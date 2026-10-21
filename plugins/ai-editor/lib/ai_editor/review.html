@@ -35,16 +35,9 @@ a{color:inherit}
 .seg>button.on{background:var(--raise);box-shadow:var(--sh);color:var(--strong);font-weight:600}
 .seg>button small{font-size:12px;line-height:16px;color:var(--muted);font-weight:400}
 
-/* the collapsed rail: the pan tile, the toggle, New, the home window's views, its jobs, Settings, the theme */
+/* the rail (Tella's tool bar): the pan tile goes home, the tools open the panel beside it; jobs, Update and the theme at its foot */
 .rail{width:80px;flex-shrink:0;height:100%;background:var(--rail);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 8px;overflow:hidden}
-.rtop{display:flex;flex-direction:column;align-items:center;gap:6px}
 .rtile{width:36px;height:36px;border-radius:10px;border:1px solid var(--line);background:var(--tile);color:var(--tileink);display:grid;place-items:center;flex-shrink:0}
-.rname{display:none;font-size:16px;line-height:20px;font-weight:600;color:var(--strong)}
-.rtog{width:28px;height:24px;border-radius:6px;display:grid;place-items:center;color:var(--muted);flex-shrink:0}
-.rtog:hover{background:var(--hover);color:var(--ink)}
-.rnew{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px;width:64px;text-decoration:none;color:var(--ink);font-size:12px;line-height:14px;font-weight:600}
-.rnew i{width:44px;height:44px;border-radius:12px;background:var(--ink);color:var(--onink);display:grid;place-items:center;flex-shrink:0}
-.rnew:hover i{background:var(--ink-hover)}
 .rgap{height:10px;flex-shrink:0}.rflex{flex:1}
 .ritem{display:flex;flex-direction:column;align-items:center;gap:4px;padding:2px 0 4px;width:64px;text-decoration:none;color:var(--ink2);font-size:12px;line-height:14px;font-weight:500}
 .ritem i{width:52px;height:32px;border-radius:10px;display:grid;place-items:center;color:var(--ink);flex-shrink:0;position:relative}
@@ -57,13 +50,6 @@ button.ritem{border:0;background:none;font:inherit;font-size:12px;line-height:14
 .rail .themebtn{width:36px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);display:grid;place-items:center;flex-shrink:0}
 .rail .themebtn:hover{border-color:var(--line2)}
 /* expanded: labels beside the icons */
-body.railx .rail{width:232px;align-items:stretch;padding:16px 12px}
-body.railx .rtop{flex-direction:row;gap:10px}body.railx .rname{display:block}body.railx .rtog{margin-left:auto}
-body.railx .rnew,body.railx .ritem{flex-direction:row;width:auto;gap:10px;padding:2px 0;font-size:14px;line-height:18px}
-body.railx .rnew i{width:36px;height:36px;border-radius:10px}
-body.railx .ritem i{width:36px}
-body.railx .ritem.rjob svg{left:5px}
-body.railx .rail .themebtn{align-self:flex-start}
 
 .app{flex:1;min-width:0;height:100%;display:flex;flex-direction:column}
 header{position:relative;height:56px;flex-shrink:0;display:flex;align-items:center;gap:16px;padding:0 16px 0 24px;border-bottom:1px solid var(--line)}
@@ -266,10 +252,27 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .mini i:hover{outline:2px solid var(--ink);outline-offset:1px}
 
 /* the panel: notes and Claude's work, the composer and the two buttons at its foot */
-aside{width:var(--sidew,320px);flex-shrink:0;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+aside{width:var(--sidew,320px);flex-shrink:0;background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
+@media (min-width:761px){aside{order:-2}#rszside{order:-1}}   /* the panel beside the rail; on a phone it stays under the video */
+.rtools{display:flex;flex-direction:column;align-items:center;gap:6px}.rtools .ritem small{display:block;font-size:11px;color:var(--muted);font-weight:400}
+.rhome{text-decoration:none}.rhome:hover{border-color:var(--line2)}
+#ptitle{font-size:15px;line-height:20px;color:var(--strong)}
+body.txtab #box,body.txtab #adds{display:none}body.txtab .pfoot{padding-top:0;border-top:0}
+.tsub{margin:0;color:var(--muted);font-size:13px;line-height:18px}
+.tstyles{display:flex;gap:6px}.tstyles button{flex:1;height:32px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);font-size:13px;font-weight:600;color:var(--ink)}
+.tstyles button:hover{border-color:var(--ink)}.tstyles button.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.tnew{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.tnew input{height:36px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:0 10px;font:inherit;font-size:14px;color:var(--strong);outline:none}.tnew input:focus{border-color:var(--ink)}
+.tnew .row{display:flex;gap:8px;align-items:center}.tnew .row span{flex:1;font-size:12px;color:var(--muted)}
+.tnew button{height:32px;padding:0 12px;border-radius:8px;font-size:13px;font-weight:600}.tnew #tadd{background:var(--ink);color:var(--onink)}.tnew #tadd:disabled{opacity:.4}.tnew #tcancel{color:var(--body)}
+.tlist{display:flex;flex-direction:column;gap:6px}.tlist h4{margin:8px 0 2px;font-size:12px;line-height:16px;font-weight:600;color:var(--muted)}
+.titem{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;cursor:pointer}.titem:hover{border-color:var(--line2)}
+.titem>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.titem b{font-size:14px;line-height:18px;color:var(--strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.titem span{font-size:12px;line-height:16px;color:var(--muted)}
+.titem button{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink);flex-shrink:0}.titem button:hover{border-color:var(--ink)}
 .phead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:16px 16px 12px;flex-shrink:0;gap:8px}
 .phead>span{color:var(--muted);font-size:13px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#ptabs{flex-shrink:0}#pmeta{flex:1 0 auto;max-width:100%;text-align:right}   /* no room beside the tabs: its own line, never "3 not..." */
+#pmeta{flex:1 0 auto;max-width:100%;text-align:right}   /* no room beside the title: its own line, never "3 not..." */
 .mhead2{display:none}
 #list{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin}
 .claude{display:flex;flex-direction:column;gap:12px;padding:14px;border:1px solid var(--line);border-radius:12px;flex-shrink:0}
@@ -376,12 +379,6 @@ aside{width:var(--sidew,320px);flex-shrink:0;background:var(--panel);border-left
 #savebtn.ready{opacity:1;pointer-events:auto}
 /* the Text tool: words typed into the box go on the video, dragged into place, in TikTok's three looks */
 #tools{grid-row:2;grid-column:3;justify-self:end;display:flex;gap:2px}
-#txtbtn{width:32px;height:28px;border-radius:8px;color:var(--body);display:grid;place-items:center;font:700 14px/1 system-ui,-apple-system,sans-serif}
-#txtbtn:hover{background:var(--chip)}#txtbtn.on{background:var(--ink);color:var(--onink)}#txtbtn[hidden]{display:none}
-#tstyle{grid-row:4;grid-column:1/-1;display:none;align-items:center;gap:6px;padding:2px}body.texting #tstyle{display:flex}
-#tstyle span{flex:1;font-size:12px;line-height:16px;color:var(--muted)}
-#tstyle button{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);background:var(--panel);font-size:12px;font-weight:600;color:var(--strong)}
-#tstyle button.on{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
 #tlayer{overflow:hidden}
 .tl{position:absolute;transform:translate(-50%,-50%);width:84%;text-align:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;font-weight:700;line-height:1.15;white-space:pre-wrap;overflow-wrap:anywhere}
 #tprev{pointer-events:auto;cursor:move;touch-action:none;outline:1px dashed rgba(255,255,255,.8);outline-offset:4px}
@@ -492,7 +489,6 @@ body.making #making{display:flex}
 #toast.show{opacity:1;transform:translate(-50%,0)}#toast svg{color:var(--ok)}
 
 @media (max-width:1180px){aside{width:var(--sidew,300px)}.left{padding:16px 20px;gap:12px}.transport{gap:6px}header{gap:12px}}
-@media (max-width:1100px){body.railx .rail{width:80px;align-items:center;padding:16px 8px}body.railx .rtop,body.railx .rnew,body.railx .ritem{flex-direction:column}body.railx .rname{display:none}body.railx .rtog{margin:0}body.railx .rnew,body.railx .ritem{width:64px;gap:4px;font-size:12px;line-height:14px}body.railx .rnew i{width:44px;height:44px;border-radius:12px}body.railx .ritem i{width:52px}body.railx .ritem.rjob svg{left:13px}body.railx .rail .themebtn{align-self:center}.rtog{display:none}}
 /* phone: the player on top, the notes in a bottom sheet */
 @media (max-width:760px){
   body{height:auto;min-height:100vh;overflow:auto;display:block}
@@ -542,18 +538,17 @@ body.making #making{display:flex}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
 <nav class="rail" aria-label="cooked.">
- <div class="rtop"><span class="rtile" title="cooked."><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z" fill="currentColor"/><path d="M45 36H58A3 3 0 0 1 58 42H45Z" fill="currentColor"/><path d="M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></span><span class="rname">cooked.</span>
-  <button class="rtog" id="railtog" aria-label="Expand the sidebar" title="Expand the sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M13 10l2 2-2 2"/></svg></button></div>
- <a class="rnew" data-home data-view="new" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></i>New</a>
+ <a class="rtile rhome" data-home data-view="home" href="#" title="Home" aria-label="cooked. home"><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z" fill="currentColor"/><path d="M45 36H58A3 3 0 0 1 58 42H45Z" fill="currentColor"/><path d="M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></a>
  <div class="rgap"></div>
- <a class="ritem" data-home data-view="home" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></i>Home</a>
- <a class="ritem on" data-home data-view="videos" href="#" aria-current="page"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9.2v5.6l4.6-2.8z"/></svg></i>Videos</a>
- <a class="ritem" data-home data-view="mystyle" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></i>Styles</a>
- <a class="ritem" data-home data-view="skills" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M13 3 5 13.5h6l-1 7.5 8-10.5h-6z"/></svg></i>Skills</a>
+ <div id="ptabs" class="rtools" role="tablist">
+  <button class="ritem" data-tab="notes" role="tab"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h16v11H9l-5 4z"/></svg></i><span>Notes <small id="ncount"></small></span></button>
+  <button class="ritem" data-tab="text" role="tab" hidden><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg></i>Text</button>
+  <button class="ritem" data-tab="rounds" role="tab"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></i>Drafts</button>
+  <button class="ritem" data-tab="trials" role="tab" hidden><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="3" width="12" height="18" rx="2"/><path d="M10 9.5v5l4-2.5z"/></svg></i>Trial reels</button>
+ </div>
  <div class="rflex"></div>
  <a class="ritem rjob" id="railjobs" data-home data-view="videos" href="#" hidden><i><span id="jobn">0</span><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" fill="none" stroke="var(--line)" stroke-width="2.5"/><path d="M12 2a10 10 0 0 1 9.5 13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg></i>Making</a>
  <button class="ritem rupd" id="railupd" type="button" hidden><i><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg></i><span id="railupdt">Update</span></button>
- <a class="ritem" data-home data-view="settings" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></i>Settings</a>
  <button class="themebtn"></button>
 </nav>
 <div class="app">
@@ -606,7 +601,7 @@ body.making #making{display:flex}
 </div>
 <div class="rsz" id="rszside" role="separator" aria-orientation="vertical" aria-label="drag to resize the notes panel" title="drag to resize"></div>
 <aside>
- <div class="phead"><div class="seg" id="ptabs"><button data-tab="notes">Notes <small id="ncount"></small></button><button data-tab="rounds">Drafts</button><button data-tab="trials" hidden>Trial reels</button></div><span id="pmeta"></span></div>
+ <div class="phead"><b id="ptitle">Notes</b><span id="pmeta"></span></div>
  <div class="mhead2"><div><b>Notes</b><span id="mcount"></span></div><button id="msend"></button></div>
  <div id="list"></div>
  <div class="pfoot">
@@ -615,10 +610,10 @@ body.making #making{display:flex}
    <input type="file" id="picin" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
    <input type="file" id="editpic" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>
    <div class="crow"><button id="clock" title="the note is saved at the playhead. i and o mark a range; click to clear it."><svg width="13" height="13" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.8" fill="none" stroke="currentColor" stroke-width="1.4"/><path d="M7 4v3.2l2 1.3" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span id="boxat" class="num">0:00.0</span></button>
-    <span id="tools"><button id="txtbtn" aria-label="add text on screen" title="Add text on screen" hidden>T</button><button id="picbtn" aria-label="attach an image" title="attach an image (or paste or drop one)"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M13 7.5l-5.3 5.3a3.2 3.2 0 01-4.5-4.5l5.6-5.6a2.1 2.1 0 013 3l-5.5 5.5a1 1 0 01-1.5-1.5L9.9 4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button></span>
+    <span id="tools"><button id="picbtn" aria-label="attach an image" title="attach an image (or paste or drop one)"><svg width="16" height="16" viewBox="0 0 16 16"><path d="M13 7.5l-5.3 5.3a3.2 3.2 0 01-4.5-4.5l5.6-5.6a2.1 2.1 0 013 3l-5.5 5.5a1 1 0 01-1.5-1.5L9.9 4.6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></button></span>
     <select id="scope" aria-label="which videos the note is for"></select>
     <button id="savebtn" aria-label="save note" title="save note (enter)"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 12V2M3 6l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-   <div id="tstyle"><span>Drag it on the video</span><button data-ts="plain">Plain</button><button data-ts="outline">Outline</button><button data-ts="box">Box</button></div></div>
+   </div>
   <div class="actions"><a id="dl" href="/download" download hidden><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>Download</a><button id="send"><i></i><span></span></button><button id="approve"></button></div>
  </div>
 </aside>
@@ -695,11 +690,7 @@ document.querySelector('.rail').addEventListener('click',async e=>{const a=e.tar
   try{const r=await fetch('/home',{method:'POST',body:'{}'}),j=await r.json();if(j.url)location.href=j.url+'#'+a.dataset.view;else alert(j.error||'The editor did not open.')}
   finally{delete a.dataset.busy}});
 $('railupd').onclick=async()=>{updating=true;renderRail();setTimeout(()=>{updating=false;if(S)renderRail()},15000);try{const r=await fetch('/update',{method:'POST',body:'{}'});if(!r.ok){updating=false;alert('The window is not open, so it cannot update. Open cooked. and press Update in Settings.')}}catch(e){updating=false}renderRail()};
-let railx=false;try{railx=localStorage.getItem('review-railx')==='1'}catch(e){}
-document.body.classList.toggle('railx',railx);
 $('newclaude').onclick=async()=>{$('newclaude').disabled=true;await post('/claude',{});await load(true);$('newclaude').disabled=false};
-$('railtog').onclick=()=>{railx=!railx;document.body.classList.toggle('railx',railx);try{localStorage.setItem('review-railx',railx?'1':'0')}catch(e){}
-  $('railtog').title=$('railtog').ariaLabel=railx?'Collapse the sidebar':'Expand the sidebar'};
 let PV=null,followNew=false;   // followNew: Go back was pressed, so show the round it opens wherever the page was
 async function load(force){
   const raw=await (await fetch('/state')).text();
@@ -869,7 +860,8 @@ function render(){
   $('mcount').textContent=mine?mine+(p?'':', not sent'):'';
   if(S.trials&&S.trials.v!==trOpened){trOpened=S.trials.v;if(S.trials.state==='proposed')tab='trials'}   // a new plan: open the tab on it
   if(!S.trials&&tab==='trials')tab='notes';
-  $('ptabs').querySelector('[data-tab=trials]').hidden=!S.trials;document.body.classList.toggle('trtab',tab==='trials');
+  $('ptabs').querySelector('[data-tab=trials]').hidden=!S.trials;document.body.classList.toggle('trtab',tab==='trials');document.body.classList.toggle('txtab',tab==='text');
+  $('ptitle').textContent={notes:'Notes',text:'Text',rounds:'Drafts',trials:'Trial reels'}[tab];
   [...$('ptabs').children].forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
   const nv=(vr.alts||[]).length;
   meta();
@@ -1055,7 +1047,8 @@ function renderList(){
       const ta2=l.querySelector('.trta');if(ta2){ta2.value=trAsk;if(f){ta2.focus();ta2.setSelectionRange(pos,pos)}}}
     return;
   }
-  $('list')._trh='';
+  if(tab==='text')return renderTextPanel();
+  $('list')._trh='';$('list')._tx=0;
   if(tab==='rounds'){
     const rs=(S.rounds||[cur()]).filter(r=>r.stage===view.stage).slice().reverse(),p=pending();
     $('list').innerHTML=rs.map(r=>{const n=S.comments.filter(c=>c.stage===r.stage&&c.round===r.round).length,k=key(r);
@@ -1579,35 +1572,63 @@ $('pics').onclick=e=>{const b=e.target.closest('[data-rm]');if(b){pics.splice(+b
 ta.addEventListener('paste',e=>{const fs=[...(e.clipboardData?.files||[])];if(fs.length){e.preventDefault();addFiles(fs)}});
 box.addEventListener('dragover',e=>{e.preventDefault();if(!ta.disabled)box.classList.add('drag')});box.addEventListener('dragleave',()=>box.classList.remove('drag'));
 box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('drag');if(!ta.disabled)addFiles(e.dataTransfer.files)});
-// the Text tool (T in the box): the typed words show on the frame as they will render (Texts.tsx "label"), dragged into
-// place; saved as a note with add_text, from the playhead for 3 s or over an i/o range. review.py `wait` puts it in texts.json.
+// the Text tool (Tella's Overlay > Text), its own tab in the rail: pick a look, type, drag it on the video. It starts at the
+// playhead for 3 s, or over an i/o range, and is saved as a note with add_text (review.py `wait` puts it in texts.json).
+// Every text of the edit is listed here with Delete; one already sent leaves texts.json and a note, so the next draft drops it.
 const TSTY={plain:'Plain',outline:'Outline',box:'Box'},TEXT_SIZE=6;
 let tx=null,tsig='';
-function setText(on){tx=on?{style:(tx&&tx.style)||'outline',x:50,y:40}:null;document.body.classList.toggle('texting',!!tx);$('txtbtn').classList.toggle('on',!!tx);
-  tsig='';if(S)render();renderTexts();if(tx){v.pause();ta.focus()}}
-$('txtbtn').onclick=()=>{if(!ta.disabled)setText(!tx)};
-$('tstyle').onclick=e=>{const b=e.target.closest('[data-ts]');if(b&&tx){tx.style=b.dataset.ts;tsig='';renderTexts();ta.focus()}};
+const tword=()=>{const w=$('tword');return w?w.value.trim():''};
+function setText(style){tx=style?{style,x:(tx&&tx.x)||50,y:(tx&&tx.y)||40}:null;document.body.classList.toggle('texting',!!tx);
+  tsig='';if(S)render();renderTexts();if(tx){v.pause();const w=$('tword');if(w)w.focus()}}
+function textItems(){   // sent ones (texts.json) and this edit's text notes not in it yet
+  const sent=S.texts||[],ids=new Set(sent.map(x=>x.id));
+  const fresh=S.comments.filter(c=>c.add_text&&c.stage==='edit'&&!ids.has('edit'+c.round+'-'+c.id))
+    .map(c=>({id:c.id,text:c.text,style:c.add_text.style,start:c.t,end:c.t_end,fresh:true}));
+  return [...fresh,...sent.map(x=>({...x,fresh:false}))].sort((a,b)=>a.start-b.start)}
+function renderTextPanel(){
+  const l=$('list');
+  if(!l._tx){l._tx=1;l._trh='';l.innerHTML=`<p class="tsub">Text on the video. It starts at the playhead and stays 3 s, or over the range you mark with i and o.</p>
+    <div class="tstyles" id="tstyles">${Object.entries(TSTY).map(([k,n])=>`<button data-ts="${k}">${n}</button>`).join('')}</div><div id="tform"></div><div class="tlist" id="trows"></div>`}
+  document.querySelectorAll('#tstyles [data-ts]').forEach(b=>b.classList.toggle('on',!!tx&&b.dataset.ts===tx.style));
+  const f=$('tform');
+  if(!!tx!==!!f.firstChild)f.innerHTML=tx?`<div class="tnew"><input id="tword" placeholder="Type your text" maxlength="120" aria-label="the text"><div class="row"><span>Drag it on the video</span><button id="tcancel">Cancel</button><button id="tadd" disabled>Add text</button></div></div>`:'';
+  const all=textItems(),row=x=>`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
+  const nw=all.filter(x=>x.fresh),old=all.filter(x=>!x.fresh);
+  const h=(nw.length?`<h4>Not sent yet</h4>${nw.map(row).join('')}`:'')+(old.length?`<h4>Sent to Claude</h4>${old.map(row).join('')}`:'')
+    +(all.length?'':'<p class="tsub">No text yet. Pick a look above to add one.</p>');
+  if($('trows')._h!==h){$('trows')._h=h;$('trows').innerHTML=h}}
+$('list').addEventListener('click',async e=>{
+  const st=e.target.closest('#tstyles [data-ts]');if(st){setText(st.dataset.ts);return}
+  if(e.target.id==='tcancel'){setText(null);return}
+  if(e.target.id==='tadd'){saveText();return}
+  const d=e.target.closest('[data-tdel]');
+  if(d){e.stopPropagation();d.disabled=true;const r=d.dataset.fresh?await post('/delete',{id:+d.dataset.tdel}):await post('/text/delete',{id:d.dataset.tdel});
+    toast(d.dataset.fresh?'Text deleted':r.error||'Text deleted. The next draft drops it.');await load();return}
+  const sk=e.target.closest('[data-tseek]');if(sk){v.currentTime=+sk.dataset.tseek;v.pause()}});
+$('list').addEventListener('input',e=>{if(e.target.id==='tword'){$('tadd').disabled=!tword();renderTexts()}});
+$('list').addEventListener('keydown',e=>{if(e.target.id!=='tword')return;e.stopPropagation();if(e.key==='Enter'){e.preventDefault();saveText()}if(e.key==='Escape')setText(null)});
+async function saveText(){const text=tword();if(!tx||!text)return;
+  const[t,te]=noteSpan(),r=await post('/comment',{t,t_end:te,text,images:[],alt:alt||null,add_text:{style:tx.style,x_pct:tx.x,y_pct:tx.y}});
+  if(!r.id)return toast(r.error||'That did not save.');inT=outT=null;renderBar();setText(null);toast('Text added');await load()}
 function renderTexts(){
   const L=$('tlayer'),fs=Math.min(L.offsetWidth,L.offsetHeight)*TEXT_SIZE/100,t=v.currentTime,edit=!!(S&&view&&view.stage==='edit');
-  $('txtbtn').hidden=!edit;if(!edit&&tx)setText(false);
-  document.querySelectorAll('#tstyle [data-ts]').forEach(b=>b.classList.toggle('on',!!tx&&b.dataset.ts===tx.style));
+  const tb=$('ptabs').querySelector('[data-tab=text]');if(tb)tb.hidden=!edit;if(!edit&&tx)setText(null);if(!edit&&tab==='text'){tab='notes';if(S)render()}
   const one=(a,text,id)=>`<div class="tl"${id?` id="${id}"`:''} style="left:${a.x_pct}%;top:${a.y_pct}%;font-size:${fs}px"><span class="ts-${a.style}">${esc(text)}</span></div>`;
   const html=(edit&&!cmp?S.comments.filter(c=>c.add_text&&c.stage===view.stage&&c.round===view.round&&c.t<=t&&t<c.t_end&&onAlt(c)):[]).map(c=>one(c.add_text,c.text)).join('')
-    +(tx?one({style:tx.style,x_pct:tx.x,y_pct:tx.y},ta.value.trim()||'Type your text','tprev'):'');
+    +(tx?one({style:tx.style,x_pct:tx.x,y_pct:tx.y},tword()||'Type your text','tprev'):'');
   if(html!==tsig){tsig=html;L.innerHTML=html}}
-ta.addEventListener('input',()=>{if(tx)renderTexts()});new ResizeObserver(()=>{tsig='';renderTexts()}).observe($('tlayer'));
+new ResizeObserver(()=>{tsig='';renderTexts()}).observe($('tlayer'));
 $('tlayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#tprev');if(!el||!tx)return;e.preventDefault();el.setPointerCapture(e.pointerId);
   const vert=v.videoHeight>v.videoWidth,mv=ev=>{const r=$('tlayer').getBoundingClientRect(),cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
     tx.x=cl((ev.clientX-r.left)/r.width*100,vert?20:12,vert?73:88);tx.y=cl((ev.clientY-r.top)/r.height*100,vert?16:8,vert?72:92);   // reels: inside the safe zone
     el.style.left=tx.x+'%';el.style.top=tx.y+'%'};
-  el.onpointermove=mv;el.onpointerup=()=>{el.onpointermove=null;tsig='';ta.focus()}});
-async function save(){const text=ta.value.trim();if(ta.disabled||(!text&&!pics.length)||(tx&&!text))return;
+  el.onpointermove=mv;el.onpointerup=()=>{el.onpointermove=null;tsig='';const w=$('tword');if(w)w.focus()}});
+async function save(){const text=ta.value.trim();if(ta.disabled||(!text&&!pics.length))return;
   const[t,te]=noteSpan(),nv=(viewRound().alts||[]).length;
-  const r=await post('/comment',{t,t_end:te,text,images:tx?[]:pics,alt:nv&&$('scope').value==='*'?'*':alt||null,on:noteOn,
-    ...(tx?{add_text:{style:tx.style,x_pct:tx.x,y_pct:tx.y}}:{})});
-  if(tx&&r.id)setText(false);closeBox();await load()}
+  await post('/comment',{t,t_end:te,text,images:pics,alt:nv&&$('scope').value==='*'?'*':alt||null,on:noteOn});
+  closeBox();await load()}
 $('savebtn').onclick=save;
-ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}if(e.key==='Escape'){if(tx)setText(false);ta.blur();inT=outT=null;noteOn=null;renderBar();boxTime()}});
+ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}if(e.key==='Escape'){ta.blur();inT=outT=null;noteOn=null;renderBar();boxTime()}});
 const sendOrStop=async()=>{const e=S.events[S.events.length-1];await post('/event',{type:pending()==='send'||makingEdit()||e&&e.type==='approve'?'stop':'send'});load()};
 $('send').onclick=sendOrStop;$('msend').onclick=sendOrStop;
 const approve=async()=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;render()}   // instant: the button and the steps turn before the server answers
@@ -1652,7 +1673,7 @@ load();setInterval(load,3000);
       const mv=ev=>move(ev),up=()=>{el.classList.remove('on');document.body.classList.remove('rszing');el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);dispatchEvent(new Event('resize'))};
       el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up)})};
   const clear=(...ks)=>()=>{for(const k of ks){R.removeProperty(k);try{localStorage.removeItem(K+k)}catch(e){}}dispatchEvent(new Event('resize'))};
-  drag(document.getElementById('rszside'),e=>keep('--sidew',Math.round(Math.max(260,Math.min(innerWidth*.55,innerWidth-e.clientX)))+'px'),clear('--sidew'));
+  drag(document.getElementById('rszside'),e=>keep('--sidew',Math.round(Math.max(260,Math.min(innerWidth*.55,e.clientX-document.querySelector('aside').getBoundingClientRect().left)))+'px'),clear('--sidew'));
   drag(document.getElementById('rsztx'),e=>{const r=document.getElementById('stage').getBoundingClientRect();
     if(document.body.classList.contains('vertical'))keep('--plw',Math.round(Math.max(20,Math.min(75,(e.clientX-r.left)/r.width*100)))+'cqw');
     else keep('--txsplit',Math.round(Math.max(20,Math.min(85,(e.clientY-r.top)/r.height*100)))+'%')},clear('--txsplit','--plw'));

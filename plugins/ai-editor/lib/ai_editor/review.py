@@ -1236,6 +1236,7 @@ def make_handler(folder, token):
                 d["theme"] = theme()
                 d["listening"], d["busy"] = listening(folder), busy(folder)
                 d["resume"] = resume_text(folder, d)
+                d["texts"] = (load(folder / "texts.json").get("items") or []) if (folder / "texts.json").exists() else []
                 d["page"] = live.page_version(HTML, HTML.with_name("ask.js"))   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
@@ -1409,6 +1410,17 @@ def make_handler(folder, token):
                             c["alt"] = body.get("alt") or None
                 update(rj, sc)
                 return self.send(200, {})
+            if path == "/text/delete":   # the Text panel's Delete on a sent text: off texts.json, and a note so the next draft drops it
+                d, f = load(rj), folder / "texts.json"
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "This draft is approved."})
+                items = (load(f).get("items") or []) if f.exists() else []
+                x = next((i for i in items if i.get("id") == body.get("id")), None)
+                if not x:
+                    return self.send(404, {"error": "That text is gone already."})
+                f.write_text(json.dumps({"items": [i for i in items if i is not x]}, indent=1), encoding="utf-8")
+                return self.comment({"t": x["start"], "t_end": x["end"], "text": f'Remove the on-screen text "{x["text"]}".'})
             if path == "/delete":
                 def rm(d):
                     d["comments"] = [c for c in d["comments"] if not (c["id"] == body.get("id") and editable(d, c))]
@@ -3045,6 +3057,12 @@ def demo():
     c4 = post("/comment", {"t": 1.0, "text": "on all of them", "alt": "*"})
     c6 = post("/comment", {"t": 2.0, "text": "wait for it", "add_text": {"style": "box", "x_pct": 50, "y_pct": 140}})   # the Text tool
     assert c6["add_text"] == {"style": "box", "x_pct": 50.0, "y_pct": 100.0, "size_pct": TEXT_SIZE} and c6["t_end"] == 5.0, c6
+    # the Text panel: sent texts are on /state; Delete takes one off texts.json and leaves a note so the next draft drops it
+    (folder / "texts.json").write_text(json.dumps({"items": [{"id": "edit1-99", "text": "hi there", "style": "plain", "start": 1.0, "end": 4.0}]}), encoding="utf-8")
+    assert [x["id"] for x in json.loads(get("/state").read())["texts"]] == ["edit1-99"]
+    gone = post("/text/delete", {"id": "edit1-99"})
+    assert not load(folder / "texts.json")["items"] and gone["text"] == 'Remove the on-screen text "hi there".' and gone["t"] == 1.0, gone
+    post("/delete", {"id": gone["id"]})
     # a note that reads as a lasting preference is offered as a rule, ticked; the user can untick it
     assert looks_like_rule("Too many zooms") and looks_like_rule("I prefer bigger captions") and not looks_like_rule("cut the um at 0:12")
     c5 = post("/comment", {"t": 2.0, "text": "always use fewer zooms"})

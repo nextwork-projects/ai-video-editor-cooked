@@ -4,6 +4,8 @@ What changed for every user, newest first.
 
 ## Unreleased
 
+- The video page has a tool bar on the left, like Tella: Notes, Text, Drafts and Trial reels, each opening its panel beside it. The cooked. logo at the top goes home.
+- Text has its own panel instead of the T in the note box: pick Plain, Outline or Box, type, drag it on the video, Add text. Every text is listed with Delete. Deleting one already sent leaves a note so the next draft drops it.
 ## ai-editor 2.7.22, creator-teardown 2.7.22 (2026-10-20)
 - Check now sees a new release the moment it is out. It read GitHub's 5-minute cached copy before, so a fresh release could still show as the old one.
 
