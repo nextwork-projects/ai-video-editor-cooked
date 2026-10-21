@@ -132,7 +132,7 @@ body.withTx:not(.vertical) #stage{flex-direction:column;gap:16px}
 body.withTx:not(.vertical) #pair{flex:1 1 var(--txsplit,58%);min-height:0;height:auto}
 body.withTx:not(.vertical) .pl{width:100%;height:100%}
 body.withTx:not(.vertical) .player{aspect-ratio:auto;height:100%}
-body.withTx:not(.vertical) #tx{flex:1 1 calc(100% - var(--txsplit,58%));min-height:150px}
+body.withTx:not(.vertical) #tx{flex:1 1 calc(100% - var(--txsplit,58%));min-height:52px}
 /* drag handles: the video against the transcript, the left side against the notes panel (sizes kept in this browser) */
 .rsz{flex:none;position:relative;z-index:2;touch-action:none}.rsz::after{content:"";position:absolute;border-radius:2px;background:var(--line2,var(--line));transition:background .15s}
 .rsz:hover::after,.rsz.on::after{background:var(--muted)}
@@ -270,7 +270,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .edwrap{display:flex;gap:8px}
 .edleft{width:84px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;padding-top:4px}
 .edleft .ezoom{position:static;height:20px;justify-content:space-between}
-.edleft button{height:30px;border-radius:7px;border:1px dashed var(--line2);font-size:12px;font-weight:600;color:var(--body);text-align:left;padding:0 8px;white-space:nowrap}
+.edleft button{height:var(--eth,30px);border-radius:7px;border:1px dashed var(--line2);font-size:12px;font-weight:600;color:var(--body);text-align:left;padding:0 8px;white-space:nowrap}
 .edleft button:hover{border-color:var(--ink);color:var(--ink)}
 .edright{flex:1;min-width:0;position:relative}
 .ezoom{position:absolute;right:0;top:-2px;z-index:4;display:flex;align-items:center;gap:2px;font-size:11px;color:var(--muted)}
@@ -278,8 +278,8 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .escroll{overflow-x:auto;overflow-y:visible;padding-top:8px;scrollbar-width:thin}
 .einner{position:relative;min-width:100%}
 .eruler{position:relative;height:16px;font-size:10px;line-height:12px;color:var(--quiet)}.eruler span{position:absolute;top:0;padding-left:3px;border-left:1px solid var(--line2);white-space:nowrap}
-.etrack{position:relative;height:30px;margin-top:6px;border-radius:6px;background:var(--rail);cursor:pointer}
-.eitem{position:absolute;top:3px;height:24px;border-radius:5px;border:1px solid var(--line2);display:flex;align-items:center;font-size:11px;line-height:14px;font-weight:600;cursor:pointer;min-width:10px}
+.etrack{position:relative;height:var(--eth,30px);margin-top:6px;border-radius:6px;background:var(--rail);cursor:pointer}
+.eitem{position:absolute;top:3px;height:calc(var(--eth,30px) - 6px);border-radius:5px;border:1px solid var(--line2);display:flex;align-items:center;font-size:11px;line-height:14px;font-weight:600;cursor:pointer;min-width:10px}
 .eitem.txt{background:#4B3E91;border-color:#6E5FD0;color:#FFFFFF;padding:0 6px}.eitem.txt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .eitem.cap{background:#7A5B12;border-color:#B88A1F;color:#FFFFFF;padding:0 6px}.eitem.cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
 .eitem.snd{background:#1F5C4A;border-color:#2F8C6F;color:#FFFFFF;overflow:hidden}
@@ -291,6 +291,9 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .eitem:hover .ex{display:grid}   /* x sits on the corner, never under the click that opens it */
 .eph{position:absolute;top:8px;bottom:0;width:2px;margin-left:-1px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none;z-index:3}
 .timeline{position:relative}
+.edleft .ehide{height:20px;border:0;padding:0 2px;font-weight:500;color:var(--muted)}
+.edmin{display:flex;justify-content:flex-end}.edmin button{height:24px;padding:0 10px;border-radius:7px;font-size:12px;font-weight:600;color:var(--muted)}.edmin button:hover{color:var(--ink);background:var(--hover)}
+#rszed{height:10px;margin:-13px 0;cursor:row-resize}#rszed::after{left:calc(50% - 20px);top:3px;width:40px;height:4px}body:has(#edtracks:empty) #rszed{display:none}
 #sndpick{position:absolute;z-index:20;width:260px;max-height:320px;overflow:auto;padding:8px;border-radius:12px;background:var(--raise);border:1px solid var(--line);box-shadow:var(--pop)}
 #sndpick h4{margin:8px 4px 2px;font-size:11px;line-height:14px;font-weight:600;color:var(--muted)}
 .timeline{position:relative}
@@ -683,6 +686,7 @@ body.making #making{display:flex}
   <div id="tx"><div class="txhead"><b>Transcript</b><span id="txmeta"></span></div><div id="txlines"></div><div class="txtools" id="txtools"></div><div id="txbar" role="toolbar" aria-label="change the selected words"></div></div>
  </div>
  </div>
+ <div class="rsz" id="rszed" role="separator" aria-label="drag to resize the player and the timeline" title="drag down for a bigger player, up for a bigger timeline"></div>
  <div class="transport">
   <button id="play" aria-label="play or pause"></button>
   <button class="tbtn" id="back" title="j">-5s</button><button class="tbtn" id="fwd" title="l">+5s</button>
@@ -1026,6 +1030,8 @@ function renderBar(){
 }
 // the edit's Text and Sounds rows: every text (made or changing) and every sound in the draft or put there by the user.
 const NOTE_ICON='<svg width="10" height="10" viewBox="0 0 12 12"><path d="M5 1.5v6.2A1.8 1.8 0 1 0 6.3 9.4V4l3.2-1V1z" fill="currentColor"/></svg>';
+let edHid=false;try{edHid=localStorage.getItem('review-edhide')==='1'}catch(e){}   // the rows folded away: Show timeline brings them back
+function setEdHid(x){if(edHid===x)return;edHid=x;try{localStorage.setItem('review-edhide',x?'1':'')}catch(e){}renderEdTracks()}
 let tzUser=0,tz=1;try{tzUser=Math.max(0,Math.min(32,+localStorage.getItem('review-tz')||0))}catch(e){}   // the rows' zoom: yours, else about 15 s a screen, as CapCut opens
 const autoZ=T=>{let z=1;while(z*2<=Math.min(32,T/15))z*=2;return z};
 function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';
@@ -1035,6 +1041,7 @@ function capText(c){const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw)
   const orig=c.text.split(/\s+/);return {text:c.w.map((k,i)=>k in cw?cw[k]:orig[i]||'').filter(Boolean).join(' '),edited:true}}
 function renderEdTracks(){const E=$('edtracks'),T=D();
   if(!(S&&view&&view.stage==='edit'&&noteOk()&&!cmp)||!T){E.innerHTML='';E._h='';return}
+  if(edHid){const h='<div class="edmin"><button id="edshow" title="Show the Text, Captions and Sounds rows">Show timeline</button></div>';if(E._h!==h){E._h=h;E.innerHTML=h}return}
   tz=tzUser||autoZ(T);
   const pc=t=>Math.max(0,Math.min(100,t/T*100)),it=data().items||{};
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
@@ -1045,7 +1052,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const snds=(it.sfx||[]).map(x=>clip(x.start??x.t,x.d,gone.has(x.t.toFixed(2))?' gone':'',`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,sname(x.src),x.peaks,x.t)).join('')
     +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>clip(x.t,x.d,' pend',`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),x.peaks,x.t)).join('');
   const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c);return `<div class="eitem cap${ct.edited?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(c.s)}%;width:${pc(c.e)-pc(c.s)}%" title="${esc(ct.text||c.text)} · ${fmtx(c.s)} · click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
-  const h=`<div class="edwrap"><div class="edleft"><div class="ezoom"><button data-z="-" title="Zoom out"${tz<=1?' disabled':''}>−</button><span>${tz}x</span><button data-z="+" title="Zoom in"${tz>=32?' disabled':''}>+</button></div><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
+  const h=`<div class="edwrap"><div class="edleft"><div class="ezoom"><button data-z="-" title="Zoom out"${tz<=1?' disabled':''}>−</button><span>${tz}x</span><button data-z="+" title="Zoom in"${tz>=32?' disabled':''}>+</button></div><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button><button class="ehide" id="edhide" title="Hide these rows (drag the bar above them to resize)">Hide</button></div>
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner" style="width:${tz*100}%"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${fmt(t)}</span>`).join('')}</div>
     <div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
@@ -1058,6 +1065,7 @@ $('edtracks').addEventListener('click',async e=>{
     tzUser=zb.dataset.z==='+'?Math.min(32,tz*2):Math.max(1,tz/2);try{localStorage.setItem('review-tz',tzUser)}catch(x){}renderEdTracks();
     const s2=$('escroll');if(s2)s2.scrollLeft=mid*s2.scrollWidth-s2.clientWidth/2;return}
   const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem')){const r=tk.getBoundingClientRect();v.currentTime=Math.max(0,(e.clientX-r.left)/r.width*D());return}   /* click empty track: go there */
+  if(e.target.id==='edhide'||e.target.id==='edshow')return setEdHid(e.target.id==='edhide');
   if(e.target.id==='addtx'){if(tool!=='text')openTool('text');setText('outline');return}
   if(e.target.id==='addsnd'){return openSndPick(e.target)}
   if(e.target.id==='capedit'){return openCapLine(null)}
@@ -1977,7 +1985,7 @@ load();setInterval(load,3000);
 
 // drag handles (.rsz): sizes as CSS variables on <html>, kept in this browser; double-click puts one back
 (()=>{const R=document.documentElement.style,K='rsz:';
-  const load=()=>{for(const k of ['--sidew','--txsplit','--plw']){try{const v=localStorage.getItem(K+k);if(v)R.setProperty(k,v)}catch(e){}}};load();
+  const load=()=>{for(const k of ['--sidew','--txsplit','--plw','--eth']){try{const v=localStorage.getItem(K+k);if(v)R.setProperty(k,v)}catch(e){}}};load();
   const keep=(k,v)=>{R.setProperty(k,v);try{localStorage.setItem(K+k,v)}catch(e){}};
   const drag=(el,move,reset)=>{if(!el)return;el.addEventListener('dblclick',reset);
     el.addEventListener('pointerdown',e=>{e.preventDefault();el.setPointerCapture(e.pointerId);el.classList.add('on');document.body.classList.add('rszing');
@@ -1985,8 +1993,12 @@ load();setInterval(load,3000);
       el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up)})};
   const clear=(...ks)=>()=>{for(const k of ks){R.removeProperty(k);try{localStorage.removeItem(K+k)}catch(e){}}dispatchEvent(new Event('resize'))};
   drag(document.getElementById('rszside'),e=>keep('--sidew',Math.round(Math.max(260,Math.min(innerWidth*.55,innerWidth-e.clientX)))+'px'),clear('--sidew'));
+  // the bar between the player and the controls: down shrinks the timeline rows, then folds them away, and the player takes the room
+  drag(document.getElementById('rszed'),e=>{const h=document.getElementById('rszed'),L=h.closest('.left').getBoundingClientRect().bottom,
+      rows=edHid?0:3*(parseFloat(getComputedStyle(document.querySelector('.etrack')||h).height)||30),fixed=L-h.getBoundingClientRect().bottom-rows,row=(L-e.clientY-fixed)/3;
+    if(row<14)return setEdHid(true);setEdHid(false);keep('--eth',Math.round(Math.min(96,Math.max(20,row)))+'px')},clear('--eth'));
   drag(document.getElementById('rsztx'),e=>{const r=document.getElementById('stage').getBoundingClientRect();
     if(document.body.classList.contains('vertical'))keep('--plw',Math.round(Math.max(20,Math.min(75,(e.clientX-r.left)/r.width*100)))+'cqw');
-    else keep('--txsplit',Math.round(Math.max(20,Math.min(85,(e.clientY-r.top)/r.height*100)))+'%')},clear('--txsplit','--plw'));
+    else keep('--txsplit',Math.round(Math.max(20,Math.min(97,(e.clientY-r.top)/r.height*100)))+'%')},clear('--txsplit','--plw'));
 })();
 </script><script src="/ask.js"></script></body></html>
