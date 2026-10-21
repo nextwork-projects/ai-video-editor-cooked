@@ -5,7 +5,7 @@ What changed for every user, newest first.
 ## Unreleased
 
 ## ai-editor 2.7.26, creator-teardown 2.7.26 (2026-10-21)
-- The Text, Captions and Sounds rows under the timeline resize: drag the bar above them up for taller rows, down to hide them. Hide folds them away, Show timeline brings them back, double-click the bar for the normal size. Kept in this browser.
+- A drag bar between the player and the controls, like CapCut's: drag it down for a bigger player (the Text, Captions and Sounds rows shrink, then fold away), up for taller rows. Hide and Show timeline do the same in one click. The transcript bar now drags down to just its header, so the player can take almost the whole page. Double-click a bar to put it back. Kept in this browser.
 
 ## ai-editor 2.7.25, creator-teardown 2.7.25 (2026-10-21)
 - Text and Sounds rows under the timeline on the edit, like CapCut's: each clip is as long as it lasts, a sound shows its waveform, with a ruler, a playhead and - / + zoom (it opens at about 15 s a screen). A Captions row shows every caption line; click one on the timeline or on the video to retype it in the Captions panel's Lines (Enter saves and goes to the next line), x takes a line out. + Text and + Sound add one at the playhead (+ Sound picks from your sound library, each with Play). Click a text to change it, click a sound to hear it in place, and x on any of them takes it out.
