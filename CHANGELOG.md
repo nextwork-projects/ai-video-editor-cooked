@@ -4,6 +4,12 @@ What changed for every user, newest first.
 
 ## Unreleased
 
+## ai-editor 2.7.27, creator-teardown 2.7.27 (2026-10-24)
+- Teach your style from this video says where the rules go: a Save to list with this video's style first, your other styles, and New style from this video (a named copy of the style with these rules).
+- YouTube (16:9) cuts breathe: pauses up to 0.30 s instead of a reel's 0.15 s, and Claude keeps each joke's beat as you said it (before a punchline, after a joke, before a reaction), up to 1.2 s.
+- Trial reels: a trial-reels skill makes versions of an approved reel that each look like a different video (the type first: story, list or pitch), puts them on the Trial reels tab, and posts only the ones you pick, spread over the day. Posting can graduate a Trial Reel automatically or only when you say.
+- Two caption edits made right after each other no longer drop the first one from the note.
+
 ## ai-editor 2.7.26, creator-teardown 2.7.26 (2026-10-23)
 - New video: "Add images or links" is now "Add videos, images or links". Choose, drop or paste videos (up to 2 GB each) as well as pictures and links, up to 50 in all. Each file uploads on its own with a progress bar; a video shows a frame from it. Claude puts each one in first, on its "Show when I say..." words.
 - B-roll has Specific clips: drag clips in, choose files, or Pick from folders to tick clips inside a connected folder. Every specific clip goes in the video; the ticked folders fill the rest.
