@@ -1676,26 +1676,38 @@ def make_handler(folder, token):
                 except (TypeError, ValueError):
                     msg = None
                 return self.send(200, {"msg": msg}) if msg else self.send(409, {"error": "nothing to undo"})
-            if path == "/learn":   # the learn panel: the ticked rules, or Not now. `wait` hands them to Claude
+            if path == "/learn":   # the learn panel: the ticked rules and where each goes, or Not now. `wait` hands them on
                 def lc(d):
                     lr = d.get("learn") or {}
                     if lr.get("state") != "proposed":
                         return False
                     ids = sorted({i for i in body.get("chosen") or [] if isinstance(i, int) and 0 <= i < len(lr["rules"])})
                     lr.update(state="chosen" if ids and not body.get("skip") else "skipped", chosen=ids, handled=False)
-                    if to and lr["state"] == "chosen":
-                        lr["to"] = to
+                    if lr["state"] == "chosen":
+                        for i in ids:
+                            lr["rules"][i]["dest"] = dest[i]
                     return True
-                to, lr0 = None, load(rj).get("learn") or {}
-                if body.get("new") and not body.get("skip") and lr0.get("state") == "proposed":   # "New style from this video"
-                    try:
-                        to = new_style_from(folder, body["new"])
-                    except ValueError as e:
-                        return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
-                elif body.get("to") is not None:   # "Save to": one of the styles the approve listed
-                    to = next((dict(x) for x in lr0.get("styles") or [] if x["id"] == str(body["to"])), None)
-                    if to is None:
-                        return self.send(400, {"error": "pick a style from the list"})
+                lr0 = load(rj).get("learn") or {}
+                if lr0.get("state") != "proposed":
+                    return self.send(409, {"error": "nothing to choose"})
+                targets = {x["id"]: x for x in (lr0.get("styles") or []) + (lr0.get("skills") or [])}
+                here = next((x for x in lr0.get("styles") or [] if x.get("here")), None)
+                to = body.get("to")   # one id for every rule (the old Save to), or {"<rule index>": id}
+                per = to if isinstance(to, dict) else {}
+                dest, made = {}, None
+                for i in range(len(lr0.get("rules") or [])):
+                    k = str(per.get(str(i), to if isinstance(to, str) else "") or lr0["rules"][i].get("to") or "")
+                    if k == "new" and not body.get("skip"):   # "New style from this video": made once, for every rule that picked it
+                        if made is None:
+                            try:
+                                made = new_style_from(folder, body.get("new"))
+                            except ValueError as e:
+                                return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
+                        dest[i] = made
+                    elif k and k not in targets and (per.get(str(i)) or isinstance(to, str)):
+                        return self.send(400, {"error": "pick a style or a skill from the list"})
+                    else:
+                        dest[i] = dict(targets.get(k) or here or {"id": "", "name": lr0.get("style") or "My style", "here": True})
                 return self.send(200, {}) if update(rj, lc) else self.send(409, {"error": "nothing to choose"})
             if path == "/trials":   # the Trial reels tab: {"action": "make", versions, hooks} | "skip" | "ask" + text
                 # | "note" + text, "for" (t1.., or all), "t" (seconds on that version): feedback once they are made
@@ -1947,6 +1959,7 @@ def make_handler(folder, token):
                     return self.send(409, {"error": err}) if err else self.send(200, {})
                 style = style_label(folder) if body["type"] == "approve" else None
                 choices = style_choices(folder) if body["type"] == "approve" else None
+                skills = skill_choices() if body["type"] == "approve" else None
 
                 def ev(d):
                     if d.get("sent") and d["events"] and d["events"][-1]["type"] == "edits":
@@ -1956,7 +1969,8 @@ def make_handler(folder, token):
                     d["sent"] = True
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
-                        d["learn"] = {"state": "reading" if session_notes(d) else "none", "style": style, "styles": choices}
+                        d["learn"] = {"state": "reading" if session_notes(d) else "none", "style": style, "styles": choices,
+                                      "skills": skills}
                     elif body["type"] == "approve" and d["stage"] == "cut":
                         prepared_steps(folder, d)
                     return True
@@ -2941,6 +2955,27 @@ def new_style_from(folder, name):
     return {"id": str(p.resolve()), "name": name, "rules": 0, "here": False, "mine": False, "new": True}
 
 
+def skill_choices():
+    """The learn panel's skills: every skill the user owns (skillrules.skill_dirs) that is not a saved style's own
+    skill, as {"id": "skill:<name>", "name", "skill", "path", "about"} (about: its description, for Claude to pick)."""
+    try:
+        from ai_editor import skillrules, styleskill
+        styles = {n for _, n in styleskill.saved()}
+        out, seen = [], set()
+        for d in skillrules.skill_dirs():
+            for md in sorted(Path(d).glob("*/SKILL.md")):
+                n = md.parent.name
+                if n in seen or n in styles or not skillrules.find_skill(n):
+                    continue
+                seen.add(n)
+                m = re.search(r"^description:\s*(.+)$", md.read_text(encoding="utf-8", errors="replace")[:4000], re.M)
+                out.append({"id": "skill:" + n, "name": n.replace("-", " ").capitalize(), "skill": n, "path": str(md),
+                            "about": (m.group(1).strip() if m else "")[:160]})
+        return out[:60]
+    except Exception:
+        return []
+
+
 def style_label(folder):
     """What the learn panel calls the style the edit used: its name on the home page, else My style."""
     try:
@@ -2979,7 +3014,15 @@ def learn_prompt(folder, d):
              f"'[{{\"rule\": \"...\", \"section\": \"cut|captions|visuals|sound|layout\", \"set\": \"captions.size_pct=4.5\"}}]'",
              "  (or a path to a .json file holding that list). \"set\" only when a taste setting maps (the taste "
              "skill's table). Then run `wait` again: it returns with the rules the user ticked. The skill-improver "
-             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin)."]
+             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin).",
+             "Give every rule a \"to\": where it belongs, one id from the list below. A rule about this kind of video "
+             "goes to this video's style; a rule for every video to My style; a rule about what one of the user's skills "
+             "does (trial reels, a talking head, a thumbnail) to that skill. The page shows your pick; the user can change it."]
+    lr = d["learn"]
+    for x in lr.get("styles") or []:
+        lines.append(f"  to \"{x['id']}\": {x['name']}" + (" (this video's style, the default)" if x.get("here") else " (every video)" if x.get("mine") else ""))
+    for x in lr.get("skills") or []:
+        lines.append(f"  to \"{x['id']}\": the {x['skill']} skill" + (f": {x['about']}" if x.get("about") else ""))
     try:
         from ai_editor import skillrules
         tg = skillrules.target(folder)
@@ -3007,12 +3050,11 @@ def learn_chosen(folder, d):
         print("LEARN: the user pressed Not now. Nothing is saved; say nothing more about it.")
         return "learn"
     rules = [lr["rules"][i] for i in lr["chosen"]]
-    to = lr.get("to")
-    if to and not to.get("here"):   # Save to: learn --done saves them there
-        lr = {**lr, "style": to["name"] + (f" (a new style, a copy of {lr['style']})" if to.get("new") else "")}
-    print(f"LEARN: the user ticked {len(rules)} rule{'s' if len(rules) != 1 else ''} for {lr['style']}:")
+    print(f"LEARN: the user ticked {len(rules)} rule{'s' if len(rules) != 1 else ''}, each with where it goes:")
     for r in rules:
-        print(f"  - [{r['section']}] {r['rule']}" + (f" ({r['set']})" if r.get("set") else ""))
+        to = (r.get("dest") or {}).get("name") or lr["style"]
+        print(f"  - [{r['section']}] {r['rule']}" + (f" ({r['set']})" if r.get("set") else "") + f" -> {to}"
+              + (" (a new style)" if (r.get("dest") or {}).get("new") else ""))
     print(f"Save them (styleskill.learn: the style's overrides, rules and skill) and tell the page:\n"
           f"  python3 {Path(__file__).resolve()} {folder} learn --done")
     return "learn"
@@ -3041,7 +3083,7 @@ def learn_propose(folder, raw):
         if st is not None and (not isinstance(st, str) or "=" not in st):
             sys.exit(f"\"set\" is key.path=value: {r}")
         out.append({"rule": str(r["rule"]).strip().rstrip("."), "section": sec, "set": st,
-                    **{k: str(r[k]).strip() for k in ("why", "replace") if r.get(k)}})
+                    **{k: str(r[k]).strip() for k in ("why", "replace", "to") if r.get(k)}})
 
     def f(d):
         if not d.get("learn"):
@@ -3057,33 +3099,36 @@ def learn_done(folder, summary):
     lr = load(folder / "review.json").get("learn") or {}
     if lr.get("state") != "chosen":
         sys.exit("nothing ticked to save: run `wait` for the user's pick first")
-    sp = edit_style(folder)
-    style = shown_style(sp)
+    sp0 = edit_style(folder)
+    style0 = shown_style(sp0)
     from ai_editor import skillrules
     tg = skillrules.target(folder)
-    to = lr.get("to")
-    if to and not to.get("here"):   # Save to: another saved style, or a new one made from this video's style
-        sp = Path(to["id"]) if to["id"] else None
-        style, tg = to["name"], {"kind": "settings"}
-    saved = []   # (rule, status, kind, ref) for the receipts
-    if tg["kind"] == "skill":   # a skill style: its skill made the edit, so the rules go into its SKILL.md
-        if not tg["path"]:
-            sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
-        for r in (lr["rules"][i] for i in lr["chosen"]):
-            status, line = skillrules.add(tg["path"], r["rule"], r.get("why") or f"from the notes on {folder.name}",
+    saved, names = [], []   # (style label, rule, status, kind, ref) for the receipts; every place saved to
+    for r in (lr["rules"][i] for i in lr["chosen"]):
+        dest = r.get("dest") or {"here": True}
+        if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
+            md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], style0)
+            if not md:
+                sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
+            status, line = skillrules.add(md, r["rule"], r.get("why") or f"from the notes on {folder.name}",
                                           r.get("replace"), edit=str(folder))
-            saved.append((skillrules.rule_of(line), status, "skill", tg["path"]))
-            print(f"{status}: {line} ({tg['path']})")
-    for r in (lr["rules"][i] for i in lr["chosen"] if tg["kind"] == "settings"):
-        setting, _, raw = (r.get("set") or "").partition("=")
-        status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
-                                     edit=folder, source="review")
-        saved.append((x["rule"], status, "settings", x["id"]))
-        print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
-
+            saved.append((label, skillrules.rule_of(line), status, "skill", md))
+            print(f"{status}: {line} ({md})")
+        else:   # a style: its overrides, rules and skill (styleskill.learn)
+            sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
+            label = style0 if dest.get("here") else dest["name"]
+            setting, _, raw = (r.get("set") or "").partition("=")
+            status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
+                                         edit=folder, source="review")
+            saved.append((label, x["rule"], status, "settings", x["id"]))
+            print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
+        if saved[-1][0] not in names:
+            names.append(saved[-1][0])
+    style = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     def done(d):
-        d["learn"].update(state="done", style=style, summary=summary or f"Saved to {style}. Next video uses it.",
-                          receipts=[receipt(d, style, *x, src="teach")["id"] for x in saved])
+        d["learn"].update(state="done", style=style, summary=summary or f"Saved to {style}. Next video uses "
+                          f"{'it' if len(saved) == 1 else 'them'}.",
+                          receipts=[receipt(d, *x, src="teach")["id"] for x in saved])
     update(folder / "review.json", done)
     print(f"saved to {style}")
 
@@ -3928,22 +3973,32 @@ def demo():
         raise AssertionError("done before the user ticked")
     except SystemExit as e:
         assert "nothing ticked" in str(e)
-    for bad, code in (({"chosen": [0], "to": "/no/such/style.json"}, 400), ({"chosen": [0], "new": " "}, 409)):
+    for bad, code in (({"chosen": [0], "to": "/no/such/style.json"}, 400), ({"chosen": [0], "to": {"0": "new"}, "new": " "}, 409),
+                      ({"chosen": [0], "to": {"0": "skill:nope"}}, 400)):
         try:   # Save to takes only a listed style; a new style needs a name
             post("/learn", bad)
             raise AssertionError(bad)
         except urllib.error.HTTPError as e:
             assert e.code == code, (bad, e.code)
-    post("/learn", {"chosen": [0, 2, 9], "to": lr["styles"][0]["id"]})
+    # each rule its own place: rule 0 this video's style, rule 2 one of the user's skills (the page's per-rule pick)
+    tsk = tmp / "skills" / "trial-notes" / "SKILL.md"
+    tsk.parent.mkdir(parents=True)
+    tsk.write_text("---\nname: trial-notes\ndescription: trial reels of a posted reel\n---\n\n# Trial notes\n", encoding="utf-8")
+    assert any(x["id"] == "skill:trial-notes" and x["about"] == "trial reels of a posted reel" for x in skill_choices()), skill_choices()
+    update(folder / "review.json", lambda d: d["learn"].update(skills=skill_choices()))
+    assert 'to "skill:trial-notes": the trial-notes skill: trial reels of a posted reel' in learn_prompt(folder, load(folder / "review.json"))
+    post("/learn", {"chosen": [0, 2, 9], "to": {"0": lr["styles"][0]["id"], "2": "skill:trial-notes"}})
     out = waited()
-    assert out.startswith("LEARN: the user ticked 2 rules for My style:") and "Captions one size smaller (captions.size_pct=4)" in out, out
+    assert out.startswith("LEARN: the user ticked 2 rules, each with where it goes:") and "Captions one size smaller (captions.size_pct=4)" in out, out
+    assert "Keep the pauses short -> Trial notes" in out, out
     assert "Fewer zooms" not in out and "learn --done" in out, out
     with contextlib.redirect_stdout(io.StringIO()):
         learn(done="")
     lr = load(folder / "review.json")["learn"]
-    assert lr["state"] == "done" and lr["summary"] == "Saved to @alice. Next video uses it.", lr
+    assert lr["state"] == "done" and lr["summary"] == "Saved to @alice and Trial notes skill. Next video uses them.", lr
     sk = (tmp / "skills" / "edit-like-alice" / "SKILL.md").read_text(encoding="utf-8")
-    assert "- Keep the pauses short." in sk and "Fewer zooms" not in sk, sk
+    assert "Captions one size smaller" in sk and "Keep the pauses short" not in sk and "Fewer zooms" not in sk, sk
+    assert "Keep the pauses short" in tsk.read_text(encoding="utf-8"), tsk.read_text(encoding="utf-8")
     old_lib = os.environ.get("AI_EDITOR_LIBRARY")
     os.environ["AI_EDITOR_LIBRARY"] = str(tmp / "lib")   # New style from this video: a named copy of @alice
     try:
@@ -4070,10 +4125,12 @@ def demo():
         raise AssertionError("undo twice")
     except urllib.error.HTTPError as e:
         assert e.code == 409
-    tr_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Keep the pauses short")
-    assert tr_["kind"] == "settings" and tr_["style"] == "@alice", tr_
-    post("/undo", {"id": tr_["id"]})
-    assert not any(r["rule"] == "Keep the pauses short" for r in taste.load_rules())
+    tr_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Captions one size smaller")
+    assert tr_["kind"] == "settings" and tr_["style"] == "@alice" and tr_["status"] == "updated", tr_   # it was there: no Undo
+    ts_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Keep the pauses short")
+    assert ts_["kind"] == "skill" and ts_["style"] == "Trial notes skill", ts_
+    post("/undo", {"id": ts_["id"]})   # a rule a save added to a skill comes out of that skill
+    assert "Keep the pauses short" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
     if old_skills is None:
         os.environ.pop("AI_EDITOR_SKILLS", None)
     else:

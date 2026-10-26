@@ -107,8 +107,9 @@ this video" with "Claude is reading your notes...". Turn them into at most 6 one
 python3 "$R" edits/<name> learn --propose '[{"rule": "Captions one size smaller", "section": "captions", "set": "captions.size_pct=4.5"}]'
 ```
 
-`[]` when none is about the style; `set` only when a taste setting maps. Run `wait` again. The user
-ticks rules and presses Update my style (or Not now). `wait` prints the ticked rules; then
+`[]` when none is about the style; `set` only when a taste setting maps; `to` on each rule: where it belongs, an
+id from the LEARN prompt's list (this video's style, My style, a style, or a skill `skill:<name>`). Run `wait`
+again. The user ticks rules, changes any pick, and presses Save (or Not now). `wait` prints the ticked rules; then
 `learn --done` saves them with `styleskill.learn` into the style the edit used (one creator style,
 else My style) and the page says "Saved to <style>. Next video uses it." No notes all session: the
 page says so and LEARN asks nothing. Round 1 of the user's first 3 videos also shows a one-time line:
