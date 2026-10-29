@@ -332,7 +332,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .eitem.txt.drag{cursor:grabbing;border-color:#FFFFFF;z-index:4}.eitem.txt:not(.pend){cursor:grab}
 .eitem.txt::before,.eitem.txt::after{content:"";position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize}.eitem.txt::before{left:-1px}.eitem.txt::after{right:-1px}
 .eitem.vid{background:#33404F;border-color:#55687E;color:#FFFFFF;padding:0 6px;cursor:pointer}.eitem.vid span{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden}
-.eitem.vid.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}
+.eitem.vid.sel,.eitem.txt.sel,.eitem.cap.sel,.eitem.img.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}
 .eitem.vid.cut{background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,transparent 6px 12px);border-style:dashed;color:var(--quiet)}
 .eitem.img{background:#3E3E42;border-color:#66666C;color:#FFFFFF;padding:0 6px;cursor:grab}.eitem.img span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
 .eitem.img.narrow span{display:none}.eitem.img.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}.eitem.img.drag{cursor:grabbing;border-color:#FFFFFF;z-index:4}
@@ -886,7 +886,7 @@ let themeAt=0;   // a poll already in flight still carries the old theme: ignore
 const $=id=>document.getElementById(id),vid=$('v'),v=media(vid),v2=$('v2'),bar=$('bar'),ta=$('ta'),box=$('box');
 const SPEEDS=[0.5,1,1.25,1.5,2],FPS=30,STAGE={cut:'The cut',edit:'The edit'};
 const KEYS=[['Play or pause','space'],['Back or forward 5 s','j l'],['Back or forward 1 s','← →'],['One frame',', .'],['Slower or faster','[ ]'],
- ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Split the video','s'],['Cut the picked piece','delete'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
+ ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Split the video','s ⌘B'],['Delete what you picked','delete'],['Copy the picked text','⌘D'],['Nudge the picked clip','⌥← ⌥→'],['Let go','esc'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
 $('keys').innerHTML=KEYS.map(([a,k])=>`<div><span>${a}</span><span>${k.split(' ').map(x=>'<kbd>'+x+'</kbd>').join('&nbsp;&nbsp;')}</span></div>`).join('');
 const TICK='<svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SPIN='<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--line)" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
@@ -1287,12 +1287,12 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
   const step=tstep(T/zm,10),ticks=[];for(let t=0;t<T;t+=step)ticks.push(t);
-  const texts=textItems().map(x=>`<div class="eitem txt${x.fresh?' pend':''}" data-et="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(x.start)}–${fmtx(x.end)}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`).join('');
+  const texts=textItems().map(x=>`<div class="eitem txt${x.fresh?' pend':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}" data-et="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(x.start)}–${fmtx(x.end)}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`).join('');
   const clip=(t0,d,cls,attrs,name,peaks,at)=>`<div class="eitem snd${cls}" ${attrs} style="left:${pc(t0)}%;width:${(d||.3)/T*100}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`;
   const snds=(it.sfx||[]).map(x=>clip(x.start??x.t,x.d,gone.has(x.t.toFixed(2))?' gone':'',`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,sname(x.src),x.peaks,x.t)).join('')
     +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>{const n=(x.peaks||[]).length,c=x.kind==='clip'&&x.d,pk=c?x.peaks.slice(Math.floor(x.in/x.d*n),Math.ceil((x.in+x.dur)/x.d*n)):x.peaks;
       return clip(x.t,c?x.dur:x.d,' pend'+(ssel===x.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),pk,x.t)}).join('');
-  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c),[cs0,ce0]=capAt(c);return `<div class="eitem cap${ct.edited||capMoved(c)?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(cs0)}%;width:${pc(ce0)-pc(cs0)}%" title="${esc(ct.text||c.text)} · ${fmtx(cs0)}–${fmtx(ce0)} · drag an edge to change how long it shows, click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
+  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c),[cs0,ce0]=capAt(c);return `<div class="eitem cap${ct.edited||capMoved(c)?' pend':''}${!ct.text?' gone':''}${tool==='captions'&&capSel===c.s&&lastPick==='cap'?' sel':''}" data-ec="${i}" style="left:${pc(cs0)}%;width:${pc(ce0)-pc(cs0)}%" title="${esc(ct.text||c.text)} · ${fmtx(cs0)}–${fmtx(ce0)} · drag an edge to change how long it shows, click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
   const cp=k=>(S.cards_pending||[]).find(p=>p.key===k)||{};
   const imgs=cardsAll().map(x=>{const p=cp(x.key),a=p.start??x.s,b=p.end??x.e;return `<div class="eitem img${p.key?' pend':''}${p.deleted?' gone':''}${csel&&csel.x.key===x.key?' sel':''}" data-ek="${esc(x.key)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(x.label)} · ${fmtx(a)}–${fmtx(b)} · click to select, drag to move, drag an edge to trim"><span>${esc(x.label.replace(/^the /,''))}</span></div>`}).join('');
   const vsps=cuts().splits.filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
@@ -1448,10 +1448,10 @@ $('edtracks').addEventListener('click',async e=>{
   if(e.target.id==='capedit'){return openCapLine(null)}
   const ci=e.target.closest('[data-ec]');if(ci){const c=(data().items.captions||[])[+ci.dataset.ec];
     if(e.target.closest('[data-ex]')){e.stopPropagation();return saveCapLine(c,'')}
-    return openCapLine(c)}
+    return openCapLine(c,true)}   // picked on the timeline: Delete takes it out, a click in the panel types
   const ti=e.target.closest('[data-et]'),si=e.target.closest('[data-st]'),ex=e.target.closest('[data-ex]');
   if(ti&&ex){e.stopPropagation();return delText(ti.dataset.et,!!ti.dataset.ef)}
-  if(ti){if(tool!=='text')openTool('text');return editText(ti.dataset.et,ti.dataset.ef)}
+  if(ti){if(tool!=='text')openTool('text');tlOpen=true;return editText(ti.dataset.et,ti.dataset.ef)}   // picked, not typed in
   if(si&&ex){e.stopPropagation();const r=await post('/sfx/remove',{t:+si.dataset.st,src:si.dataset.ssrc,...(si.dataset.sp2?{placed:si.dataset.sp2}:{})});
     if(!r.id)return toast(r.error||'That did not save.');toast('Sound removed. Submit feedback and the next draft drops it.');$('edtracks')._h=null;return load()}
   if(si&&si.dataset.sp2&&placed(si.dataset.sp2)){ssel=si.dataset.sp2;$('edtracks')._h=null;renderEdTracks();return openSndEdit(document.querySelector(`#edtracks [data-sp2="${CSS.escape(ssel)}"]`)||si)}   // the row was redrawn
@@ -2198,6 +2198,27 @@ $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if
 // it back, Delete takes it out, Note leaves a note about it. Until the bake, the page draws it at its new place
 // (S.cards_pending) over its old spot.
 let csel=null;   // {x: the card (review.py screen_items), box, orig} in % of the frame
+let lastPick=null,tlOpen=false;   // tlOpen: a text opened from its timeline clip gets no caret
+// the timeline's keys, CapCut's: Delete takes out what was picked last, Cmd+B splits, Cmd+D duplicates a text,
+// Alt+arrows nudge the picked clip 0.1 s (1 s with Shift), Esc lets go of everything. True when a key was used
+function tlKeys(e){const k=e.key,del=k==='Delete'||k==='Backspace',mod=e.metaKey||e.ctrlKey;
+  if(mod&&!e.altKey&&k.toLowerCase()==='b'){e.preventDefault();splitAt(v.currentTime);return true}
+  if(k==='Escape'&&(csel||vsel!=null||ssel||tx)){csel=null;drawCard();vsel=null;ssel=null;$('sndpick').hidden=true;if(tx)setText(null);lastPick=null;$('edtracks')._h=null;renderEdTracks();return true}
+  const T=tx&&tx.edit&&!tx.edit.fresh?(S.texts||[]).find(x=>String(x.id)===String(tx.edit.id)):null;
+  if(del&&lastPick==='text'&&tx&&tx.edit){e.preventDefault();delText(tx.edit.id,tx.edit.fresh);return true}
+  if(del&&lastPick==='cap'&&tool==='captions'&&capSel!=null){const c=((data().items||{}).captions||[]).find(c=>c.s===capSel);if(c){e.preventDefault();saveCapLine(c,'');return true}}
+  if(mod&&!e.altKey&&k.toLowerCase()==='d'&&lastPick==='text'&&T){e.preventDefault();const len=T.end-T.start;
+    post('/text/add',{text:T.text,style:T.style,x_pct:T.x_pct,y_pct:T.y_pct,size_pct:T.size_pct,font:T.font,color:T.color,width_pct:T.width_pct,start:T.end,end:T.end+len})
+      .then(r=>{toast(r.id||r.ok?`Copied "${T.text}" to ${fmtx(T.end)}.`:'That did not save.');$('edtracks')._h=null;load()});return true}
+  if(e.altKey&&!mod&&(k==='ArrowLeft'||k==='ArrowRight')){const d=(k==='ArrowLeft'?-1:1)*(e.shiftKey?1:.1),r2=x=>Math.round(Math.max(0,x)*100)/100;
+    if(lastPick==='text'&&T){e.preventDefault();setText(null);post('/text/edit',{id:T.id,start:r2(T.start+d),end:r2(T.end+d)}).then(()=>{$('edtracks')._h=null;load()});return true}
+    if(lastPick==='card'&&csel){e.preventDefault();const q=(S.cards_pending||[]).find(p=>p.key===csel.x.key)||{},a=q.start??csel.x.s,b=q.end??csel.x.e;
+      post('/card/edit',{key:csel.x.key,label:csel.x.label,t:a,t_end:b,start:r2(a+d),end:r2(b+d)}).then(()=>{$('edtracks')._h=null;load()});return true}
+    if(lastPick==='snd'&&ssel&&placed(ssel)){e.preventDefault();const x=placed(ssel);post('/sfx/move',{placed:x.id,t:r2(x.t+d)}).then(()=>{$('edtracks')._h=null;load()});return true}}
+  return false}
+document.addEventListener('pointerdown',e=>{const t=e.target,on=sel=>t.closest&&t.closest(sel);
+  const k=on('.eitem.txt')||on('#tprev')?'text':on('.eitem.cap')||on('#cpline')||on('#cbody')?'cap':on('.eitem.img')||on('#csel')||on('[data-hit]')?'card':on('.eitem.snd')?'snd':on('.eitem.vid')||on('.vsp')?'vid':on('#tx')?'tx':null;
+  if(!k)return;lastPick=k;if(k!=='tx'&&txSel&&typeof hideBar==='function'){txSel=null;hideBar();paintSel()}},true);
 // CapCut's rule: a click anywhere but on the picked thing (or its own bar and panel) lets it go; an open text saves first
 document.addEventListener('pointerdown',e=>{const on=sel=>e.target.closest(sel);
   if(csel&&!on('#csel,.cbar,.eitem.img,[data-hit],#tside')){csel=null;drawCard()}
@@ -2340,8 +2361,8 @@ function setText(style,edit){
         start:t0,end:edit?edit.end:(b??Math.min(t0+3,v.duration||t0+3)),edit:edit||(tx&&tx.edit)||null};
     if(!tpanel)openPanel(true);
     if(!(v.currentTime>=tx.start&&v.currentTime<tx.end))v.currentTime=tx.start+.05}
-  document.body.classList.toggle('texting',!!tx);tsig=null;$('tbody')._tf=null;renderTextPanel();renderTexts();
-  if(tx){v.pause();setTimeout(()=>{const sp=$('tprev')&&$('tprev').firstChild;if(sp)typeIn(sp,true);else{const w=$('tword');if(w){w.focus();w.select()}}},0)}}
+  document.body.classList.toggle('texting',!!tx);tsig=null;$('edtracks')._h=null;renderEdTracks();$('tbody')._tf=null;renderTextPanel();renderTexts();   // its clip shows picked
+  if(tx){v.pause();setTimeout(()=>{if(tlOpen){tlOpen=false;return}const sp=$('tprev')&&$('tprev').firstChild;if(sp)typeIn(sp,true);else{const w=$('tword');if(w){w.focus();w.select()}}},0)}}
 // put the caret in the text on the video: all of it picked (a new or just-opened text), or where the user clicked
 function typeIn(sp,all,x,y){$('tprev').classList.add('typing');sp.focus();const r=document.createRange(),sel=getSelection();
   const at=x!=null&&document.caretRangeFromPoint?document.caretRangeFromPoint(x,y):null;
@@ -2419,7 +2440,7 @@ function capTile(name,l){const fs=Math.max(11,Math.min(16,(l.size_pct||4.2)*2.8)
 let capFocus=null,capSel=null;   // capFocus: the line to put the cursor in (its start); capSel: the line the panel is on
 let capLive={},capDrag=false;   // a size, place or colour being dragged or slid: drawn at once, saved when let go
 const CAPCOLS=['#FFFFFF','#000000','#FFD60A','#FF9500','#FF3B30','#34C759','#0A84FF','#BF5AF2'];   // the few caption colours; the wheel has the rest
-function openCapLine(c){if(tool!=='captions')openTool('captions');capFocus=c?c.s:null;if(c){capSel=c.s;v.currentTime=c.s+.02;v.pause()}$('cbody')._s=null;renderCapPanel()}
+function openCapLine(c,pick){if(tool!=='captions')openTool('captions');capFocus=c&&!pick?c.s:null;if(pick)lastPick='cap';if(c){capSel=c.s;v.currentTime=c.s+.02;v.pause()}$('cbody')._s=null;renderCapPanel();$('edtracks')._h=null;renderEdTracks()}
 async function saveCapLine(c,text,quiet){if(!c)return;const live=capTyping[c.s];delete capTyping[c.s];const old=capText(c).text;if(live==null&&text.trim()===old.trim())return;
   const r=await post('/captions/text',{s:c.s,w:c.w,text,old:c.text});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
   if(!quiet)toast(text.trim()?'Caption changed.':'Caption taken out.');
@@ -2669,6 +2690,7 @@ document.addEventListener('keydown',e=>{
   const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&txEditable()&&HIST.length){e.preventDefault();return txUndo()}
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&edTxOk()&&EH.u.length){e.preventDefault();return edUndo()}
+  if(!typing&&view&&view.stage==='edit'&&tlKeys(e))return;
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&edTxOk()){e.preventDefault();return edTxOp()}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&txEditable()){e.preventDefault();return txOp('cut')}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&ssel&&placed(ssel)){e.preventDefault();$('sndpick').hidden=true;return delSnd(placed(ssel))}
