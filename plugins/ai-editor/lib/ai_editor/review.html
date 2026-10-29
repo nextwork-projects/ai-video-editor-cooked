@@ -957,7 +957,10 @@ $('clcbtn').onclick=async()=>{const b=$('clcbtn');b.disabled=true;
 $('railtog').onclick=()=>{railx=!railx;document.body.classList.toggle('railx',railx);try{localStorage.setItem('review-railx',railx?'1':'0')}catch(e){}
   $('railtog').title=$('railtog').ariaLabel=railx?'Collapse the sidebar':'Expand the sidebar'};
 let PV=null,followNew=false;   // followNew: Go back was pressed, so show the round it opens wherever the page was
-async function load(force){
+// a poll sent before the last edit on this page answers with the state before it: keep what the page has, or a cut
+// put back plays as cut again for a moment (the sound jumps and repeats) until the next poll
+let editAt=0;const LOCAL=['cuts','placed_sounds','cap_times','texts'];
+async function load(force){const sent=performance.now();
   const raw=await (await fetch('/state')).text();
   if(raw===lastRaw&&!force)return;lastRaw=raw;
   const d=JSON.parse(raw),was=S&&key(cur());
@@ -965,6 +968,7 @@ async function load(force){
   if(S&&!landing&&makingEdit()&&d.stage==='edit'&&key(d)!==key(S)){landing=d.stills?3:1;renderMaking();renderList();setTimeout(()=>{landing=2;load(true)},1100);return}   // 3: the stills, the same green bar
   // live reload: the page or the server changed; never while a note is being typed
   if(d.page){const t=document.activeElement;if(PV&&d.page!==PV&&!(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName)&&t.value)){location.reload();return}PV=PV||d.page}
+  if(S&&sent<editAt)for(const k of LOCAL)if(k in S)d[k]=S[k];
   S=d;plainState(S);
   if((d.theme==='light'||d.theme==='dark')&&document.documentElement.dataset.theme!==d.theme&&Date.now()-themeAt>3000){document.documentElement.dataset.theme=d.theme;themeIcon()}   // one theme with the window
   if(!view||followNew&&was!==key(cur())||(was&&was!==key(cur())&&key(view)===was)){if(view&&was&&was!==key(cur())&&v.currentTime>0)seekTo=mapT(v.currentTime,key(view),key(cur()));   // the new draft opens where you were, not at 0
@@ -1256,7 +1260,7 @@ let vsel=null,edDragged=0;
 const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
 function vpieces(){const T=D(),c=cuts(),b=[0,...c.splits.filter(t=>t>0&&t<T),T];
   return b.slice(0,-1).map((a,i)=>({a,b:b[i+1],cut:c.gone.some(([x,y])=>a>=x-.01&&b[i+1]<=y+.01)}))}
-async function setCuts(c,what){if(what){const was=JSON.parse(JSON.stringify(cuts()));edPush(what,()=>setCuts(was),()=>setCuts(c))}S.cuts=c;$('edtracks')._h=null;renderEdTracks();
+async function setCuts(c,what){editAt=performance.now();if(what){const was=JSON.parse(JSON.stringify(cuts()));edPush(what,()=>setCuts(was),()=>setCuts(c))}S.cuts=c;$('edtracks')._h=null;renderEdTracks();
   const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');$('edtracks')._h=null;await load()}   // ok, or the note it made
 function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.splits.some(x=>Math.abs(x-t)<.1))return;
   setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
@@ -1273,7 +1277,11 @@ function edTxOp(op){const ks=[];for(let k=txSel.a;k<=txSel.b;k++)if(!W[k].nt&&W[
   const gone=op==='cut'?[...c.gone,[a,b]]:c.gone.flatMap(([x,y])=>y<=a||x>=b?[[x,y]]:[...(a>x?[[x,a]]:[]),...(b<y?[[b,y]]:[])]);
   const splits=[...new Set([...c.splits,...[a,b].filter(t=>t>.05&&t<T-.05&&!c.splits.some(x=>Math.abs(x-t)<.01))])].sort((x,y)=>x-y);   // the row shows it as its own piece
   txSel=null;hideBar();setCuts({...c,splits,gone},op==='cut'?'words cut':'words put back');renderTx();renderTools();toast(op==='cut'?'Cut. It plays without those words now.':'Words put back.')}
-function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp)return;const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(g)v.currentTime=g[1]}
+// one jump per cut: the frame a seek lands on can start before the cut's end (a 24 fps video, FPS is 30), so the same
+// jump never fires again within 0.5 s, or it seeks in a loop and the sound stutters and repeats
+let goneTo=null,goneAt=0;
+function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp)return;const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(!g)return;
+  if(goneTo===g[1]&&performance.now()-goneAt<500)return;goneTo=g[1];goneAt=performance.now();v.currentTime=g[1]+.01}
 // undo / redo (Cmd+Z, Shift+Cmd+Z) for the timeline edits made on this page: each entry replays the opposite save.
 // The transcript keeps its own undo (HIST); whichever was touched last takes the key.
 const EH={u:[],r:[]};let edAt=0,txAt=0;
@@ -1724,7 +1732,7 @@ $('list').addEventListener('click',e=>{
   renderList();
 });
 document.addEventListener('pointerdown',e=>{if(trMenu!=null&&!e.target.closest('.trmenu,.trsel')){trMenu=null;renderList()}});
-async function post(u,b){const r=await fetch(u,{method:'POST',body:JSON.stringify(b)});return r.ok?r.json():{}}
+async function post(u,b){editAt=performance.now();const r=await fetch(u,{method:'POST',body:JSON.stringify(b)});editAt=performance.now();return r.ok?r.json():{}}
 
 $('stages').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -2022,7 +2030,7 @@ function skip(t){
   if(!previewOn||!KEEP.length)return;const h=.5/FPS;
   if(KEEP.some(r=>t>=r[0]-h&&t<r[1]-h))return;
   const n=KEEP.find(r=>r[0]>t-h);
-  if(n){if(Math.abs(v.currentTime-n[0])>.001)v.currentTime=n[0]}else if(!v.paused){v.pause();v.currentTime=KEEP[KEEP.length-1][1]-.01}
+  if(n){if(Math.abs(v.currentTime-n[0])>.001&&!(goneTo===n[0]&&performance.now()-goneAt<500)){goneTo=n[0];goneAt=performance.now();v.currentTime=n[0]}}   // the same one-jump guardelse if(!v.paused){v.pause();v.currentTime=KEEP[KEEP.length-1][1]-.01}
 }
 if('requestVideoFrameCallback' in HTMLVideoElement.prototype){const f=(_,m)=>{skip(m.mediaTime);skipGone(m.mediaTime);v.requestVideoFrameCallback(f)};v.requestVideoFrameCallback(f)}
 v.addEventListener('timeupdate',()=>{skip(v.currentTime);skipGone(v.currentTime)});v.addEventListener('play',()=>skip(v.currentTime));
