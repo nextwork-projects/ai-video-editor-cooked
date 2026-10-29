@@ -1029,15 +1029,137 @@ def cards_added(folder, d):
 def bake_ready(folder, d):
     """Why the typed texts cannot go into this draft by themselves now (None: they can). A patch render needs the
     edit's final render and the plan it was made from; while Claude has the round it plans them in itself."""
+    why = live_ready(folder, d)
+    return why if why == "not the edit" else "Claude has this draft" if d.get("sent") or busy(folder) and not listening(folder) \
+        else why   # waiting for notes: idle
+
+
+def live_ready(folder, d):
+    """Why the page cannot play this draft live from its plan (None: it can): the draft on the page must be the render
+    edit.py made from that plan, untouched since, so the composition drawn from the plan is that video (one finished by
+    hand, finish.sh overlays, has more in it than the plan says)."""
     plan = Path(d.get("plan") or "-")
     src = plan.with_name("render" + plan.stem[len("plan"):] + ".mp4")
     return ("not the edit" if d.get("stage") != "edit" or d.get("stills") or d.get("raw") else
-            "Claude has this draft" if d.get("sent") or busy(folder) and not listening(folder) else   # waiting for notes: idle
             "no plan" if not plan.is_file() or not plan.stem.startswith("plan") else
             "no render to patch" if not src.is_file() or not src.with_suffix(".plan.json").is_file() else
             "the render was finished by hand" if not render_stamped(src) else
             "the draft is not the render" if not Path(d.get("video") or "-").is_file()
             or Path(d["video"]).stat().st_size != src.stat().st_size else None)
+
+
+LIVE_PLAN, LIVE_PROXY, LIVE_LOCK = {}, {}, threading.Lock()   # folder -> (files' key, plan); folder -> its proxy's thread
+
+
+def live_sound(x):
+    """A placed sound (sounds.json) as a cue the live player plays from this page's own routes: a dropped clip from
+    "in" for "dur" at "vol", a library sound as it is, both at "t" (plan.py placed_sounds levels and trims them into
+    .sfx/ for the render). Quoted as the page's encodeURIComponent quotes, so the page's own copy is the same cue."""
+    q = quote(str(x["sound"]), safe="!'()*")
+    if x.get("kind") == "clip":
+        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), "placed": x.get("id")}
+    d = sound_shape(sfx_mod().library_dir() / str(x["sound"]), cap=sfx_mod().MAX_OWN_S).get("d")
+    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), "placed": x.get("id")}
+
+
+def live_video(folder, plan, plan_f):
+    """The footage the live player plays, relative to the edit: the render's own copy (edit.py prepare_public: the cut
+    at output size, framed and graded as the render draws it, a keyframe every 15 frames so a seek is quick) while it
+    is that, else a copy made once the same way into .live/ (an editor's proxy: a 4K cut stutters in a browser), and
+    the cut itself while that is made. Renders never read .live/."""
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from edit import footage_filter
+    from plan import probe
+    rel, cut = plan["video"], folder / plan["video"]
+    if not cut.is_file():
+        return rel
+    k = (str(cut), cut.stat().st_mtime_ns)
+    if LIVE_PROXY.get(k) is None:
+        LIVE_PROXY[k] = probe(cut)   # once per cut: ffprobe on every poll would be slow
+    m = LIVE_PROXY[k]
+    vf = footage_filter(plan, m["width"], m["height"])
+    for c in (folder / f".render{plan_f.stem[len('plan'):]}" / rel, folder / ".live" / rel):
+        made = c.with_name(c.name + ".vf")
+        if c.is_file() and c.stat().st_mtime >= cut.stat().st_mtime and made.is_file() and made.read_text(encoding="utf-8") == vf:
+            return c.relative_to(folder).as_posix()
+    out = folder / ".live" / rel
+    with LIVE_LOCK:
+        if (LIVE_PROXY.get(str(out)) or threading.Thread()).is_alive():
+            return rel
+
+        def make():
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_name(out.stem + ".part" + out.suffix)
+            r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cut), "-filter_complex", vf, "-c:v", "libx264", "-crf", "23",
+                                "-preset", "veryfast", "-g", "15", "-keyint_min", "15", "-sc_threshold", "0", "-pix_fmt", "yuv420p",
+                                "-c:a", "copy", "-movflags", "+faststart", str(tmp)], capture_output=True)
+            if r.returncode == 0:
+                os.replace(tmp, out)
+                out.with_name(out.name + ".vf").write_text(vf, encoding="utf-8")
+            else:
+                tmp.unlink(missing_ok=True)
+        LIVE_PROXY[str(out)] = threading.Thread(target=make, daemon=True)
+        LIVE_PROXY[str(out)].start()
+    return rel
+
+
+def live_plan(folder, d):
+    """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
+    the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
+    smoothly (live_video), and each card's overrides.json key ("_key"). {"why": ...} when the page plays the MP4.
+    Made again only when one of its files changed: the page asks after every change it sees."""
+    why = live_ready(folder, d)
+    if why:
+        return {"why": why}
+    plan_f = Path(d["plan"])
+    p = load(plan_f)
+    cap = captions_info(folder, plan_f)
+    video = live_video(folder, p, plan_f)
+    key = (json.dumps(cap, sort_keys=True), video, *((f.stat().st_mtime_ns if f.exists() else 0) for f in
+           (plan_f, folder / "texts.json", folder / "overrides.json", folder / "sounds.json")))
+    hit = LIVE_PLAN.get(str(folder))
+    if hit and hit[0] == key:
+        return hit[1]
+    p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import apply_overrides
+    p = apply_overrides(p, folder, plan_f.name)
+    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x]
+    for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
+        if not c["src"].startswith("/") and "_d" not in c:
+            c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
+    st = p["captions"].setdefault("style", {})
+    n0 = st.get("words_per_caption")
+    st.update((cap["looks"].get(cap["look"]) or {}) if cap.get("look") and cap["look"] != st.get("style") else {}, **cap["mine"])
+    n = CAP_GROUPS.get(str(cap.get("words"))) or st.get("words_per_caption")
+    if n and n != n0:   # words at a time changed: re-paged as plan.py pages them
+        from plan import chunk_captions, mark_emph
+        words = [w for ch in p["captions"]["chunks"] for w in ch.get("words") or [] if "start" in w]
+        p["captions"]["chunks"] = mark_emph(chunk_captions(words, n, st.get("case", "sentence")))
+        st["words_per_caption"] = n
+    p["video"] = video
+    for c in p["cards"]:
+        c["_key"] = card_key(c)
+    LIVE_PLAN[str(folder)] = (key, p)
+    return p
+
+
+LIVE_JS = {"lock": threading.Lock()}
+
+
+def live_bundle(check=True):
+    """dist/live.js, the live player (preview/live.tsx), built with the renderer when its sources changed (preview.py
+    build_bundle); check=False: the one already built (its chunks). None when it cannot be built: the page plays the MP4."""
+    with LIVE_JS["lock"]:
+        if check or not LIVE_JS.get("js"):
+            try:
+                sys.path.insert(0, str(EDIT_PY.parent))
+                from preview import build_bundle
+                LIVE_JS["js"] = build_bundle().with_name("live.js")
+            except (Exception, SystemExit) as e:   # noqa: BLE001  no node, no renderer: say so in the server log
+                print(f"live player: not built ({e})", file=sys.stderr)
+                LIVE_JS["js"] = None
+        return LIVE_JS["js"]
 
 
 def render_stamped(src):
@@ -1924,6 +2046,17 @@ def make_handler(folder, token):
                 if making_edit(d):
                     d["making"] = {"style": making_style(folder), "steps": EDIT_STEPS}
                 return self.send(200, d)
+            if path == "/live/plan":   # the live player's plan (live_plan), or why the page plays the MP4
+                return self.send(200, live_plan(folder, load(rj)))
+            if path == "/live/live.js" or re.fullmatch(r"/live/chunks/[\w-]+\.js", path):   # the live player and its chunks
+                b = live_bundle(path == "/live/live.js")
+                f = b and b.parent / path[len("/live/"):]
+                return self.send(200, f.read_bytes(), "text/javascript") if f and f.is_file() else self.send(404, {})
+            if path.startswith("/live/media/"):   # a file the plan names, under this edit only
+                p = (folder / unquote(path[len("/live/media/"):])).resolve()
+                if not p.is_file() or not p.is_relative_to(folder.resolve()):
+                    return self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
             if path == "/video":
                 d = load(rj)
                 if q.get("k") == "raw":
@@ -3969,6 +4102,79 @@ def demo_bake(tmp):
     assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 3
 
 
+def demo_live(tmp):
+    """/live/plan: the plan the next bake makes (texts.json, overrides.json), with the placed sounds, this video's
+    caption style and footage the browser plays; /live/media serves files under the edit only."""
+    f = tmp / "live"
+    (f / "review" / "snap-edit1").mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=2", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", str(f / "cut.mp4")], check=True)
+    shutil.copy2(f / "cut.mp4", f / "render.mp4")
+    plan = {"video": "cut.mp4", "fps": 30, "durationInFrames": 60, "width": 64, "height": 36,
+            "captions": {"style": {"y_pct": 70, "words_per_caption": 3}, "chunks": [{"text": "one two", "start": 0.0, "end": 1.0, "words": [
+                {"text": "one", "start": 0.0, "end": 0.5}, {"text": "two", "start": 0.5, "end": 1.0}]}]},
+            "texts": [{"kind": "title", "text": "T", "start": 0, "end": 1}],
+            "cards": [{"start": 0.5, "end": 1.5, "trigger_word": "repo", "box": [30, 60, 40, 20]}],
+            "sfx": [{"t": 0.4, "src": ".sfx/pop.wav", "event": 0.5}, {"t": 1.0, "src": ".sfx/clip-old.wav", "placed": "old"}]}
+    for x in (f / "plan.json", f / "render.plan.json", f / "review" / "snap-edit1" / "plan.json"):
+        x.write_text(json.dumps(plan), encoding="utf-8")
+    clone(f / "render.mp4", f / "review" / "v-edit1.mp4")
+    save(f / "review.json", {"stage": "edit", "round": 1, "sent": True, "stills": False, "events": [], "comments": [],
+                             "plan": str(f / "plan.json"), "snap": "snap-edit1", "video": str(f / "review" / "v-edit1.mp4")})
+    d = load(f / "review.json")
+    assert live_plan(f, d) == {"why": "the render was finished by hand"}, "a render finished by hand plays as the MP4"
+    (f / "render.stamp.json").write_text(json.dumps({"size": (f / "render.mp4").stat().st_size,
+                                                     "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
+    assert live_ready(f, d) is None and bake_ready(f, d) == "Claude has this draft", "live while Claude has it; only the bake waits"
+    (f / "texts.json").write_text(json.dumps({"items": [{"id": "t1", "text": "hi", "style": "box", "start": 0.5, "end": 1.5,
+                                                         "x_pct": 50, "y_pct": 30, "size_pct": 8, "color": "#FF3B30"}]}), encoding="utf-8")
+    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20], "start": 0.8, "end": 1.9}},
+                                                  "words": {"0.500": "TWO"}}), encoding="utf-8")
+    (f / "sounds.json").write_text(json.dumps({"items": [{"id": "a1", "t": 1.2, "sound": "song one.mp3", "kind": "clip", "in": 0.5,
+                                                          "dur": 0.8, "vol": 0.5}]}), encoding="utf-8")
+    lp = live_plan(f, d)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import apply_overrides
+    want = load(f / "plan.json")   # what bake() writes before its patch render
+    want["texts"] = [x for x in want["texts"] if x.get("kind") != "label"] + typed_labels(f)
+    want = apply_overrides(want, f, "plan.json")
+    assert lp["texts"] == want["texts"] and lp["texts"][1]["color"] == "#FF3B30", lp["texts"]
+    assert [{k: v for k, v in c.items() if k != "_key"} for c in lp["cards"]] == want["cards"] and lp["cards"][0]["_key"] == "repo@0.500"
+    assert lp["captions"]["chunks"] == want["captions"]["chunks"] and lp["captions"]["chunks"][0]["text"] == "one TWO"
+    assert [(c["src"], c.get("from"), c.get("dur"), c.get("vol")) for c in lp["sfx"]] == [
+        (".sfx/pop.wav", None, None, None), ("/audio/song%20one.mp3", 0.5, 0.8, 0.5)], lp["sfx"]   # the old placed copy is gone
+    assert live_plan(f, d) is lp, "unchanged files: the same plan, nothing made again"
+    from ai_editor import taste
+    rp = taste.rules_path()
+    keep = rp.read_bytes() if rp.exists() else None   # this demo's caption rules come out again after
+    set_captions(f, style={"y": 40})
+    assert live_plan(f, d)["captions"]["style"]["y_pct"] == 40, "this video's caption place"
+    set_captions(f, words="1")
+    assert [c["text"] for c in live_plan(f, d)["captions"]["chunks"]] == ["one", "TWO"], "one word at a time: paged again"
+    rp.write_bytes(keep) if keep is not None else rp.unlink()
+    th = LIVE_PROXY.get(str(f / ".live" / "cut.mp4"))   # no render copy: the cut plays while a proxy is made, then the proxy
+    assert th, "a proxy is being made"
+    th.join(60)
+    assert live_plan(f, d)["video"] == ".live/cut.mp4" and (f / ".live" / "cut.mp4.vf").is_file()
+    (tmp / "outside.txt").write_text("secret", encoding="utf-8")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def code(p, **h):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}{p}?t=tok", headers=h)) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
+    assert code("/live/media/cut.mp4") == 200 and code("/live/media/.live/cut.mp4", Range="bytes=0-9") == 206
+    for bad in ("/live/media/../outside.txt", "/live/media/%2e%2e/outside.txt", "/live/media/" + quote(str(tmp / "outside.txt")),
+                "/live/media/review", "/live/media/nope.png"):
+        assert code(bad) == 404, bad
+    assert code("/live/plan") == 200
+    srv.shutdown()
+    srv.server_close()
+
+
 def demo():
     import contextlib
     import io
@@ -3977,6 +4183,7 @@ def demo():
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")   # start records the folder in the library index there
     demo_timings(tmp)
     demo_bake(tmp)
+    demo_live(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []

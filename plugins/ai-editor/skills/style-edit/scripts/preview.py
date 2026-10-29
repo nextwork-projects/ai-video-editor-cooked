@@ -298,6 +298,10 @@ def handler(sess, bundle, stop, token):
                 return self.body((PAGE / "index.html").read_bytes(), "text/html; charset=utf-8", cookie=True)
             if p == "/app.js":
                 return self.body(bundle.read_bytes(), "text/javascript")
+            if p.startswith("/chunks/") and re.fullmatch(r"/chunks/[\w-]+\.js", p):   # build.mjs splitting: the shared code and each font
+                f = bundle.parent / p[1:]
+                if f.is_file():
+                    return self.body(f.read_bytes(), "text/javascript")
             if p == "/api/state":
                 return self.body(sess.state())
             if p.startswith("/media/"):
@@ -326,20 +330,29 @@ def handler(sess, bundle, stop, token):
     return H
 
 
+BUNDLE_SRC = ("app.tsx", "live.tsx", "Sfx.tsx", "build.mjs")
+
+
 def build_bundle():
-    """Bundle preview/app.tsx with the renderer's own esbuild and node_modules (~/.ai-video-editor/remotion),
-    against the same src/ the render uses."""
+    """Bundle preview/app.tsx (this page) and preview/live.tsx (the review page's live player) with the renderer's
+    own esbuild and node_modules (~/.ai-video-editor/remotion), against the same src/ the render uses. Built again
+    only when a source is newer than the bundles. Returns dist/app.js; dist/live.js sits beside it."""
     sys.path.insert(0, str(HERE))
-    from edit import REMOTION, sync_renderer
+    from edit import REMOTION, SRC, sync_renderer
     sync_renderer()
     if not (REMOTION / "node_modules" / "@remotion" / "player").exists():
         sys.exit(f"ERROR: @remotion/player missing in {REMOTION}/node_modules. Run the setup skill's remotion step again.")
     dst = REMOTION / "preview"
+    out = [dst / "dist" / "app.js", dst / "dist" / "live.js"]
+    newest = max(p.stat().st_mtime for p in [*(PAGE / f for f in BUNDLE_SRC), *(SRC / "src").rglob("*")] if p.is_file())
+    if all(o.exists() and o.stat().st_mtime > newest for o in out):
+        return out[0]
     dst.mkdir(exist_ok=True)
-    for f in ("app.tsx", "Sfx.tsx", "build.mjs"):
+    shutil.rmtree(dst / "dist", ignore_errors=True)   # chunk names carry a hash: the old ones would pile up
+    for f in BUNDLE_SRC:
         shutil.copy2(PAGE / f, dst / f)
     subprocess.run(["node", str(dst / "build.mjs")], cwd=REMOTION, check=True)
-    return dst / "dist" / "app.js"
+    return out[0]
 
 
 def make_server(sess, bundle, port):
@@ -475,6 +488,18 @@ def demo():
     srv.shutdown()
     srv.server_close()
     shutil.rmtree(d)
+    # the bundles: both pages from one build, and a second call with nothing changed builds nothing
+    assert all((PAGE / f).is_file() for f in BUNDLE_SRC) and all(f in (PAGE / "build.mjs").read_text(encoding="utf-8") for f in ("app.tsx", "live.tsx"))
+    sys.path.insert(0, str(HERE))
+    from edit import REMOTION, SRC
+    lock = "package-lock.json"
+    if (REMOTION / "node_modules" / "@remotion" / "player").exists() and (REMOTION / lock).read_bytes() == (SRC / lock).read_bytes():
+        js = build_bundle()
+        live, at = js.with_name("live.js"), js.with_name("live.js").stat().st_mtime_ns
+        assert "CookedLive" in live.read_text(encoding="utf-8") and any((js.parent / "chunks").glob("*.js")), "the live player and its chunks"
+        assert build_bundle() == js and live.stat().st_mtime_ns == at, "unchanged sources: not built again"
+    else:
+        print("note: no installed renderer here, the bundle build was not checked")
     print("demo ok")
 
 

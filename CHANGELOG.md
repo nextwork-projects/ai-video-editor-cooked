@@ -3,6 +3,7 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- The edit plays live on its review page: the video you watch is the edit itself, drawn from its plan, so typing a caption or a text, a colour, a moved or dropped picture, a sound or a cut shows in the real frame at once. No blurred box, no Preview label, no second copy. The MP4 still plays for the cut, older drafts, other versions, compare and a render finished by hand.
 - Drag a caption's edges on the Captions row to show it longer or shorter, or drag it to move it; an edge pushes the next caption along. The video shows it at its new time straight away and it bakes into the video by itself.
 - A picked image lets go when the video plays past it or you click anywhere else, and an open text saves and closes the same way. No Done needed.
 - A Media tool on the edit: upload or drop images and videos, then drag one onto the video (or the timeline) and it is on screen there at once, from the playhead, 3 s for a picture or the clip's length up to 10 s. Move, resize, retime and delete it like any card; it goes into the video by itself, no Claude needed.
