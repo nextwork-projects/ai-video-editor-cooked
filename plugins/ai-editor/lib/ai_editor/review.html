@@ -2225,6 +2225,15 @@ $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if
 // (S.cards_pending) over its old spot.
 let csel=null;   // {x: the card (review.py screen_items), box, orig} in % of the frame
 let lastPick=null,tlOpen=false;   // tlOpen: a text opened from its timeline clip gets no caret
+// Delete over a timeline clip takes that clip out, picked or not (the mouse wins over the last pick)
+function hoverDel(){const it=document.querySelector('#edtracks .eitem:hover');if(!it||it.classList.contains('gone'))return false;
+  if(it.dataset.sp2&&placed(it.dataset.sp2)){$('sndpick').hidden=true;delSnd(placed(it.dataset.sp2));return true}   // its popover goes too
+  if(it.dataset.et&&it.querySelector('[data-ex]')){delText(it.dataset.et,!!it.dataset.ef);return true}   // not a text Claude has
+  if(it.dataset.ec!=null){saveCapLine(((data().items||{}).captions||[])[+it.dataset.ec],'');return true}
+  const ex=it.querySelector('[data-ex]');if(ex){ex.click();return true}   // a sound the draft placed
+  if(it.dataset.ek){const x=cardsAll().find(c=>c.key===it.dataset.ek);if(!x)return false;selectCard(x);cardSave(true);return true}
+  if(it.dataset.va!=null){cutPiece(+it.dataset.va);return true}
+  return false}
 // the timeline's keys, CapCut's: Delete takes out what was picked last, Cmd+B splits, Cmd+D duplicates a text,
 // Alt+arrows nudge the picked clip 0.1 s (1 s with Shift), Esc lets go of everything. True when a key was used
 function tlKeys(e){const k=e.key,del=k==='Delete'||k==='Backspace',mod=e.metaKey||e.ctrlKey;
@@ -2716,6 +2725,7 @@ document.addEventListener('keydown',e=>{
   const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&txEditable()&&HIST.length){e.preventDefault();return txUndo()}
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&edTxOk()&&EH.u.length){e.preventDefault();return edUndo()}
+  if(!typing&&view&&view.stage==='edit'&&(e.key==='Backspace'||e.key==='Delete')&&!e.metaKey&&!e.ctrlKey&&hoverDel()){e.preventDefault();return}
   if(!typing&&view&&view.stage==='edit'&&tlKeys(e))return;
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&edTxOk()){e.preventDefault();return edTxOp()}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&txEditable()){e.preventDefault();return txOp('cut')}
