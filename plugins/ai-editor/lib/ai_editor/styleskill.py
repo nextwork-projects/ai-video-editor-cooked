@@ -307,7 +307,7 @@ def copies(style):
 
 def learned(sc):
     """One bullet per rule of this scope, from rules.json (deduplicated there, as taste rules are)."""
-    rules = [r for r in taste.load_rules() if r["scope"] == sc] if taste.rules_path().exists() else []
+    rules = [r for r in taste.load_rules() if r["scope"] == sc and not r.get("off")] if taste.rules_path().exists() else []   # off: not followed
     lines = []
     for r in rules:
         setting = f" Setting: `{r['setting']} = {json.dumps(r['value'])}`." if r.get("setting") else ""

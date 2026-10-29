@@ -319,6 +319,11 @@ def round_data(folder, video, stage, rnd, plan, prev=None):
                                         music=snap_sha(folder, prev.get("snap")) != music_sha(folder))
         if old.get("duration") and dur and abs(old["duration"] - dur) >= 0.1:
             d["changes"].append({"t": None, "text": f"{abs(old['duration'] - dur):.1f} s {'shorter' if dur < old['duration'] else 'longer'}"})
+    try:   # the rules this draft used: what plan.py, the cut and Claude's taste read handed over (taste.record)
+        from ai_editor import taste
+        d["rules"] = taste.applied_ids(folder)
+    except Exception:
+        pass
     name = f"data-{stage}{rnd}.json"
     save(folder / "review" / name, d)
     return name
@@ -574,6 +579,206 @@ def card_override(folder, key, change):
     cards[key] = {**(cards.get(key) or {}), **change}
     save(f, ov)
     return cards[key]
+
+
+def log_edit(folder, change, target, frm, to, what=""):
+    """One hands-on edit on the page as a correction in <edit>/corrections.jsonl, the file preview.py writes
+    ({change, target, from, to, what}), with source "review" and the stage and round it was made on. edit_patterns
+    sums them up at the final approve, so what the user did teaches the style as well as what they typed."""
+    folder = Path(folder)
+    try:
+        d = load(folder / "review.json")
+    except (OSError, ValueError):
+        d = {}
+    row = {"at": now(), "source": "review", "stage": d.get("stage"), "round": d.get("round"), "change": change,
+           "target": str(target), "from": frm, "to": to, "what": what}
+    with contextlib.suppress(OSError), open(folder / "corrections.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def edit_events(folder):
+    """The page's own rows of corrections.jsonl (preview.py's rows have another shape and stay out)."""
+    try:
+        rows = [json.loads(x) for x in (Path(folder) / "corrections.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
+    except (OSError, ValueError):
+        return []
+    return [r for r in rows if isinstance(r, dict) and r.get("source") == "review" and r.get("change")]
+
+
+def card_was(folder, key, plan=None):
+    """A card's box before a move: its last move (overrides.json), a dropped card's own box, else where the plan has it."""
+    f = Path(folder) / "overrides.json"
+    ov = load(f) if f.exists() else {}
+    box = ((ov.get("cards") or {}).get(key) or {}).get("box") or next(
+        (a.get("box") for a in ov.get("added_cards") or [] if a.get("key") == key), None)
+    if box:
+        return box
+    try:
+        p = load(Path(plan) if plan else Path(folder) / "plan.json")
+    except (OSError, ValueError, TypeError):
+        return None
+    for c in p.get("cards") or []:
+        if "start" in c and card_key(c) == key:
+            return c["box"] if isinstance(c.get("box"), list) and len(c["box"]) == 4 else [0, 0, 100, 50] if c.get("layout") == "split" else [0, 0, 100, 100]
+    return None
+
+
+# what a taste setting is called on the learn card and in the rules a draft used ("sets caption size to 4.3")
+SET_WORDS = {"captions.size_pct": ("caption size", ""), "captions.y_pct": ("caption place", "% down the frame"),
+             "captions.words_per_caption": ("words a caption", ""), "captions.color": ("caption colour", ""),
+             "captions.highlight_color": ("caption highlight", ""), "captions.preset": ("caption look", ""),
+             "cut.max_pause": ("pause length", " s"), "cut.max_pause_wide": ("pause length on wide videos", " s"),
+             "zoom.per_min": ("zooms a minute", ""), "cards.per_min": ("cards a minute", ""), "sfx": ("sound effects", ""),
+             "layout.mode": ("layout", "")}
+
+
+def set_words(setting, value):
+    """"caption size to 4.3" for captions.size_pct = 4.3 (SET_WORDS), the key itself for one not listed."""
+    what, unit = SET_WORDS.get(setting, (setting, ""))
+    v = {True: "on", False: "off"}.get(value, value) if isinstance(value, bool) else value
+    return f"{what} to {v}{unit}"
+
+
+def set_text(st):
+    """A proposed rule's "set" ("captions.size_pct=4.3") as the card says it: "sets caption size to 4.3"."""
+    from ai_editor import taste
+    k, _, raw = (st or "").partition("=")
+    return f"sets {set_words(k, taste.parse(raw))}" if k and raw else ""
+
+
+def edit_patterns(events, ctx=None):
+    """The page's hands-on edits (log_edit rows) summed up into candidate rules, deterministically, for the LEARN
+    prompt: [{"line", "section", "n", "set"}]. Conservative: a pattern needs 2+ alike edits, or a look setting that
+    was changed (captions, a song's level); one-off fixes (a word retyped, a card retimed) never count.
+    ctx: {"cards": cards in the draft, "duration": seconds}, for "4 of 5 cards" and a cards-a-minute setting."""
+    import statistics
+    from collections import Counter
+    ctx, out = ctx or {}, []
+    put = lambda line, section, n, st=None: out.append({"line": line, "section": section, "n": n, "set": st})
+    num = lambda v: v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    box = lambda b: b if isinstance(b, list) and len(b) == 4 and all(num(v) is not None for v in b) else None
+    # cards: each card's first box to its last; the ones taken out count apart
+    first, last, gone = {}, {}, set()
+    for e in events:
+        if e["change"] == "card.move" and box(e.get("to")):
+            if box(e.get("from")):
+                first.setdefault(e["target"], e["from"])
+            last[e["target"]] = e["to"]
+        elif e["change"] == "card.delete":
+            gone.add(e["target"])
+    moved = {k: (first[k], last[k]) for k in last if k in first and k not in gone}
+    total = max(int(ctx.get("cards") or 0), len(moved) + len(gone))
+    cy = lambda b: b[1] + b[3] / 2
+    for word, sign in (("up", -1), ("down", 1)):
+        ds = [abs(cy(b) - cy(a)) for a, b in moved.values() if sign * (cy(b) - cy(a)) >= 3]
+        if len(ds) >= 2 and 2 * len(ds) > len(moved):
+            put(f"moved {len(ds)} of {total} cards {word} by about {round(statistics.median(ds))}% of the frame", "visuals", len(ds))
+    for word, wide, ok in (("bigger", "wider", lambda r: r >= 1.1), ("smaller", "narrower", lambda r: r <= 0.9)):
+        rs = [b[2] / a[2] for a, b in moved.values() if a[2] and ok(b[2] / a[2])]
+        if len(rs) >= 2 and 2 * len(rs) > len(moved):
+            put(f"made {len(rs)} of {total} cards {word} (about {round(abs(statistics.median(rs) - 1) * 100)}% {wide})", "visuals", len(rs))
+    if len(gone) >= 2:
+        dur, n = float(ctx.get("duration") or 0), int(ctx.get("cards") or 0)
+        per = round((n - len(gone)) / (dur / 60), 1) if dur >= 20 and n > len(gone) else None
+        put(f"took out {len(gone)} of {total} cards", "visuals", len(gone), f"cards.per_min={per}" if per else None)
+    # captions: a look setting changed is a pattern on its own; first value seen to the last one set
+    cap = {}
+    for e in events:
+        if e["change"].startswith("captions."):
+            cap.setdefault(e["change"][9:], [e.get("from"), None])[1] = e.get("to")
+    for k, (a, b) in cap.items():
+        if b is None or a == b:
+            continue
+        if k == "size_pct" and num(b):
+            line = (f"made captions {round(abs(b - a) / a * 100)}% {'bigger' if b > a else 'smaller'} (size {a} -> {b})"
+                    if num(a) else f"set the caption size to {b}")
+        elif k == "y_pct" and num(b):
+            line = f"moved captions {'up' if b < a else 'down'} ({a}% -> {b}% down the frame)" if num(a) else f"put captions {b}% down the frame"
+        elif k == "words_per_caption" and num(b):
+            line = "showed captions a sentence at a time" if b >= 12 else f"showed captions {b} word{'' if b == 1 else 's'} at a time"
+        elif k in ("color", "highlight_color"):
+            line = f"changed the caption {'colour' if k == 'color' else 'highlight'} to {b}"
+        elif k == "preset":
+            line = f"picked the {b} caption look"
+        else:
+            continue
+        put(line, "captions", 1, f"captions.{k}={b}")
+    # on-screen texts: each one as it is now; a font, look or colour picked for most of them (2+)
+    rows = {}
+    for e in events:
+        if e["change"] in ("text.add", "text.edit") and isinstance(e.get("to"), dict):
+            rows[e["target"]] = e["to"]
+        elif e["change"] == "text.delete":
+            rows.pop(e["target"], None)
+    rs = list(rows.values())
+    for key, default, say in (("font", "TikTok Sans", "picked {v} for {n} of {t} texts"),
+                              ("style", "outline", "used the {v} text look for {n} of {t} texts"),
+                              ("color", "#FFFFFF", "made {n} of {t} texts {v}")):
+        if len(rs) < 2:
+            break
+        v, n = Counter(r.get(key) or default for r in rs).most_common(1)[0]
+        if v != default and n >= 2 and 3 * n >= 2 * len(rs):
+            put(say.format(v=v, n=n, t=len(rs)), "visuals", n)
+    big = [r["size_pct"] for r in rs if num(r.get("size_pct"))]
+    if len(big) >= 2 and len(big) == len(rs):
+        m = statistics.median(big)
+        if abs(m - TEXT_SIZE) / TEXT_SIZE >= 0.15 and all((x > TEXT_SIZE) == (m > TEXT_SIZE) for x in big):
+            put(f"made {len(big)} of {len(rs)} texts {'bigger' if m > TEXT_SIZE else 'smaller'} (size {TEXT_SIZE:g} -> {m:g})", "visuals", len(big))
+    # cuts on the timeline: pieces with no words in them are pauses the cut left (put back ones do not count)
+    back = {tuple(e["from"]) for e in events if e["change"] == "cut.restore" and isinstance(e.get("from"), list)}
+    pauses = [b - a for e in events if e["change"] == "cut.piece" and isinstance(e.get("to"), list) and len(e["to"]) == 2
+              and tuple(e["to"]) not in back and not str(e.get("what") or "").strip() for a, b in [e["to"]] if b - a >= 0.2]
+    if len(pauses) >= 2:
+        # ponytail: 3+ pauses cut by hand reads as "the cut is too slow", the taste table's faster 0.12 s; no measuring
+        put(f"cut {len(pauses)} pauses longer than {int(min(pauses) * 10) / 10:g} s", "cut", len(pauses),
+            "cut.max_pause=0.12" if len(pauses) >= 3 else None)
+    # sound: a dropped song's level is a look choice; the same sound added twice is a habit; sounds taken out
+    lv = {}
+    for e in events:
+        if e["change"] == "sfx.move" and (e.get("to") or {}).get("kind") == "clip":
+            lv.setdefault(e["target"], [(e.get("from") or {}).get("vol", 1.0), None])[1] = e["to"].get("vol")
+    for a, b in lv.values():
+        if num(a) is not None and num(b) is not None and abs(b - a) >= 0.2:
+            put(f"turned the dropped song {'down' if b < a else 'up'} to {round(b * 100)}%", "sound", 1)
+            break
+    adds = Counter(str(e.get("what") or "") for e in events if e["change"] == "sfx.add")
+    for name, n in adds.most_common():
+        if name and n >= 2:
+            put(f"added the {name} sound {n} times", "sound", n)
+    rm = sum(e["change"] == "sfx.remove" for e in events)
+    if rm >= 2:
+        put(f"took out {rm} sound effects", "sound", rm)
+    return out
+
+
+def edit_ctx(folder, d):
+    """edit_patterns' ctx from the draft the user was looking at: how many cards it had and how long it is."""
+    try:
+        p = load(Path(d["plan"])) if d.get("plan") else {}
+    except (OSError, ValueError):
+        p = {}
+    return {"cards": len(p.get("cards") or []), "duration": (data_of(folder, d.get("data")) or {}).get("duration") or 0}
+
+
+def rules_used(ids):
+    """The rules a draft used (taste.applied_ids) as the notes panel lists them: each rule, where it lives, what it
+    set, and whether it is turned off now. Rules gone from rules.json since drop out."""
+    from ai_editor import taste
+    try:
+        rules = {r["id"]: r for r in taste.load_rules()} if taste.rules_path().exists() else {}
+    except (OSError, ValueError):
+        return []
+    out = []
+    for i in ids or []:
+        r = rules.get(i)
+        if not r:
+            continue
+        sc = r.get("scope") or "all"
+        where = ("My style" if sc == "all" else "This video" if sc.startswith("video:")
+                 else shown_style(Path(r["style"])) if r.get("style") else "@" + sc[6:])
+        out.append({"id": i, "rule": r["rule"], "where": where, "off": bool(r.get("off")),
+                    "did": set_words(r["setting"], r.get("value")) if r.get("setting") else ""})
+    return out
 
 
 def screen_items(folder, p):
@@ -919,14 +1124,19 @@ def cuts_text(transcript, gone):
     in when its middle is, apply_edits' rule), for Claude to take out of spans.json and render again. "" for none."""
     if not gone:
         return ""
+    said = lambda a, b: said_in(transcript, a, b)
+    parts = [f'{fmt(a)}-{fmt(b)}' + (f' ("{said(a, b)}")' if said(a, b) else " (no words)") for a, b in gone]
+    return (f"Cut from the video on the timeline: {'; '.join(parts)}. Take these out of the cut (spans.json, the words "
+            f"quoted), then plan and render again. The page plays the draft without them already.")
+
+
+def said_in(transcript, a, b):
+    """The words said from a to b on the edit's clock (a word is in when its middle is, apply_edits' rule)."""
     try:
         words = [w for w in words_of(transcript) if "start" in w]
     except (OSError, ValueError, TypeError):
         words = []
-    said = lambda a, b: " ".join(w["text"].strip() for w in words if a - 1e-3 <= (w["start"] + w["end"]) / 2 <= b + 1e-3)
-    parts = [f'{fmt(a)}-{fmt(b)}' + (f' ("{said(a, b)}")' if said(a, b) else " (no words)") for a, b in gone]
-    return (f"Cut from the video on the timeline: {'; '.join(parts)}. Take these out of the cut (spans.json, the words "
-            f"quoted), then plan and render again. The page plays the draft without them already.")
+    return " ".join(w["text"].strip() for w in words if a - 1e-3 <= (w["start"] + w["end"]) / 2 <= b + 1e-3)
 
 
 def typed_labels(folder):
@@ -2075,7 +2285,12 @@ def make_handler(folder, token):
                 p = folder / "review" / Path(r.get("data") or "-").name if r else None
                 if p and p.is_file() and (r["stage"], r["round"]) == (d["stage"], d["round"]) == ("cut", d["round"]):
                     upgrade_transcript(folder, p)
-                return self.send(200, p.read_bytes() if p and p.is_file() else {})
+                if not (p and p.is_file()):
+                    return self.send(200, {})
+                out = load(p)
+                if isinstance(out.get("rules"), list):   # the ids as each rule now: its words, where it lives, off or on
+                    out["rules"] = rules_used(out["rules"])
+                return self.send(200, out)
             if path == "/sound-preview":   # the Sounds panel's play button: one pick of one moment, at a fixed level
                 sfx = sfx_mod()
                 cue, pick = q.get("cue", ""), q.get("c", "default")
@@ -2220,6 +2435,13 @@ def make_handler(folder, token):
                             return True
                     return False
                 return self.send(200, {}) if update(rj, kp) else self.send(409, {"error": "Claude has this note now."})
+            if path == "/rule/off":   # "Turn off" / "Turn on" on a rule a draft used: kept, stops applying (taste.set_off)
+                from ai_editor import taste
+                try:
+                    r = taste.set_off(int(body.get("id")), bool(body.get("off")))
+                except (TypeError, ValueError):
+                    r = None
+                return self.send(200, {"id": r["id"], "off": bool(r.get("off"))}) if r else self.send(404, {"error": "That rule is gone."})
             if path == "/undo":   # a receipt's Undo: the saved rule comes out of the style
                 try:
                     msg = undo_receipt(folder, int(body.get("id")))
@@ -2327,6 +2549,8 @@ def make_handler(folder, token):
                 last = d["events"][-1]["type"] if d["events"] else None
                 if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
                     return self.send(409, {"error": "Captions change on the edit, before it is approved."})
+                snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
+                was = captions_info(folder, snap_plan)
                 try:
                     said = set_captions(folder, body.get("words"), body.get("look"), body)
                 except ValueError as e:
@@ -2334,6 +2558,11 @@ def make_handler(folder, token):
                 if not said:
                     return self.send(400, {"error": "captions takes words, look, size, y, color or highlight"})
                 cur = captions_info(folder)   # one Captions note per round, saying where the choice is now
+                n_of = lambda w: CAP_GROUPS.get(w) or (int(w) if str(w or "").isdigit() else None)
+                for k, a, b in [("words_per_caption", n_of(was["words"]), n_of(cur["words"])), ("preset", was["look"], cur["look"])] + [
+                        (k, was["mine"].get(k, was["base"].get(k)), cur["mine"].get(k)) for k, *_ in CAP_STYLE.values()]:
+                    if b is not None and a != b:
+                        log_edit(folder, "captions." + k, "captions", a, b)
                 mine = cur["mine"]
                 now_said = [w for w in (("a sentence at a time" if cur["words"] == "sentence" else f"{cur['words']} word"
                                          f"{'' if cur['words'] == '1' else 's'} at a time") if cur["words"] else None,
@@ -2372,8 +2601,10 @@ def make_handler(folder, token):
                     lib.mkdir(parents=True, exist_ok=True)
                     (lib / name).write_bytes(raw)
                     body = {"cue": cue, "choice": name}
+                was = sfx.choices().get(cue)
                 try:
                     sfx.choose(cue, str(body.get("choice") or ""))
+                    log_edit(folder, "sound.pick", cue, was, str(body.get("choice") or ""))
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 d = load(rj)
@@ -2409,6 +2640,7 @@ def make_handler(folder, token):
                 x = next((i for i in items if i.get("id") == body.get("placed")), None)
                 if not x:
                     return self.send(404, {"error": "That sound is gone already."})
+                was = {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}
                 try:
                     x["t"] = round(max(0.0, float(body.get("t", x["t"]))), 2)
                     if x.get("kind") == "clip":
@@ -2418,6 +2650,7 @@ def make_handler(folder, token):
                 except (TypeError, ValueError):
                     return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
                 save(folder / "sounds.json", {"items": items})
+                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}, Path(x["sound"]).stem)
                 line = f"{Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
                                           "Plan again so they are in (sounds.json and overrides.json sfx).")
@@ -2442,17 +2675,20 @@ def make_handler(folder, token):
                             dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
                             x.update(kind="clip", **{"in": 0.0}, dur=round(max(0.1, min(length, dur - t if dur > t else length)), 2), vol=1.0)
                         save(f, {"items": items + [x]})
+                        log_edit(folder, "sfx.add", x["id"], None, {"sound": name, "t": t, "kind": x.get("kind")}, Path(name).stem)
                         line = f"add {Path(name).stem} at {fmt(t)}"
                     elif body.get("placed"):
                         if not any(i["id"] == body["placed"] for i in items):
                             raise ValueError
                         save(f, {"items": [i for i in items if i["id"] != body["placed"]]})
+                        log_edit(folder, "sfx.remove", body["placed"], {"src": body.get("src"), "t": t}, None, sound_name(body.get("src") or ""))
                         line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
                     else:   # one the plan put there: overrides.json takes it out, so a re-plan keeps it out
                         ov_f = folder / "overrides.json"
                         ov = load(ov_f) if ov_f.exists() else {}
                         ov.setdefault("sfx", {})[f"{t:.3f}"] = {"deleted": True}
                         save(ov_f, ov)
+                        log_edit(folder, "sfx.remove", f"{t:.3f}", {"src": body.get("src"), "t": t}, None, sound_name(body.get("src") or ""))
                         line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
                 except (KeyError, TypeError, ValueError):
                     return self.send(400, {"error": "sfx/add takes t and a library sound; sfx/remove takes t and placed or src"})
@@ -2474,6 +2710,7 @@ def make_handler(folder, token):
                 ov.setdefault("words", {}).update(words)
                 save(ovf, ov)
                 new = " ".join(w for w in words.values() if w)
+                log_edit(folder, "caption.retype", f"{t:.2f}", old, new)
                 line = f'"{old}" at {fmt(t)} now "{new}"' if new else f'"{old}" at {fmt(t)} taken out'
                 bake_soon(folder)   # into the video by itself; a note only while Claude has the round
                 if not d.get("sent"):
@@ -2493,6 +2730,7 @@ def make_handler(folder, token):
                     return self.send(400, {"error": "captions/time takes w (its first word's start), s and e"})
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
+                log_edit(folder, "caption.time", key, (ov.get("cap_times") or {}).get(key), [a, b], str(body.get("text") or "")[:60])
                 ov.setdefault("cap_times", {})[key] = [a, b]
                 save(ovf, ov)
                 bake_soon(folder)
@@ -2530,7 +2768,14 @@ def make_handler(folder, token):
                     t, te = float(body["t"]), float(body["t_end"])
                 except (KeyError, TypeError, ValueError):
                     return self.send(400, {"error": "card/edit takes key, t, t_end and box [x, y, w, h], start and end, or deleted"})
+                was = card_was(folder, key, d.get("plan"))
                 card_override(folder, key, change)
+                if change.get("deleted"):
+                    log_edit(folder, "card.delete", key, was, None, label)
+                if "box" in change and change["box"] != was:
+                    log_edit(folder, "card.move", key, was, change["box"], label)
+                if "start" in change:
+                    log_edit(folder, "card.retime", key, None, [change["start"], change["end"]], label)
                 bake_soon(folder)
                 if not d.get("sent"):
                     return self.send(200, {"ok": True})
@@ -2565,6 +2810,7 @@ def make_handler(folder, token):
                 key = f"media{n}@{card['start']:.3f}"
                 added.append({"key": key, **card})
                 save(ovf, ov)
+                log_edit(folder, "card.add", key, None, {"src": src, "box": box}, Path(src).name)
                 bake_soon(folder)
                 if not d.get("sent"):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
@@ -2582,8 +2828,15 @@ def make_handler(folder, token):
                     return self.send(400, {"error": "timeline/cut takes splits [t] and gone [[start, end]]"})
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
+                was = [list(g) for g in (ov.get("cuts") or {}).get("gone") or []]
                 ov["cuts"] = cuts
                 save(ovf, ov)
+                for g in cuts["gone"]:   # each new piece with the words said in it ("" for a pause)
+                    if g not in was:
+                        log_edit(folder, "cut.piece", f"{g[0]:.2f}", None, g, said_in(d.get("transcript"), *g))
+                for g in was:
+                    if g not in cuts["gone"]:
+                        log_edit(folder, "cut.restore", f"{g[0]:.2f}", g, None)
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
                 text = cuts_text(d.get("transcript"), cuts["gone"])
@@ -2618,6 +2871,7 @@ def make_handler(folder, token):
                     self.send(200, {"ok": True, "id": r["id"]})
                 if path == "/text/delete":
                     save(f, {"items": [i for i in items if i is not x]})
+                    log_edit(folder, "text.delete", x["id"], x, None, x["text"])
                     bake_soon(folder)
                     return tell(f'Remove the on-screen text "{x["text"]}".')
                 text = str(body.get("text") or x["text"]).strip()[:120]
@@ -2632,6 +2886,7 @@ def make_handler(folder, token):
                 except (ValueError, TypeError) as e:
                     return self.send(400, {"error": str(e) or "no time"})
                 save(f, {"items": [new if i is x else i for i in items] + ([new] if path == "/text/add" else [])})
+                log_edit(folder, path[1:].replace("/", "."), new["id"], None if path == "/text/add" else x, new, text)
                 bake_soon(folder)
                 if path == "/text/add":
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)
@@ -2666,6 +2921,8 @@ def make_handler(folder, token):
                 style = style_label(folder) if body["type"] == "approve" else None
                 choices = style_choices(folder) if body["type"] == "approve" else None
                 skills = skill_choices() if body["type"] == "approve" else None
+                d0 = load(rj)   # the hands-on edits of the session, summed up for the learn card (edit_patterns)
+                pats = edit_patterns(edit_events(folder), edit_ctx(folder, d0)) if body["type"] == "approve" else []
 
                 def ev(d):
                     if d.get("sent") and d["events"] and d["events"][-1]["type"] == "edits":
@@ -2675,8 +2932,8 @@ def make_handler(folder, token):
                     d["sent"] = True
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
-                        d["learn"] = {"state": "reading" if session_notes(d) else "none", "style": style, "styles": choices,
-                                      "skills": skills}
+                        d["learn"] = {"state": "reading" if session_notes(d) or pats else "none", "style": style, "styles": choices,
+                                      "skills": skills, "edits": pats}
                     elif body["type"] == "approve" and d["stage"] == "cut":
                         prepared_steps(folder, d)
                     return True
@@ -3710,10 +3967,10 @@ def disposition(name):
 def learn_prompt(folder, d):
     """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes."""
     if d["learn"]["state"] == "none":
-        return "LEARN: no notes this session, so nothing to learn. The page says so; say nothing about it."
+        return "LEARN: no notes or edits this session, so nothing to learn. The page says so; say nothing about it."
     st = d["learn"]["style"]
-    lines = [f"LEARN: the video is approved. Turn this session's notes and your replies (below) into at most 6 "
-             f"one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
+    lines = [f"LEARN: the video is approved. Turn this session's notes, your replies and the user's hands-on edits (below) "
+             f"into at most 8 one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
              f"first 5 s\". Leave out one-off fixes (a word cut at 0:12) and notes already saved as rules. Post them "
              f"([] when none is about the style); the page shows them with checkboxes:",
              f"  python3 {Path(__file__).resolve()} {folder} learn --propose "
@@ -3742,6 +3999,11 @@ def learn_prompt(folder, d):
                      )
         if tg["path"]:
             lines += ["  " + ln for ln in skillrules.learned(Path(tg["path"]).read_text(encoding="utf-8"))] or ["  (none yet)"]
+    if lr.get("edits"):   # edit_patterns: what the user did on the page, counted, not what they typed
+        lines.append("Hands-on edits the user made on the page (moved, resized, picked), summed up. Word each one that is "
+                     "about the style as one short rule, in its section; where a [set] is given, put it in the rule's \"set\" "
+                     "exactly, so the next draft changes:")
+        lines += [f"  - {x['line']} [{x['section']}]" + (f" [set {x['set']}]" if x.get("set") else "") for x in lr["edits"]]
     for c in sorted(session_notes(d), key=lambda c: (c["stage"] != "cut", c["round"], c["t"])):
         saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else ""
         keep = " [the user asked to keep this as a rule: propose it]" if c.get("keep") and not saved else ""
@@ -3788,7 +4050,7 @@ def learn_propose(folder, raw):
         st = r.get("set") or None
         if st is not None and (not isinstance(st, str) or "=" not in st):
             sys.exit(f"\"set\" is key.path=value: {r}")
-        out.append({"rule": str(r["rule"]).strip().rstrip("."), "section": sec, "set": st,
+        out.append({"rule": str(r["rule"]).strip().rstrip("."), "section": sec, "set": st, "set_text": set_text(st),
                     **{k: str(r[k]).strip() for k in ("why", "replace", "to") if r.get(k)}})
 
     def f(d):
@@ -4220,6 +4482,45 @@ def demo_live(tmp):
     srv.server_close()
 
 
+def demo_learn_edits(tmp):
+    """edit_patterns on fixed events: alike edits and changed look settings become lines, one-offs do not."""
+    E = lambda change, target, frm, to, what="": {"source": "review", "change": change, "target": target, "from": frm, "to": to, "what": what}
+    ev = [E("card.move", f"c{i}@1.000", [0, 40, 50, 30], [0, 28, 50, 30]) for i in range(4)]   # 4 cards up 12%
+    ev += [E("card.move", "c4@1.000", [0, 40, 50, 30], [2, 40, 50, 30]),   # one only nudged sideways
+           E("card.retime", "c0@1.000", None, [1, 3]),   # a one-off
+           E("captions.size_pct", "captions", 3.6, 4.0), E("captions.size_pct", "captions", 4.0, 4.3),
+           E("captions.color", "captions", None, "#FFD60A")]
+    ev += [E("text.add", f"t{i}", None, {"id": f"t{i}", "text": "x", "font": "Anton", "style": "outline"}) for i in range(3)]
+    ev += [E("cut.piece", f"{a:.2f}", None, [a, a + w], "") for a, w in ((1, 0.45), (5, 0.6), (9, 0.5), (12, 0.4))]
+    ev += [E("cut.piece", "20.00", None, [20, 22], "a whole line"), E("cut.piece", "30.00", None, [30, 30.5], ""),
+           E("cut.restore", "30.00", [30, 30.5], None),
+           E("sfx.move", "s1", {"t": 2, "vol": 1.0, "kind": "clip"}, {"t": 2, "vol": 0.6, "kind": "clip"}),
+           E("sfx.move", "s1", {"t": 2, "vol": 0.6, "kind": "clip"}, {"t": 2, "vol": 0.4, "kind": "clip"}),
+           E("caption.retype", "1.00", "helo", "hello")]
+    got = {x["line"]: x for x in edit_patterns(ev, {"cards": 5, "duration": 60})}
+    assert list(got) == ["moved 4 of 5 cards up by about 12% of the frame", "made captions 19% bigger (size 3.6 -> 4.3)",
+                         "changed the caption colour to #FFD60A", "picked Anton for 3 of 3 texts", "cut 4 pauses longer than 0.4 s",
+                         "turned the dropped song down to 40%"], list(got)
+    assert got["made captions 19% bigger (size 3.6 -> 4.3)"]["set"] == "captions.size_pct=4.3"
+    assert got["cut 4 pauses longer than 0.4 s"]["set"] == "cut.max_pause=0.12" and got["picked Anton for 3 of 3 texts"]["set"] is None
+    assert {x["section"] for x in got.values()} == {"visuals", "captions", "cut", "sound"}
+    # one of each is no pattern; two cards out of a 5-card minute set cards a minute
+    one = [E("card.move", "a@1.000", [0, 40, 50, 30], [0, 20, 50, 30]), E("text.add", "t", None, {"font": "Anton"}),
+           E("cut.piece", "1.00", None, [1, 1.5], ""), E("sfx.remove", "x", {}, None)]
+    assert edit_patterns(one) == [], edit_patterns(one)
+    two = edit_patterns([E("card.delete", "a@1", [0, 0, 1, 1], None), E("card.delete", "b@2", [0, 0, 1, 1], None)], {"cards": 5, "duration": 60})
+    assert two == [{"line": "took out 2 of 5 cards", "section": "visuals", "n": 2, "set": "cards.per_min=3.0"}], two
+    assert set_text("captions.size_pct=4.3") == "sets caption size to 4.3" and set_text("cut.max_pause=0.12") == "sets pause length to 0.12 s"
+    assert set_text(None) == "" and set_words("sfx", False) == "sound effects to off"
+    # log_edit appends a row the summariser reads back; preview.py's own rows stay out
+    f = tmp / "le"
+    f.mkdir()
+    save(f / "review.json", {"stage": "edit", "round": 2})
+    (f / "corrections.jsonl").write_text(json.dumps({"source": "preview", "change": "card.set", "from": None, "to": {}}) + "\n", encoding="utf-8")
+    log_edit(f, "captions.size_pct", "captions", 3.6, 4.3)
+    assert [(e["change"], e["stage"], e["round"], e["from"], e["to"]) for e in edit_events(f)] == [("captions.size_pct", "edit", 2, 3.6, 4.3)]
+
+
 def demo():
     import contextlib
     import io
@@ -4227,6 +4528,7 @@ def demo():
     tmp = Path(tempfile.mkdtemp(prefix="review_demo_"))
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")   # start records the folder in the library index there
     demo_timings(tmp)
+    demo_learn_edits(tmp)
     demo_bake(tmp)
     demo_live(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
@@ -4860,6 +5162,21 @@ def demo():
     assert "LEARN: the video is approved" in out and "#1 the cut r1: cut the hello, please -> reply: cut it" in out, out
     lr0 = json.loads(get("/state").read())["learn"]
     assert {k: lr0[k] for k in ("state", "style")} == {"state": "reading", "style": "My style"}, lr0
+    # every hands-on edit above is a row in corrections.jsonl with its before and after; the caption look the user set
+    # comes back as rules with their setting, in the LEARN prompt too; one-off fixes (a word retyped) do not
+    ev = edit_events(folder)
+    kinds = {e["change"] for e in ev}
+    assert {"text.add", "text.edit", "text.delete", "cut.piece", "cut.restore", "captions.size_pct", "captions.preset", "sound.pick",
+            "sfx.add", "sfx.remove", "sfx.move", "caption.retype", "caption.time", "card.move", "card.delete", "card.retime",
+            "card.add"} <= kinds, kinds
+    assert all(e["source"] == "review" and e["stage"] == "edit" and "from" in e and "to" in e for e in ev), ev[:2]
+    mv = next(e for e in ev if e["change"] == "card.move")
+    assert mv["to"] == [10, 12.3, 50, 30] and isinstance(mv["from"], list) and mv["from"] != mv["to"], mv
+    pl0 = {x["set"]: x["line"] for x in lr0["edits"]}
+    assert pl0.get("captions.size_pct=5.5") == "set the caption size to 5.5" and pl0.get("captions.y_pct=62") == "put captions 62% down the frame", pl0
+    assert "captions.preset=bold" in pl0 and "captions.words_per_caption=12" in pl0 and "captions.highlight_color=#FF3B30" in pl0, pl0
+    assert not any("retyp" in x["line"] for x in lr0["edits"]), lr0["edits"]
+    assert "[set captions.preset=bold]" in out and "Hands-on edits the user made on the page" in out, out
     assert lr0["styles"][0]["here"] and lr0["styles"][0]["name"] == "My style", lr0["styles"]   # Save to: this video's style first
     try:
         post("/comment", {"t": 2, "text": "after approve"})
@@ -4953,6 +5270,24 @@ def demo():
     assert lr["state"] == "done" and lr["summary"] == "Saved to @alice and Trial notes skill. Next video uses them.", lr
     sk = (tmp / "skills" / "edit-like-alice" / "SKILL.md").read_text(encoding="utf-8")
     assert "Captions one size smaller" in sk and "Keep the pauses short" not in sk and "Fewer zooms" not in sk, sk
+    # the next draft records the rules it used; the page lists them and turns one off (kept, its setting out) and on
+    small = next(r for r in taste.load_rules() if r["rule"] == "Captions one size smaller")
+    taste.record(folder, "plan.py", [small["id"], 99999])
+    rn = round_data(folder, vid, "edit", 7, None)
+    assert load(folder / "review" / rn)["rules"] == [small["id"], 99999]
+    used = rules_used([small["id"], 99999])   # a rule gone since drops out
+    assert used == [{"id": small["id"], "rule": "Captions one size smaller", "where": "@alice", "off": False,
+                     "did": "caption size to 4"}], used
+    assert post("/rule/off", {"id": small["id"], "off": True}) == {"id": small["id"], "off": True}
+    assert "size_pct" not in (json.loads((sp.parent / "style.overrides.json").read_text(encoding="utf-8")).get("captions") or {})
+    assert rules_used([small["id"]])[0]["off"] and "Captions one size smaller" not in (tmp / "skills" / "edit-like-alice" / "SKILL.md").read_text(encoding="utf-8")
+    assert post("/rule/off", {"id": small["id"], "off": False})["off"] is False
+    assert json.loads((sp.parent / "style.overrides.json").read_text(encoding="utf-8"))["captions"]["size_pct"] == 4
+    try:
+        post("/rule/off", {"id": 99999, "off": True})
+        raise AssertionError("a rule that is gone")
+    except urllib.error.HTTPError as e:
+        assert e.code == 404
     assert "Keep the pauses short" in tsk.read_text(encoding="utf-8"), tsk.read_text(encoding="utf-8")
     old_lib = os.environ.get("AI_EDITOR_LIBRARY")
     os.environ["AI_EDITOR_LIBRARY"] = str(tmp / "lib")   # New style from this video: a named copy of @alice
@@ -5244,7 +5579,7 @@ def demo():
     o = io.StringIO()
     with contextlib.redirect_stdout(o):
         cmd_wait(rf, poll=0.01)
-    assert "LEARN: no notes this session" in o.getvalue(), o.getvalue()
+    assert "LEARN: no notes or edits this session" in o.getvalue(), o.getvalue()
     # the transcript editor: Apply turns restore/cut word ranges into spans.json, keeps spans.prev.json, and `wait`
     # exits with the EDITS line. Restoring part of a span splits it; a cut inside a word takes the whole word
     ef = tmp / "edits" / "tx"
