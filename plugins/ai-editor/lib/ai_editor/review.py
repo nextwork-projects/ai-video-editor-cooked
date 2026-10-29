@@ -538,7 +538,7 @@ def caption_words(starts, text):
 
 def card_override(folder, key, change):
     """The video page's move, resize or delete of a card into <edit>/overrides.json (preview.py apply_overrides,
-    which plan.py runs after planning, so a re-plan keeps it). change: {"box": [x, y, w, h]} or {"deleted": True}."""
+    which plan.py runs after planning, so a re-plan keeps it). change: {"box": [x, y, w, h]}, {"start", "end"} or {"deleted": True}."""
     f = Path(folder) / "overrides.json"
     ov = load(f) if f.exists() else {}
     cards = ov.setdefault("cards", {})
@@ -926,15 +926,24 @@ def baked_texts(folder, d):
 
 def cards_pending(folder, d):
     """The cards moved, resized or deleted on the page (overrides.json) that the video on the page does not show yet:
-    [{"key", "box"} or {"key", "deleted"}]. The page draws them at their new place until the bake puts them in."""
+    [{"key", "box"?, "start"?, "end"?} or {"key", "deleted"}]. The page draws them at their new place until the bake puts them in."""
     f = Path(folder) / "overrides.json"
     try:
         ov = (load(f).get("cards") or {}) if f.exists() else {}
     except (OSError, ValueError):
         return []
     shown = {c.get("key"): c for c in (data_of(Path(folder), d.get("data")).get("items") or {}).get("cards") or []}
-    return [{"key": k, **({"deleted": True} if o.get("deleted") else {"box": o["box"]})} for k, o in ov.items()
-            if k in shown and (o.get("deleted") or o.get("box") and [round(float(v), 1) for v in o["box"]] != shown[k]["box"])]
+    out = []
+    for k, o in ov.items():
+        c = shown.get(k)
+        if not c:
+            continue
+        p = {"deleted": True} if o.get("deleted") else {
+            **({"box": o["box"]} if o.get("box") and [round(float(v), 1) for v in o["box"]] != c["box"] else {}),
+            **{a: o[a] for a, b in (("start", "s"), ("end", "e")) if a in o and abs(float(o[a]) - c[b]) > 0.01}}
+        if p:
+            out.append({"key": k, **p})
+    return out
 
 
 def bake_ready(folder, d):
@@ -2224,13 +2233,23 @@ def make_handler(folder, token):
                     if body.get("deleted"):
                         change, what = {"deleted": True}, "Remove"
                     else:
-                        box = [round(float(v), 1) for v in body["box"]]
-                        if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        change, what = {}, "Move or resize"
+                        if "box" in body:
+                            box = [round(float(v), 1) for v in body["box"]]
+                            if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                                raise ValueError
+                            change["box"] = box
+                        if "start" in body or "end" in body:   # the timeline's Images row: moved or trimmed in time
+                            s, e = round(float(body["start"]), 2), round(float(body["end"]), 2)
+                            if s < 0 or round(e - s, 2) < 0.2 or e > 36000:
+                                raise ValueError
+                            change.update(start=s, end=e)
+                            what = f"Retime ({fmt(s)}-{fmt(e)})" if "box" not in change else what
+                        if not change:
                             raise ValueError
-                        change, what = {"box": box}, "Move or resize"
                     t, te = float(body["t"]), float(body["t_end"])
                 except (KeyError, TypeError, ValueError):
-                    return self.send(400, {"error": "card/edit takes key, t, t_end and box [x, y, w, h] or deleted"})
+                    return self.send(400, {"error": "card/edit takes key, t, t_end and box [x, y, w, h], start and end, or deleted"})
                 card_override(folder, key, change)
                 bake_soon(folder)
                 if not d.get("sent"):
@@ -3754,12 +3773,13 @@ def demo_bake(tmp):
         shutil.copy2(f / "plan.json", f / "render.plan.json")
         stamp()
         return subprocess.CompletedProcess(cmd, 0, "", "")
-    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20]}}}), encoding="utf-8")
+    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20], "start": 0.8, "end": 1.9}}}), encoding="utf-8")
     p = load(f / "plan.json")
     p["cards"] = [{"start": 0.5, "end": 1.5, "trigger_word": "repo", "box": [30, 60, 40, 20]}]
     (f / "plan.json").write_text(json.dumps(p), encoding="utf-8")
     assert bake(f, run=fake) is None and ran == [["patch", str(f), "--plan", "plan.json"]], ran
-    assert load(f / "plan.json")["cards"][0]["box"] == [5, 10, 40, 20], "the moved card is baked in"
+    c = load(f / "plan.json")["cards"][0]
+    assert (c["box"], c["start"], c["end"]) == ([5, 10, 40, 20], 0.8, 1.9), "the moved and retimed card is baked in"
     p = load(f / "plan.json")
     assert [x["kind"] for x in p["texts"]] == ["title", "label"] and p["texts"][1]["size_pct"] == 8, p["texts"]
     d = load(f / "review.json")
@@ -4289,6 +4309,22 @@ def demo():
         except urllib.error.HTTPError as e:
             assert e.code == 400, bad
     assert cd == {"ok": True} and json.loads(get("/state").read())["cards_pending"] == [{"key": trk_items[0]["key"], "deleted": True}]
+    (folder / "overrides.json").unlink()
+    # the timeline's Images row: a card moved or trimmed in time keeps its box, shows as pending, and bad times are refused
+    k0, c0 = trk_items[0]["key"], trk_items[0]
+    post("/card/edit", {"key": k0, "t": 4, "t_end": 6.5, "box": [10, 12, 50, 30]})
+    ct = post("/card/edit", {"key": k0, "t": 4, "t_end": 6.5, "start": 4.004, "end": 6.5})
+    assert ct == {"ok": True} and load(folder / "overrides.json")["cards"][k0] == {"box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}
+    pend = json.loads(get("/state").read())["cards_pending"]
+    assert pend == [{"key": k0, "box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}], pend
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "box": c0["box"], "start": c0["s"], "end": c0["e"]})   # an undo: back where the video has it
+    assert json.loads(get("/state").read())["cards_pending"] == [], "back in place is not pending"
+    for bad in ({"start": -1, "end": 2}, {"start": 3, "end": 3.1}, {"start": 3}, {"start": "x", "end": 4}, {}):
+        try:
+            post("/card/edit", {"key": k0, "t": 1, "t_end": 2, **bad})
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
     (folder / "overrides.json").unlink()
     for bad in ("/card-img/../review.json", "/card-img/review.json"):
         try:

@@ -3,6 +3,7 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- Timeline, CapCut style: drag a split line to move it (a cut gets longer or shorter with it, snapping to word starts), double-click one to remove it, and a new Images row shows every picture on screen: click it to select it on the video, drag it or its edges to change when it shows, and it goes into the video by itself. Cmd+Z and Shift+Cmd+Z undo and redo timeline edits.
 - Text is edited on the video, like CapCut: click a text to type straight into it, drag it to move it, drag any corner to size it, and drag a side to bring its width in (it wraps sooner). Enter saves, Esc cancels. The panel shows the same text, size and width.
 - Text takes a font (10 Google fonts, TikTok Sans by default) and a colour: 24 colours, a colour wheel for any colour, or a hex code. On a box the colour is the box, and its words turn black or white to read.
 - Block: a new look with one box that hugs the whole text. Box keeps a box on each line.

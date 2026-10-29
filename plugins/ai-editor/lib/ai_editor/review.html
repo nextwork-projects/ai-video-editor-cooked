@@ -326,6 +326,13 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .eitem.vid{background:#33404F;border-color:#55687E;color:#FFFFFF;padding:0 6px;cursor:pointer}.eitem.vid span{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden}
 .eitem.vid.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}
 .eitem.vid.cut{background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,transparent 6px 12px);border-style:dashed;color:var(--quiet)}
+.eitem.img{background:#3E3E42;border-color:#66666C;color:#FFFFFF;padding:0 6px;cursor:grab}.eitem.img span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
+.eitem.img.narrow span{display:none}.eitem.img.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}.eitem.img.drag{cursor:grabbing;border-color:#FFFFFF;z-index:4}
+.eitem.img::before,.eitem.img::after{content:"";position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize}.eitem.img::before{left:-1px}.eitem.img::after{right:-1px}
+.vsp{position:absolute;top:0;bottom:0;width:12px;margin-left:-6px;cursor:col-resize;z-index:3}.vsp::after{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;border-radius:1px;background:var(--quiet)}
+.vsp:hover::after,.vsp.drag::after{background:#FFFFFF}
+.etip{position:absolute;font-style:normal;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--onink);font-size:10px;font-weight:600;line-height:14px;padding:1px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:6}
+.edlab{height:30px;line-height:30px;font-size:12px;font-weight:600;color:var(--quiet);padding:0 9px}
 .etrack.dropon{outline:2px dashed var(--ink);outline-offset:2px}
 .eph{position:absolute;top:8px;bottom:0;width:2px;margin-left:-1px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none;z-index:3}
 .timeline{position:relative}
@@ -1191,28 +1198,77 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
     +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>{const n=(x.peaks||[]).length,c=x.kind==='clip'&&x.d,pk=c?x.peaks.slice(Math.floor(x.in/x.d*n),Math.ceil((x.in+x.dur)/x.d*n)):x.peaks;
       return clip(x.t,c?x.dur:x.d,' pend'+(ssel===x.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),pk,x.t)}).join('');
   const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c);return `<div class="eitem cap${ct.edited?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(c.s)}%;width:${pc(c.e)-pc(c.s)}%" title="${esc(ct.text||c.text)} · ${fmtx(c.s)} · click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
+  const cp=k=>(S.cards_pending||[]).find(p=>p.key===k)||{};
+  const imgs=(it.cards||[]).map(x=>{const p=cp(x.key),a=p.start??x.s,b=p.end??x.e;return `<div class="eitem img${p.key?' pend':''}${p.deleted?' gone':''}${csel&&csel.x.key===x.key?' sel':''}" data-ek="${esc(x.key)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(x.label)} · ${fmtx(a)}–${fmtx(b)} · click to select, drag to move, drag an edge to trim"><span>${esc(x.label.replace(/^the /,''))}</span></div>`}).join('');
+  const vsps=cuts().splits.filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
   const said=(a,b)=>W.filter(w=>w.t!=null&&w.t>=a&&w.t<b).map(w=>w.w).join(' ');
   const vids=vpieces().map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':said(x.a,x.b)||fmtx(x.b-x.a))}</span></div>`).join('');
-  const h=`<div class="edwrap"><div class="edleft"><button id="vsplit" title="Split the video at the playhead (s)">Split</button><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
+  const h=`<div class="edwrap"><div class="edleft"><button id="vsplit" title="Split the video at the playhead (s)">Split</button><span class="edlab">Images</span><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
-    <div class="etrack" data-row="vid">${vids}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
+    <div class="etrack" data-row="vid">${vids}${vsps}</div><div class="etrack" data-row="img">${imgs}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
   if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
-    E.querySelectorAll('.eitem.snd').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}edPh()}
+    E.querySelectorAll('.eitem.snd,.eitem.img').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}edPh()}
 // the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
 // draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
 let vsel=null,edDragged=0;
 const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
 function vpieces(){const T=D(),c=cuts(),b=[0,...c.splits.filter(t=>t>0&&t<T),T];
   return b.slice(0,-1).map((a,i)=>({a,b:b[i+1],cut:c.gone.some(([x,y])=>a>=x-.01&&b[i+1]<=y+.01)}))}
-async function setCuts(c){S.cuts=c;$('edtracks')._h=null;renderEdTracks();
+async function setCuts(c,what){if(what){const was=JSON.parse(JSON.stringify(cuts()));edPush(what,()=>setCuts(was),()=>setCuts(c))}S.cuts=c;$('edtracks')._h=null;renderEdTracks();
   const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');$('edtracks')._h=null;await load()}   // ok, or the note it made
 function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.splits.some(x=>Math.abs(x-t)<.1))return;
-  setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)});toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
+  setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
 function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
   const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
-  setCuts({...c,gone});toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
+  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
 function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp)return;const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(g)v.currentTime=g[1]}
+// undo / redo (Cmd+Z, Shift+Cmd+Z) for the timeline edits made on this page: each entry replays the opposite save.
+// The transcript keeps its own undo (HIST); whichever was touched last takes the key.
+const EH={u:[],r:[]};let edAt=0,txAt=0;
+function edPush(what,undo,redo){EH.u.push({what,undo,redo});if(EH.u.length>60)EH.u.shift();EH.r=[];edAt=performance.now()}
+const edSave=(path,b)=>post(path,b).then(r=>{if(!(r.ok||r.id))throw new Error(r.error||'');$('edtracks')._h=null;return load()});
+async function edUndo(redo){const h=(redo?EH.r:EH.u).pop();if(!h)return;(redo?EH.u:EH.r).push(h);edAt=performance.now();
+  try{await (redo?h.redo:h.undo)();toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
+$('tx').addEventListener('pointerdown',()=>txAt=performance.now(),true);
+document.addEventListener('keydown',e=>{if(!(e.metaKey||e.ctrlKey)||e.altKey||e.key.toLowerCase()!=='z'||/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)||e.target.isContentEditable)return;
+  if(e.shiftKey?!EH.r.length:!EH.u.length||HIST.length&&txAt>edAt)return;e.preventDefault();e.stopImmediatePropagation();edUndo(e.shiftKey)},true);
+// a split line on the Video row: drag it to move it (the cut pieces on either side follow, so a cut gets longer or
+// shorter), double-click it to join the pieces. It snaps to the nearest word start; Alt drags free.
+const tip=(el,t)=>{let b=el.querySelector('.etip');if(!b){b=document.createElement('b');b.className='etip';el.appendChild(b)}b.textContent=t};
+$('edtracks').addEventListener('pointerdown',e=>{const h=e.target.closest('.vsp');if(!h||e.button)return;e.preventDefault();
+  const t0=+h.dataset.vs,T=D(),tk=h.parentElement,W0=tk.getBoundingClientRect().width,x0=e.clientX,c=cuts();
+  const bs=[0,...c.splits.filter(t=>t>0&&t<T),T],i=bs.indexOf(t0),lo=bs[i-1]+.1,hi=bs[i+1]-.1,pc=t=>t/T*100;
+  const L=tk.querySelector(`[data-va="${bs[i-1]}"]`),R=tk.querySelector(`[data-va="${t0}"]`);let t=t0,moved=false;
+  h.setPointerCapture(e.pointerId);h.classList.add('drag');tip(h,fmtx(t0));
+  h.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>2)moved=true;if(!moved)return;t=Math.max(lo,Math.min(hi,t0+(ev.clientX-x0)/W0*T));
+    if(!ev.altKey){const sn=6/W0*T,w=W.reduce((m,w)=>w.t!=null&&!w.nt&&Math.abs(w.t-t)<Math.abs(m-t)?w.t:m,Infinity);if(Math.abs(w-t)<sn&&w>lo&&w<hi)t=w}
+    t=Math.round(t*100)/100;h.style.left=pc(t)+'%';tip(h,fmtx(t));
+    if(L)L.style.width=`calc(${pc(t)-pc(bs[i-1])}% - 2px)`;if(R){R.style.left=pc(t)+'%';R.style.width=`calc(${pc(bs[i+1])-pc(t)}% - 2px)`}
+    v.pause();v.currentTime=t};
+  h.onpointerup=()=>{h.onpointermove=h.onpointerup=null;h.classList.remove('drag');h.querySelector('.etip')?.remove();if(!moved||Math.abs(t-t0)<.005)return;edDragged=performance.now();
+    const m=x=>Math.abs(x-t0)<.005?t:x;setCuts({splits:c.splits.map(m).sort((a,b)=>a-b),gone:c.gone.map(r=>r.map(m))},'split moved');toast(`Split moved to ${fmtx(t)}.`)}});
+$('edtracks').addEventListener('dblclick',e=>{const h=e.target.closest('.vsp');if(!h)return;const t=+h.dataset.vs,c=cuts();
+  if(c.gone.some(r=>r.some(x=>Math.abs(x-t)<.005)))return toast('That split is the edge of a cut. Put the piece back first.');
+  setCuts({...c,splits:c.splits.filter(x=>Math.abs(x-t)>=.005)},'split removed');toast('Split removed.')});
+// the Images row: every card on the video as a clip. Click it to select it on the video; drag it to move it in time,
+// an edge to trim it. It saves on release (/card/edit start, end into overrides.json) and bakes into the video by itself.
+$('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.img');if(!it||e.button)return;
+  const x=(((data().items||{}).cards)||[]).find(c=>c.key===it.dataset.ek);if(!x)return;
+  const p=(S.cards_pending||[]).find(p=>p.key===x.key)||{},s0=p.start??x.s,e0=p.end??x.e;
+  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
+  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=s0,en=e0,moved=false;
+  it.setPointerCapture(e.pointerId);
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3)moved=true;if(!moved)return;const dt=(ev.clientX-x0)/W0*T;
+    if(mode==='m'){st=Math.max(0,Math.min(T-(e0-s0),s0+dt));en=st+e0-s0}
+    else if(mode==='l')st=Math.max(0,Math.min(e0-.2,s0+dt));else en=Math.min(T,Math.max(s0+.2,e0+dt));
+    st=Math.round(st*100)/100;en=Math.round(en*100)/100;
+    it.classList.add('drag');it.style.left=st/T*100+'%';it.style.width=(en-st)/T*100+'%';tip(it,`${fmtx(st)}–${fmtx(en)}`);v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02};
+  it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;it.querySelector('.etip')?.remove();if(!moved)return;edDragged=performance.now();
+    const b={key:x.key,label:x.label,t:st,t_end:en};
+    try{await edSave('/card/edit',{...b,start:st,end:en});toast(`${x.label[0].toUpperCase()+x.label.slice(1)} now ${fmtx(st)}–${fmtx(en)}.`);
+      edPush('image moved',()=>edSave('/card/edit',{...b,start:s0,end:e0}),()=>edSave('/card/edit',{...b,start:st,end:en}))}
+    catch(err){toast(err.message||'That did not save.');$('edtracks')._h=null;renderEdTracks()}}});
 // drag a text on the Text row to move it in time, or drag its edge to trim it; it saves on release (texts.json)
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.txt');if(!it||it.dataset.ef||e.button||e.target.closest('[data-ex]'))return;
   const x=(S.texts||[]).find(x=>String(x.id)===it.dataset.et);if(!x)return;
@@ -1224,7 +1280,8 @@ $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eit
     else if(mode==='l')st=Math.max(0,Math.min(x.end-.2,x.start+dt));else en=Math.min(T,Math.max(x.start+.2,x.end+dt));
     it.classList.add('drag');it.style.left=st/T*100+'%';it.style.width=(en-st)/T*100+'%';v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02};
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
-    const r=await post('/text/edit',{id:x.id,start:Math.round(st*100)/100,end:Math.round(en*100)/100});
+    const b={id:x.id,start:Math.round(st*100)/100,end:Math.round(en*100)/100},was={id:x.id,start:x.start,end:x.end};const r=await post('/text/edit',b);
+    if(r.ok||r.id)edPush(`"${x.text}" moved`,()=>edSave('/text/edit',was),()=>edSave('/text/edit',b));
     toast(r.ok||r.id?`"${x.text}" now ${fmtx(st)}–${fmtx(en)}.`:r.error||'That did not save.');$('edtracks')._h=null;await load()}});
 // drop a video or an image on the timeline (at the spot) or on the video (at the playhead): it goes in "Anything to
 // add?" with the words said there, so Claude puts it on screen on them
@@ -1246,7 +1303,9 @@ $('edtracks').addEventListener('click',async e=>{
   const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem')){const r=tk.getBoundingClientRect();v.currentTime=Math.max(0,(e.clientX-r.left)/r.width*D());return}   /* click empty track: go there */
   if(performance.now()-edDragged<300)return;
   if(e.target.id==='vsplit')return splitAt(v.currentTime);
-  const vp=e.target.closest('[data-va]');if(vp){ssel=null;vsel=+vp.dataset.va;v.pause();v.currentTime=vsel+.02;$('edtracks')._h=null;return renderEdTracks()}
+  const ik=e.target.closest('[data-ek]');if(ik){const x=(((data().items||{}).cards)||[]).find(c=>c.key===ik.dataset.ek);if(!x)return;
+    const p=(S.cards_pending||[]).find(p=>p.key===x.key)||{};vsel=ssel=null;v.currentTime=Math.max(x.s,Math.min(x.e-.05,p.start??x.s))+.02;return selectCard(x)}   // where the video shows it
+  const vp=e.target.closest('[data-va]');if(vp){ssel=null;if(csel){csel=null;drawCard()}vsel=+vp.dataset.va;v.pause();v.currentTime=vsel+.02;$('edtracks')._h=null;return renderEdTracks()}
   if(e.target.id==='addtx'){if(tool!=='text')openTool('text');setText('outline');return}
   if(e.target.id==='addsnd'){return openSndPick(e.target)}
   if(e.target.id==='capedit'){return openCapLine(null)}
@@ -1298,7 +1357,8 @@ $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eit
     else x.dur=Math.max(.2,Math.min(x.d-o.in,T-o.t,o.dur+dt));
     it.classList.add('drag');it.style.left=x.t/T*100+'%';it.style.width=sndLen(x)/T*100+'%';v.pause();v.currentTime=mode==='r'?x.t+x.dur-.05:x.t};
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
-    const r=await post('/sfx/move',{placed:x.id,t:Math.round(x.t*100)/100,...(clipped?{in:Math.round(x.in*100)/100,dur:Math.round(x.dur*100)/100}:{})});
+    const b={placed:x.id,t:Math.round(x.t*100)/100,...(clipped?{in:Math.round(x.in*100)/100,dur:Math.round(x.dur*100)/100}:{})},was={placed:x.id,t:o.t,...(clipped?{in:o.in,dur:o.dur}:{})};
+    const r=await post('/sfx/move',b);if(r.id||r.ok)edPush('sound moved',()=>edSave('/sfx/move',was),()=>edSave('/sfx/move',b));
     toast(r.id||r.ok?`${x.sound.replace(/\.[a-z0-9]+$/i,'')} at ${fmtx(x.t)}. It plays there now; Submit feedback and the next draft has it.`:r.error||'That did not save.');
     $('edtracks')._h=null;await load()}});
 // an audio file onto the timeline (a song, a voice-over, a sound): streamed in, a clip on the Sounds row at once
@@ -1994,20 +2054,21 @@ let csel=null;   // {x: the card (review.py screen_items), box, orig} in % of th
 function selectCard(x){if(!noteOk())return;v.pause();const p=(S.cards_pending||[]).find(p=>p.key===x.key&&p.box),b=p?p.box:x.box;
   csel={x,box:b.slice(),orig:b.slice(),saved:!!p};drawCard()}
 const cmoved=()=>!!csel&&csel.box.some((q,i)=>Math.abs(q-csel.orig[i])>.2);
-function drawCard(){const L=$('clayer');if(!csel){drawPending();return}
+function drawCard(){const L=$('clayer');renderEdTracks();if(!csel){drawPending();return}
   const[x,y,w,h]=csel.box,[ox,oy,ow,oh]=csel.x.box,mv=cmoved(),sh=csel.box.some((q,i)=>Math.abs(q-csel.x.box[i])>.2);   // sh: not where the video has it
   L._s=null;L.innerHTML=(sh?`<div class="cwas" style="left:${ox}%;top:${oy}%;width:${ow}%;height:${oh}%"><span>Was here</span></div>`:'')
     +`<div class="csel" id="csel" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%">${csel.x.src&&sh?`<img src="/card-img/${csel.x.src.split('/').map(encodeURIComponent).join('/')}" alt="">`:''}${['nw','ne','sw','se'].map(k=>`<i data-h="${k}"></i>`).join('')}</div>
     <div class="cbar"><button data-c="reset"${csel.saved||mv?'':' disabled'}>Reset</button><button data-c="note">Note</button><button data-c="del">Delete</button><button data-c="cancel" class="go">Done</button></div>`}
 // cards moved or deleted that the video does not show yet: their old spot dimmed, the picture at its new place
 function drawPending(){const L=$('clayer'),t=v.currentTime,cs=((data().items||{}).cards)||[],baking=S.bake&&/waiting|working/.test(S.bake.state||'');
-  const h=(S.cards_pending||[]).map(p=>{const c=cs.find(c=>c.key===p.key);if(!c||!(c.s<=t&&t<c.e))return '';const[ox,oy,ow,oh]=c.box;
+  const h=(S.cards_pending||[]).map(p=>{const c=cs.find(c=>c.key===p.key);if(!c||!(c.s<=t&&t<c.e)||!p.deleted&&!p.box)return '';   /* moved only in time: the Images row shows it */const[ox,oy,ow,oh]=c.box;
     return `<div class="cwas" style="left:${ox}%;top:${oy}%;width:${ow}%;height:${oh}%"><span>${p.deleted?'Deleted':baking?'Updating...':'Moved'}</span></div>`
       +(p.box&&c.src?`<div class="cnew" style="left:${p.box[0]}%;top:${p.box[1]}%;width:${p.box[2]}%;height:${p.box[3]}%"><img src="/card-img/${c.src.split('/').map(encodeURIComponent).join('/')}" alt=""></div>`:'')}).join('');
   if(L._s!==h){L._s=h;L.innerHTML=h}}
-async function cardSave(del,box){const c=csel;if(!c)return;
-  const r=await post('/card/edit',{key:c.x.key,label:c.x.label,t:c.x.s,t_end:c.x.e,...(del?{deleted:true}:{box:box||c.box})});
+async function cardSave(del,box){const c=csel;if(!c)return;const base={key:c.x.key,label:c.x.label,t:c.x.s,t_end:c.x.e},was=c.orig.slice(),nb=(box||c.box).slice();
+  const r=await post('/card/edit',{...base,...(del?{deleted:true}:{box:nb})});
   if(!(r.id||r.ok))return toast(r.error||'That did not save.');
+  if(!del)edPush('image moved',()=>edSave('/card/edit',{...base,box:was}),()=>edSave('/card/edit',{...base,box:nb}));   // a delete is baked out of the plan: no undo
   if(del){csel=null;toast(r.id?'Card deleted. Claude has this draft: it drops it in the next one.':'Card deleted.')}
   else{c.orig=c.box.slice();c.saved=true;if(r.id)toast('Saved. Claude has this draft: it moves it in the next one.')}
   drawCard();await load()}
