@@ -458,10 +458,13 @@ body.tside #tside{display:flex}
 #tbody[hidden],#cbody[hidden],#sbody[hidden]{display:none!important}
 #sbody{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:10px}
 .srow{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px}
-.slib,.smom{display:flex;flex-direction:column;gap:10px}.smom{padding-top:16px;border-top:1px solid var(--line)}
+.slib{display:flex;flex-direction:column;gap:10px}.smom{padding-top:14px;border-top:1px solid var(--line)}
+.smom[open]{display:flex;flex-direction:column;gap:12px}.smom summary{display:flex;align-items:center;flex-wrap:wrap;gap:2px 8px;cursor:pointer;list-style:none}.smom summary::-webkit-details-marker{display:none}
+.smom summary::before{content:"";width:6px;height:6px;border-right:1.5px solid var(--muted);border-bottom:1.5px solid var(--muted);transform:rotate(-45deg);margin-right:2px;align-self:center;transition:transform .15s}.smom[open] summary::before{transform:rotate(45deg)}
+.smom summary b{font-size:14px;color:var(--strong)}.smom summary span{font-size:12px;color:var(--muted)}
 .slhead{display:flex;align-items:center;justify-content:space-between}.slhead b{font-size:14px;line-height:18px;color:var(--strong)}
 .slhead button{height:30px;padding:0 12px;border-radius:8px;background:var(--ink);color:var(--onink);font-size:13px;font-weight:600}
-.sdrop{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border:1.5px dashed var(--line2);border-radius:12px;font-size:13px;line-height:18px;font-weight:600;color:var(--body);text-align:center;cursor:pointer}
+.sdrop{display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px;border:1.5px dashed var(--line2);border-radius:12px;font-size:13px;line-height:18px;font-weight:600;color:var(--body);text-align:center;cursor:pointer}
 .sdrop small{font-size:11px;font-weight:400;color:var(--muted)}.sdrop:hover,.sdrop.on{border-color:var(--ink);color:var(--ink);background:var(--hover)}
 #sfind{height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 10px;font-size:13px}
 .slrows{display:flex;flex-direction:column;gap:2px}
@@ -511,8 +514,8 @@ body.tside #tside{display:flex}
 .tf{display:flex;align-items:center;gap:10px;min-height:32px}.tf.top{align-items:flex-start}.tf.top>span{padding-top:2px}
 .tf>span{width:46px;flex-shrink:0;font-size:12px;line-height:16px;color:var(--muted)}
 .tfv{flex:1;min-width:0;display:flex;align-items:center;gap:8px}.tfv.col{flex-direction:column;align-items:stretch}
-.tfv b{flex:1;font-size:13px;font-weight:600;color:var(--strong);white-space:nowrap}
-.tfv button{height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}.tfv button:hover{border-color:var(--ink)}
+.tfv b{font-size:13px;font-weight:600;color:var(--strong);white-space:nowrap}
+.tfv button{flex:1;min-width:0;height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}.tfv button:hover{border-color:var(--ink)}
 .tfv input[type=range]{flex:1;min-width:0;accent-color:var(--ink)}.tfv output{width:34px;text-align:right;font-size:12px;color:var(--body)}
 .tfv select{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font-size:13px}
 .tfoot{display:flex;align-items:center;gap:8px}.tfoot span{flex:1}
@@ -550,8 +553,8 @@ body.tside #tside{display:flex}
 .tl.hit span{color:transparent!important;-webkit-text-stroke:0!important;background:none!important}   /* baked in the video: only the click target */
 .tpickrow{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:16px;color:var(--strong)}.tpickrow b{font-weight:600}
 #tfont{width:100%;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font-size:14px}
-.tcols{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
-.tcols button{aspect-ratio:1;width:100%;min-width:0;padding:0;border-radius:6px;border:1px solid var(--line2)}.tcols button.on{outline:2px solid var(--ink);outline-offset:1px}
+.tcols{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:18px;gap:4px}
+.tcols button{height:18px;width:100%;min-width:0;padding:0;border-radius:4px;border:1px solid var(--line2)}.tcols button.on{outline:2px solid var(--ink);outline-offset:1px}
 .tcustom{display:flex;align-items:center;gap:8px}
 .tcustom label{position:relative;width:28px;height:28px;border-radius:50%;flex-shrink:0;cursor:pointer;background:conic-gradient(#FF3B30,#FFCC00,#34C759,#00C7BE,#0A84FF,#BF5AF2,#FF2D92,#FF3B30)}
 .tcustom label span{position:absolute;inset:6px;border-radius:50%;border:2px solid var(--panel)}
@@ -2137,7 +2140,7 @@ function renderTextPanel(){
   document.querySelectorAll('#ttiles [data-ts]').forEach(b=>b.classList.toggle('on',!!tx&&b.dataset.ts===tx.style));
   const f=$('tform'),sig=tx?(tx.edit?'e'+tx.edit.id:'n'):'';
   if(l._tf!==sig){l._tf=sig;f.innerHTML=tx?`<div class="tnew"><textarea id="tword" rows="2" placeholder="Type your text" maxlength="120" aria-label="the text">${esc(tx.word||'')}</textarea>
-    <div class="tf"><span>Time</span><div class="tfv"><b id="tspan" class="num"></b><button id="tstart" title="Start at the playhead">Set start</button><button id="tend" title="End at the playhead">Set end</button></div></div>
+    <div class="tf top"><span>Time</span><div class="tfv col"><b id="tspan" class="num"></b><div class="tfv"><button id="tstart" title="Start at the playhead">Start here</button><button id="tend" title="End at the playhead">End here</button></div></div></div>
     <div class="tf"><span>Size</span><div class="tfv"><input type="range" id="tsize" min="2" max="20" step="0.5" value="${tx.size}" aria-label="text size"><output id="tsizen" class="num">${tx.size}</output></div></div>
     <div class="tf"><span>Width</span><div class="tfv"><input type="range" id="twidth" min="15" max="84" step="1" value="${tx.w}" aria-label="text width"><output id="twidthn" class="num">${tx.w}%</output></div></div>
     <div class="tf"><span>Font</span><div class="tfv"><select id="tfont" aria-label="font">${TFONTS.map(f=>`<option value="${f}"${f===tx.font?' selected':''}>${f}</option>`).join('')}</select></div></div>
@@ -2229,7 +2232,7 @@ $('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw
 // for every video, with a note).
 const PLAY='<svg width="14" height="14" viewBox="0 0 14 14"><path d="M4 2.5v9l7.5-4.5z" fill="currentColor"/></svg>';
 const STOP='<svg width="14" height="14" viewBox="0 0 14 14"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/></svg>';
-let sndAudio=null,sndKey='',sndFind='';
+let sndAudio=null,sndKey='',sndFind='',sndMomOpen=false;
 function sndStop(){if(sndAudio)sndAudio.pause();sndAudio=null;sndKey='';document.querySelectorAll('#sbody [data-pk]').forEach(b=>b.innerHTML=PLAY)}
 function sndHear(key,url){const same=sndKey===key;sndStop();if(same||!url)return;
   sndAudio=new Audio(url);sndKey=key;sndAudio.onended=sndStop;sndAudio.play().catch(()=>toast('Could not play that sound'));
@@ -2245,14 +2248,14 @@ function renderSndPanel(){const b=$('sbody'),u=(S&&S.sounds_ui)||{cues:[],own:[]
       <button class="sladd" data-ladd="${esc(f)}">Add</button><button class="slrm" data-lrm="${esc(f)}" aria-label="remove ${esc(f)} from the library" title="Remove from your sounds">×</button></div>`).join('');
   const opt=(c,f)=>`<option value="${esc(f)}"${c===f?' selected':''}>${esc(sndName(f))}</option>`;
   b.innerHTML=`<div class="slib"><div class="slhead"><b>Your sounds</b><button id="supload">Upload</button></div>
-    <label class="sdrop" id="sdrop"><input type="file" id="slibfile" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus" multiple hidden>Drop sound files here or click to choose<small>mp3, wav, m4a, aac, flac, ogg. Kept for every video.</small></label>
+    <label class="sdrop" id="sdrop"><input type="file" id="slibfile" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus" multiple hidden>Drop sound files here or click to choose</label>
     ${u.own.length>6?`<input id="sfind" placeholder="Search your sounds" value="${esc(sndFind)}" aria-label="search your sounds">`:''}
     <div class="slrows">${rows}</div>
     ${u.own.length?'<p class="tsub">Drag a sound onto the timeline, or Add puts it at the playhead.</p>':''}</div>
-    <div class="smom"><div class="slhead"><b>Sound for each moment</b></div><p class="tsub">Used in every video.</p>
+    <details class="smom"${sndMomOpen?' open':''}><summary><b>Sound for each moment</b><span>Used in every video</span></summary>
     ${u.cues.map(x=>`<div class="smrow"><div><b>${esc(x.label)}</b><small>When ${esc(x.when)}</small></div>
       <div class="smsel"><select data-cue="${esc(x.cue)}" aria-label="sound for ${esc(x.label)}">${opt(x.choice,'default')}${opt(x.choice,'none')}${u.own.length?`<optgroup label="Your sounds">${u.own.map(f=>opt(x.choice,f)).join('')}</optgroup>`:''}</select>
-      <button class="splay sm" data-pk="c:${esc(x.cue)}:${esc(x.choice)}" data-sp="${esc(x.cue)}" aria-label="play"${x.choice==='none'?' disabled':''}>${PLAY}</button></div></div>`).join('')}</div>`}
+      <button class="splay sm" data-pk="c:${esc(x.cue)}:${esc(x.choice)}" data-sp="${esc(x.cue)}" aria-label="play"${x.choice==='none'?' disabled':''}>${PLAY}</button></div></div>`).join('')}</details>`}
 // files into the library, one at a time, streamed (a song can be big)
 async function libUpload(fs){fs=[...fs].filter(f=>/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg|opus)$/i.test(f.name));
   if(!fs.length)return toast('Add a sound file: wav, mp3, m4a, aac, flac, ogg or opus.');let n=0;
@@ -2277,6 +2280,7 @@ $('sbody').addEventListener('change',async e=>{if(e.target.id==='slibfile'){cons
 $('sbody').addEventListener('input',e=>{if(e.target.id!=='sfind')return;sndFind=e.target.value;const q=sndFind.toLowerCase();   // filter in place: the box keeps its caret
   document.querySelectorAll('#sbody .slrow').forEach(r=>r.hidden=!!q&&!r.dataset.snd.toLowerCase().includes(q))});
 $('sbody').addEventListener('keydown',e=>{if(e.target.id==='sfind')e.stopPropagation()});
+$('sbody').addEventListener('toggle',e=>{if(e.target.classList&&e.target.classList.contains('smom'))sndMomOpen=e.target.open},true);
 $('sbody').addEventListener('dragstart',e=>{const r=e.target.closest('[data-snd]');if(!r)return;e.dataTransfer.setData('application/x-cooked-sound',r.dataset.snd);e.dataTransfer.effectAllowed='copy'});
 ['dragover','dragenter'].forEach(k=>$('sbody').addEventListener(k,e=>{if(![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();const d=$('sdrop');if(d)d.classList.add('on')}));
 $('sbody').addEventListener('dragleave',e=>{if(!$('sbody').contains(e.relatedTarget)){const d=$('sdrop');if(d)d.classList.remove('on')}});
