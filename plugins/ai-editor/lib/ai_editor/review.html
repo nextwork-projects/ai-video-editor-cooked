@@ -674,6 +674,15 @@ body.staged #stagebar{display:flex}
 .rcpt.off{color:var(--muted)}.rcpt button{border:0;background:none;padding:0;font:inherit;font-weight:600;color:var(--strong);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 .rcpt button:hover{color:var(--ink)}
 .learn .erow button.go{flex:1}.learn .erow button.go:disabled{opacity:.5}
+.lset{margin-left:28px;font-size:12px;line-height:16px;color:var(--quiet)}   /* the setting a kept rule saves */
+/* the rules a draft used: a quiet line in the notes panel that opens the list, each with Turn off */
+.rused{align-self:flex-start;border:0;background:none;padding:8px 0 0;font:inherit;font-size:12px;line-height:16px;color:var(--muted);cursor:pointer}
+.rused:hover{color:var(--strong)}
+.rlist{display:flex;flex-direction:column;gap:10px;padding:4px 0 0}
+.rl{display:flex;align-items:flex-start;gap:12px;font-size:13px;line-height:18px}
+.rl>div{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}.rl b{font-weight:500;color:var(--strong)}
+.rl i{font-style:normal;font-size:12px;line-height:16px;color:var(--quiet)}.rl.off b{color:var(--muted)}
+.rl button{border:0;background:none;padding:0;font:inherit;font-size:12px;line-height:18px;font-weight:600;color:var(--strong);text-decoration:underline;text-underline-offset:2px;cursor:pointer;white-space:nowrap}
 /* the Trial reels tab: Claude's plan for re-cuts of the approved reel, one type menu per version */
 body.trtab #box,body.trtab #adds{display:none}body.trtab .pfoot{padding-top:0;border-top:0}   /* Undo approve sits 8px under Skip */
 .tr{display:flex;flex-direction:column;gap:20px}
@@ -1562,6 +1571,21 @@ function noteHtml(c){
   return `<div class="note${old?' old':''}${ed?' editing':''}${done?' done':''}${wont?' wont':''}" data-t="${t}" data-old="${old?1:0}"${why?` title="${esc(why)}"`:''}><div class="bub">${said?'':thumb}<div class="nb"><div class="nh">${done?`<span class="okt" aria-label="done">${TICK}</span>`:''}<span class="tchip num">${tm}</span>${said?lead:quote}</div>
     ${body}${rep}${keep}${notes.map(x=>`<span class="nmeta">${x}</span>`).join('')}${acts.length&&!ed?`<div class="acts">${acts.join('')}</div>`:''}</div></div></div>`;
 }
+// the rules this draft used (review.py round_data -> /data rules): one quiet line, the list under it, each with Turn off
+let rulesOpen=false;
+function rulesUsedHtml(){
+  const rs=data().rules||[];if(!rs.length)return '';
+  const li=rs.map(r=>`<div class="rl${r.off?' off':''}"><div><b>${esc(r.rule)}.</b><i>${esc([r.where,r.did?'Set '+r.did:'',r.off?'Turned off':''].filter(Boolean).join(' · '))}</i></div><button data-roff="${r.id}">${r.off?'Turn on':'Turn off'}</button></div>`).join('');
+  return `<button class="rused" data-rused aria-expanded="${rulesOpen}">This draft used ${rs.length} of your rules</button>${rulesOpen?`<div class="rlist">${li}</div>`:''}`;
+}
+$('list').addEventListener('click',async e=>{
+  if(e.target.closest('[data-rused]')){rulesOpen=!rulesOpen;return renderList()}
+  const b=e.target.closest('[data-roff]');if(!b)return;
+  const r=(data().rules||[]).find(x=>x.id===+b.dataset.roff);if(!r)return;
+  const j=await post('/rule/off',{id:r.id,off:!r.off});if(j.id==null)return toast(j.error||'That did not save.');
+  for(const d of Object.values(DATA))for(const x of d.rules||[])if(x.id===r.id)x.off=j.off;   // every draft that used it
+  renderList();
+});
 function workHtml(){
   const p=pending(),e=S.events[S.events.length-1],picked=!!(S.sent&&e&&e.handled);
   const act=(S.activity||[]).filter(x=>x.round===S.round&&!(x.step&&p!=='send')),live=act.some(x=>!x.done);   // edit steps (visual-prep during the cut) are not this round's work
@@ -1609,9 +1633,10 @@ function mapT(t,from,to){
 }
 function learnHtml(){
   const L=S.learn;if(!L)return '';const head=`<b>${`Teach ${!L.style||L.style==='My style'?'your style':esc(L.style)} from this video`}</b>`;   // own style: "your style"; a creator's: its name
-  const say={none:'No notes this time. Your style stays as it is.',empty:'Nothing in your notes was about the style. It stays as it is.',skipped:'Not saved. Your style stays as it is.'}[L.state];
+  const ed=L.edits&&L.edits.length?' and edits':'';   // edit_patterns: what the user did on the page counts too
+  const say={none:'No notes or edits this time. Your style stays as it is.',empty:`Nothing in your notes${ed} was about the style. It stays as it is.`,skipped:'Not saved. Your style stays as it is.'}[L.state];
   if(say)return `<div class="learn">${head}<p>${say}</p></div>`;
-  if(L.state==='reading')return `<div class="learn">${head}<p class="wait"><i></i>Claude is reading your notes...</p></div>`;
+  if(L.state==='reading')return `<div class="learn">${head}<p class="wait"><i></i>Claude is reading your notes${ed}...</p></div>`;
   const open=L.state==='proposed',rs=(L.rules||[]).map((r,i)=>[r,i]).filter(([,i])=>open||L.chosen.includes(i));
   const rows='<div class="lrules">'+rs.map(([r,i])=>`<label class="lrule${open&&untick.has(i)?' off':''}"><input type="checkbox" data-li="${i}"${open&&untick.has(i)?'':' checked'}${open?'':' disabled'}><span>${esc(r.rule)}.</span></label>`).join('')+'</div>';
   if(open){   // Claude picked where each rule goes (its "to"); the user changes any from the menu under it
@@ -1626,9 +1651,9 @@ function learnHtml(){
       <button role="option" aria-selected="${t==='new'}" class="${t==='new'?'cur':''}" data-lto="+new" data-lrow="${i}"><span class="ck"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="t"><b>New style from this video</b><i>A copy of ${esc(here.name)} with these rules</i></span></button></div>`;
     const on=rs.filter(([,i])=>!untick.has(i)),wantNew=on.some(([,i])=>pick(i)==='new'),noName=wantNew&&!lName.trim();
     const places=[...new Set(on.map(([,i])=>nm(pick(i))))],list=places.length<2?places.join(''):places.slice(0,-1).join(', ')+' and '+places[places.length-1];
-    const rowsP=rs.map(([r,i])=>{const t=pick(i),off=untick.has(i);return `<div class="lar${off?' off':''}"><label class="lrule"><input type="checkbox" data-li="${i}"${off?'':' checked'}><span>${esc(r.rule)}.</span></label>
+    const rowsP=rs.map(([r,i])=>{const t=pick(i),off=untick.has(i);return `<div class="lar${off?' off':''}"><label class="lrule"><input type="checkbox" data-li="${i}"${off?'':' checked'}><span>${esc(r.rule)}.</span></label>${r.set_text?`<span class="lset">${esc(r.set_text[0].toUpperCase()+r.set_text.slice(1))}</span>`:''}
       <div class="lto"><i>Saves to</i><button data-ldd="${i}" aria-haspopup="listbox" aria-expanded="${lOpen===i}"${off?' disabled':''}><span>${esc(t==='new'?nm(t):t.name)}</span>${CHV}</button></div>${lOpen===i&&!off?menu(i,t):''}</div>`}).join('');
-    return `<div class="learn"><div>${head}<p>From your notes. Claude picked where each one goes; change any that are wrong.</p></div><div class="lars">${rowsP}</div>
+    return `<div class="learn"><div>${head}<p>From your notes${ed}. Claude picked where each one goes; change any that are wrong.</p></div><div class="lars">${rowsP}</div>
       ${wantNew?`<input class="lname" maxlength="40" placeholder="Name the new style, like Podcast clips" value="${esc(lName)}" aria-label="name the new style">`:''}${lErr?`<span class="lerr">${esc(lErr)}</span>`:''}
       ${places.length?`<p class="lsum">Updates ${esc(list)}.</p>`:''}
       <div class="lact"><button class="go" data-lsave${!on.length||noName?' disabled':''}>Save ${plural(on.length,'rule')}</button><button class="skip" data-lskip>Not now</button></div></div>`;
@@ -1707,6 +1732,7 @@ function renderList(){
   if(!mine.length&&!prev.length&&!(S.raw&&isCur())&&!(isCur()&&(makingEdit()||p==='approve')))h+=isCur()?'<div class="empty"><b>Your feedback</b>Pause where something is off and type what to change below. Each note is pinned to that moment. Claude sees nothing until you press Submit feedback to Claude.</div>':'<p class="empty2">No notes on this draft.</p>';
   if(!mine.length&&prev.length&&isCur()&&!p)h+=`<p class="empty2">No notes on ${dn(viewRound())} yet. Pause where something is off and leave a note.</p>`;
   if(isCur()&&S.made&&S.stage==='edit'&&!S.stills&&view.stage==='edit')h+=`<p class="since made">${esc(S.made)}</p>`;
+  h+=rulesUsedHtml();
   if(isCur())h+=workHtml();
   const queued=isCur()?S.comments.filter(c=>c.queued&&c.stage===S.stage&&onAlt(c)).sort((a,b)=>a.t-b.t):[];
   if(queued.length)h+=`<p class="sub">${S.raw?'For the cut':'For the next draft'}</p>`+queued.map(noteHtml).join('');

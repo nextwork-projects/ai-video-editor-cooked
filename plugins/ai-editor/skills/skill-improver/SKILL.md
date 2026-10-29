@@ -32,7 +32,9 @@ Copy this checklist and tick it off:
 
 - Review-page notes and your replies: `edits/<name>/review.json` (`comments`). After the final approve, `wait`'s
   `LEARN:` block already lists them.
-- Preview fixes: `edits/<name>/corrections.jsonl`.
+- Hands-on edits and preview fixes: `edits/<name>/corrections.jsonl`, one row per change with `from` and `to`
+  (the review page's rows have `"source": "review"`). After the final approve, `LEARN:` sums them up already:
+  "moved 4 of 5 cards up by about 12% of the frame [visuals]". Word each as a rule; keep a `[set ...]` as its `set`.
 - Corrections the user typed in this chat about this video.
 
 ## 2. Keep only notes for every future video
