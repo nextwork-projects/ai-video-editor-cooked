@@ -339,21 +339,35 @@ def card_key(c):
 CAP_GROUPS = {"1": 1, "3": 3, "5": 5, "sentence": 12}   # the Captions panel's words at a time (12: breaks at the sentence's own commas and stops)
 
 
-def captions_info(folder):
+CAP_STYLE = {"size": ("size_pct", 2, 12), "y": ("y_pct", 15, 85), "color": ("color",), "highlight": ("highlight_color",)}   # the panel's style rows
+
+
+def captions_info(folder, plan=None):
     """The Captions panel: the looks (presets.py, built in then the user's) and this video's words at a time and look,
-    from taste (this video's settings win, as plan.py reads them)."""
+    from taste (this video's settings win, as plan.py reads them); "base" the caption style in the draft (its plan), and
+    "mine" this video's own size, place and colours, which the page draws over the video until a draft has them."""
     from ai_editor import presets, taste
     looks = {k: {f: v.get(f) for f in ("size_pct", "weight", "case", "color", "stroke", "stroke_color", "box", "box_color",
-                                     "shadow", "highlight_color", "words_per_caption") if v.get(f) is not None}
+                                     "shadow", "highlight_color", "words_per_caption", "font_match") if v.get(f) is not None}
              for k, v in presets.captions().items()}
     cap = (taste.load_json(folder, count=False) or {}).get("captions") or {}
     n = cap.get("words_per_caption")
-    return {"looks": looks, "look": cap.get("preset"),
+    keys = {f"captions.{k[0]}" for k in CAP_STYLE.values()}
+    mine = {r["setting"][9:]: r["value"] for r in taste.load_rules() if r.get("scope") == f"video:{folder.name}" and r.get("setting") in keys} \
+        if taste.rules_path().exists() else {}
+    try:
+        st = (load(plan).get("captions") or {}).get("style") or {} if plan else {}
+    except (OSError, ValueError):
+        st = {}
+    base = {f: st[f] for f in ("size_pct", "y_pct", "width_pct", "weight", "case", "color", "highlight_color", "stroke", "box",
+                               "box_color", "shadow", "font_match", "style") if st.get(f) is not None}
+    return {"looks": looks, "look": cap.get("preset"), "base": base, "mine": mine,
             "words": next((k for k, v in CAP_GROUPS.items() if v == n), str(n) if n else None)}
 
 
-def set_captions(folder, words=None, look=None):
-    """Save the Captions panel's choice for this video only (taste scope video:<name>), the way the taste skill does."""
+def set_captions(folder, words=None, look=None, style=None):
+    """Save the Captions panel's choice for this video only (taste scope video:<name>), the way the taste skill does.
+    style: {"size", "y", "color", "highlight"} (CAP_STYLE), each one a setting plan.py lays over the look."""
     from ai_editor import presets, taste
     said = []
     if words is not None:
@@ -369,6 +383,21 @@ def set_captions(folder, words=None, look=None):
         taste.add("Captions", f"Captions look: {look}", "captions.preset", look, scope=f"video:{folder.name}", edit=str(folder),
                   source="review")
         said.append(f"the {look} look")
+    for k, (key, *lim) in CAP_STYLE.items():
+        v = (style or {}).get(k)
+        if v is None:
+            continue
+        if lim:
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not lim[0] <= v <= lim[1]:
+                raise ValueError(f"{k}: a number from {lim[0]} to {lim[1]}")
+            v = round(float(v), 1 if k == "size" else None)   # the place in whole percent, as the slider moves it
+        elif not isinstance(v, str) or not presets.HEX.fullmatch(v):
+            raise ValueError(f"{k}: a colour like #FFD60A")
+        else:
+            v = v.upper()
+        what = {"size": f"size {v}", "y": f"{v}% down the frame", "color": f"colour {v}", "highlight": f"highlight {v}"}[k]
+        taste.add("Captions", f"Captions {what}", f"captions.{key}", v, scope=f"video:{folder.name}", edit=str(folder), source="review")
+        said.append(what)
     return said
 
 
@@ -1783,7 +1812,8 @@ def make_handler(folder, token):
                 d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
                 d["sounds_ui"] = sounds_info() if d.get("stage") == "edit" else None   # the Sounds panel
-                d["captions_ui"] = captions_info(folder) if d.get("stage") == "edit" else None   # the Captions panel
+                snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
+                d["captions_ui"] = captions_info(folder, snap_plan) if d.get("stage") == "edit" else None   # the Captions panel, its base the video shown
                 d["texts"] = (load(folder / "texts.json").get("items") or []) if (folder / "texts.json").exists() else []   # the Text tab
                 d["texts_baked"] = baked_texts(folder, d) if d.get("stage") == "edit" else []   # the rest the page draws live
                 d["cards_pending"] = cards_pending(folder, d) if d.get("stage") == "edit" else []   # moved, not in the video yet
@@ -2069,16 +2099,22 @@ def make_handler(folder, token):
                 if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
                     return self.send(409, {"error": "Captions change on the edit, before it is approved."})
                 try:
-                    said = set_captions(folder, body.get("words"), body.get("look"))
+                    said = set_captions(folder, body.get("words"), body.get("look"), body)
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 if not said:
-                    return self.send(400, {"error": "captions takes words and/or look"})
+                    return self.send(400, {"error": "captions takes words, look, size, y, color or highlight"})
                 cur = captions_info(folder)   # one Captions note per round, saying where the choice is now
+                mine = cur["mine"]
                 now_said = [w for w in (("a sentence at a time" if cur["words"] == "sentence" else f"{cur['words']} word"
                                          f"{'' if cur['words'] == '1' else 's'} at a time") if cur["words"] else None,
-                                        f"the {cur['look']} look" if cur["look"] else None) if w]
-                text = f"Captions: {' and '.join(now_said or said)}, for this video (saved to its taste). Plan again so it shows."
+                                        f"the {cur['look']} look" if cur["look"] else None,
+                                        f"size {mine['size_pct']}" if "size_pct" in mine else None,
+                                        f"{mine['y_pct']}% down the frame" if "y_pct" in mine else None,
+                                        f"colour {mine['color']}" if "color" in mine else None,
+                                        f"highlight {mine['highlight_color']}" if "highlight_color" in mine else None) if w]
+                ws = now_said or said
+                text = f"Captions: {', '.join(ws[:-1]) + ' and ' + ws[-1] if len(ws) > 1 else ws[0]}, for this video (saved to its taste). Plan again so it shows."
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "captions" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
                 if old:
@@ -4182,7 +4218,13 @@ def demo():
     assert cc1["text"].startswith("Captions: a sentence at a time, for this video"), cc1
     assert cc2["id"] == cc1["id"] and cc2["text"].startswith("Captions: a sentence at a time and the bold look"), cc2   # one note, kept current
     assert all(r["scope"] == f"video:{folder.name}" for r in _taste.load_rules() if r.get("setting", "").startswith("captions.")), "this video only"
-    for bad in ({"words": "7"}, {"look": "nope"}, {}):
+    cc3 = post("/captions", {"size": 5.55, "y": 62, "color": "#ffd60a", "highlight": "#FF3B30"})
+    cap = (_taste.load_json(folder, count=False) or {}).get("captions") or {}
+    assert (cap.get("size_pct"), cap.get("y_pct"), cap.get("color"), cap.get("highlight_color")) == (5.5, 62.0, "#FFD60A", "#FF3B30"), cap
+    cui = json.loads(get("/state").read())["captions_ui"]
+    assert cui["mine"] == {"size_pct": 5.5, "y_pct": 62, "color": "#FFD60A", "highlight_color": "#FF3B30"} and "base" in cui, cui
+    assert cc3["id"] == cc1["id"] and cc3["text"].startswith("Captions: a sentence at a time, the bold look, size 5.5, 62% down"), cc3
+    for bad in ({"words": "7"}, {"look": "nope"}, {}, {"size": 40}, {"y": "high"}, {"color": "red"}, {"highlight": "#12"}):
         try:
             post("/captions", bad)
             raise AssertionError(bad)

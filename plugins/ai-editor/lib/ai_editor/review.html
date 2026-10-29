@@ -496,6 +496,15 @@ body.tside #tside{display:flex}
 .clook{display:flex;flex-direction:column;gap:6px;align-items:stretch;text-align:left;font-size:12px;line-height:16px;color:var(--body);font-weight:500}
 .clook>span{height:64px;border-radius:10px;background:#3A3D44 linear-gradient(160deg,#5B6270,#2B2E35);display:grid;place-items:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;outline:1.5px solid transparent;outline-offset:2px;overflow:hidden;padding:0 6px}
 .clook:hover>span{outline-color:var(--line2)}.clook.on>span{outline-color:var(--ink)}.clook.on{color:var(--strong);font-weight:600}
+/* the caption preview over the video (drawCapPrev): the line in its new style, the old one dimmed under it */
+#cplayer{overflow:hidden}
+.cpline{position:absolute;left:50%;transform:translate(-50%,-50%);white-space:nowrap;text-align:center;line-height:1.15;pointer-events:auto;cursor:ns-resize;touch-action:none;outline:1px dashed rgba(255,255,255,.85);outline-offset:6px}
+.cpline b{font-weight:inherit}.cpline.hit{outline:0}.cpline.hit b{color:transparent!important;-webkit-text-stroke:0!important;text-shadow:none!important;background:none!important}.cpline.hit b span{color:transparent!important}
+.cpline.hit:hover{outline:1px dashed rgba(255,255,255,.8)}
+.cpline small{position:absolute;left:50%;top:100%;margin-top:10px;transform:translateX(-50%);font:600 11px/14px system-ui,-apple-system,sans-serif;color:#FFFFFF;background:rgba(12,10,9,.7);padding:2px 6px;border-radius:5px;-webkit-text-stroke:0;text-shadow:none}
+.cpwas{position:absolute;pointer-events:none;background:rgba(12,10,9,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-radius:6px}
+.cstyle{display:flex;flex-direction:column;gap:10px}#cbody .tf>span{width:58px}
+.cword{height:36px;width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:0 10px;font:inherit;font-size:14px;color:var(--strong);outline:none}.cword:focus{border-color:var(--ink)}
 #tbody{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:14px}
 .ttiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
 .ttile{height:44px;border-radius:8px;background:#3A3836;display:grid;place-items:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;font-weight:700;font-size:12px;outline:1.5px solid transparent;outline-offset:2px}
@@ -533,7 +542,7 @@ body.tside #tside{display:flex}
 .cwas{position:absolute;pointer-events:none;outline:1px dashed rgba(255,255,255,.75);background:rgba(12,10,9,.55);display:grid;place-items:center}
 .cwas span{font-size:11px;line-height:14px;color:#FFFFFF;background:rgba(12,10,9,.7);padding:2px 6px;border-radius:5px;white-space:nowrap;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis}
 .cbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);pointer-events:auto;display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--pill);box-shadow:var(--pop);white-space:nowrap;max-width:calc(100% - 12px)}
-#clayer,#hits,#tlayer{-webkit-user-select:none;user-select:none}#tedit{pointer-events:none}
+#clayer,#hits,#tlayer,#cplayer{-webkit-user-select:none;user-select:none}#tedit{pointer-events:none}
 .cnew{position:absolute;pointer-events:none;outline:1px dashed rgba(255,255,255,.8)}.cnew img{width:100%;height:100%;object-fit:contain;display:block}
 .cbar button{height:26px;padding:0 8px;border-radius:7px;font-size:12px;line-height:26px;font-weight:600;color:var(--pilltx)}.cbar button:hover{background:rgba(255,255,255,.12)}
 .cbar button.go{background:#FFFFFF;color:#0C0A09}.cbar button:disabled{opacity:.4}
@@ -785,7 +794,7 @@ body.making #making{display:flex}
   <div id="pair">
    <figure class="pl" id="p2"><figcaption id="cap2"></figcaption><div class="player"><video id="v2" preload="auto" muted playsinline></video><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
    <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><video id="v" preload="auto" playsinline></video>
-    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
+    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
@@ -1953,7 +1962,7 @@ function tick(){const T=D(),t=v.currentTime,p=Math.min(100,t/T*100);
   document.querySelectorAll('#ticks span[data-s]').forEach((el,i,all)=>el.classList.toggle('cur',t>=+el.dataset.s&&(!all[i+1]||t<+all[i+1].dataset.s)));
   document.querySelectorAll('.track .ph').forEach(el=>el.style.left=p+'%');
   $('time').innerHTML=`<b>${fmtx(t)}</b><span>/ ${fmt(v.duration||0)}</span>`;
-  $('fsfill').style.width=$('fsknob').style.left=p+'%';$('fstime').innerHTML=`<b>${fmtx(t)}</b> / ${fmt(v.duration||0)}`;tfollow();tickTx();renderHits();renderTexts();if(!csel)drawPending();edPh()}
+  $('fsfill').style.width=$('fsknob').style.left=p+'%';$('fstime').innerHTML=`<b>${fmtx(t)}</b> / ${fmt(v.duration||0)}`;tfollow();tickTx();renderHits();renderTexts();if(!csel)drawPending();drawCapPrev();edPh()}
 v.addEventListener('timeupdate',tick);v.addEventListener('seeked',tick);
 const at=e=>{const r=bar.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))*(v.duration||0)};
 bar.addEventListener('pointerdown',e=>{dragging=true;bar.setPointerCapture(e.pointerId);v.currentTime=at(e);tick()});
@@ -2109,7 +2118,7 @@ function openTool(n){if(n!=='text'&&tx)setText(null);tool=n;tpanel=n==='text';do
   $('railtext').classList.toggle('on',n==='text');$('railcap').classList.toggle('on',n==='captions');$('railsnd').classList.toggle('on',n==='sounds');
   $('tsht').textContent={captions:'Captions',sounds:'Sounds'}[n]||'Text';
   $('tplus').hidden=n!=='text';$('tbody').hidden=n!=='text';$('cbody').hidden=n!=='captions';$('sbody').hidden=n!=='sounds';
-  if(n==='text')renderTextPanel();if(n==='captions')renderCapPanel();if(n==='sounds')renderSndPanel()}
+  if(n==='text')renderTextPanel();if(n==='captions')renderCapPanel();if(n==='sounds')renderSndPanel();drawCapPrev()}
 function openPanel(on){openTool(on?'text':null)}
 function setText(style,edit){
   if(!style){tx=null}
@@ -2195,34 +2204,81 @@ function capTile(name,l){const fs=Math.max(11,Math.min(16,(l.size_pct||4.2)*2.8)
     +(l.stroke?`-webkit-text-stroke:${Math.max(1,fs*.12)}px ${l.stroke_color||'#000'};paint-order:stroke fill;`:'')
     +(l.box?`background:${l.box_color||'#000'};padding:2px 6px;border-radius:5px;`:'')+(l.shadow?'text-shadow:0 2px 6px rgba(0,0,0,.6);':'');
   return `<span><b style="${esc(st)}">${esc(t)}</b></span>`}
-let capFocus=null;   // the caption line to put the cursor in (its start)
-function openCapLine(c){if(tool!=='captions')openTool('captions');capFocus=c?c.s:null;if(c){v.currentTime=c.s+.02;v.pause()}$('cbody')._s=null;renderCapPanel()}
+let capFocus=null,capSel=null;   // capFocus: the line to put the cursor in (its start); capSel: the line the panel is on
+let capLive={},capDrag=false;   // a size, place or colour being dragged or slid: drawn at once, saved when let go
+const CAPCOLS=['#FFFFFF','#000000','#FFD60A','#FF9500','#FF3B30','#34C759','#0A84FF','#BF5AF2'];   // the few caption colours; the wheel has the rest
+function openCapLine(c){if(tool!=='captions')openTool('captions');capFocus=c?c.s:null;if(c){capSel=c.s;v.currentTime=c.s+.02;v.pause()}$('cbody')._s=null;renderCapPanel()}
 async function saveCapLine(c,text){if(!c)return;const old=capText(c).text;if(text.trim()===old.trim())return;
   const r=await post('/captions/text',{s:c.s,w:c.w,text,old:c.text});if(!r.id)return toast(r.error||'That did not save.');
   toast(text.trim()?'Caption changed. Submit feedback and the next draft has it.':'Caption taken out. Submit feedback and the next draft drops it.');
   const row=$('cbody').querySelector(`.cline[data-cs="${c.s}"]`);if(row){row.classList.add('ed');if(!text.trim())row.querySelector('input').value=''}
   $('cbody')._s=null;$('edtracks')._h=null;await load()}
+// the caption style the next draft gets: the draft's own (its plan), the look picked if the draft does not have it yet,
+// then this video's size, place and colours, then what is being slid now
+function capLook(){const c=(S&&S.captions_ui)||{},b=c.base||{},l=c.look&&c.look!==b.style&&(c.looks||{})[c.look]||{};return {...b,...l,...(c.mine||{}),...capLive}}
+const CAPK=['size_pct','y_pct','color','highlight_color','weight','case','font_match','stroke','box','box_color'];
+function capChanged(){const b=((S&&S.captions_ui)||{}).base||{},a=capLook();return CAPK.some(k=>typeof a[k]==='boolean'||typeof b[k]==='boolean'?!!a[k]!==!!b[k]:a[k]!=null&&a[k]!==b[k])}
+async function saveCapStyle(body){const r=await post('/captions',body);if(!r.id){capLive={};drawCapPrev();return toast(r.error||'That did not save.')}
+  $('cbody')._s=null;await load();capLive={};drawCapPrev()}
 function capLinesHtml(){const cs=(data().items||{}).captions||[];if(!cs.length)return '';
-  return `<div><div class="tcap" style="margin-bottom:8px"><span>Lines</span><span>Enter saves</span></div><div class="clines">${cs.map((c,i)=>{const ct=capText(c);
+  return `<div><div class="tcap" style="margin-bottom:8px"><span>All lines</span><span>Enter saves</span></div><div class="clines">${cs.map((c,i)=>{const ct=capText(c);
     return `<div class="cline${ct.edited?' ed':''}" data-cs="${c.s}"><button class="clt" data-cseek="${i}">${fmtx(c.s)}</button><input data-ci="${i}" value="${esc(ct.text)}" placeholder="(taken out)" aria-label="caption at ${fmtx(c.s)}"><button class="cx" data-cdel="${i}" title="Take this caption out">×</button></div>`}).join('')}</div></div>`}
-function renderCapPanel(){const b=$('cbody'),c=(S&&S.captions_ui)||{looks:{}},sig=JSON.stringify(c)+JSON.stringify(S&&S.cap_words)+((data().items||{}).captions||[]).length;
+const capCols=(k,cur)=>`<div class="tcols">${CAPCOLS.map(c=>`<button data-cc="${k}" data-col="${c}" style="background:${c}" title="${c}" aria-label="${k} ${c}"${c===cur?' class="on"':''}></button>`).join('')}</div>
+  <div class="tcustom"><label title="Any colour"><input type="color" data-cpick="${k}" value="${cur.toLowerCase()}" aria-label="any ${k} colour"><span></span></label><input data-chex="${k}" value="${cur}" maxlength="7" aria-label="${k} as hex" spellcheck="false"></div>`;
+function renderCapPanel(){const b=$('cbody'),c=(S&&S.captions_ui)||{looks:{}},cs=(data().items||{}).captions||[],sig=JSON.stringify(c)+JSON.stringify(S&&S.cap_words)+cs.length+'|'+capSel;
   if(b._s===sig&&capFocus===null)return;if(b.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'&&capFocus===null)return;b._s=sig;
-  b.innerHTML=`<div><div class="tcap" style="margin-bottom:8px"><span>Words at a time</span></div><div class="cgroup">${CGROUPS.map(([k,n])=>`<button data-cw="${k}"${c.words===k?' class="on"':''}>${n}</button>`).join('')}</div></div>
-    <div><div class="tcap" style="margin-bottom:8px"><span>Look</span></div><div class="clooks">${Object.entries(c.looks||{}).map(([k,l])=>`<button class="clook${c.look===k?' on':''}" data-cl="${esc(k)}">${capTile(k,l)}${esc(k[0].toUpperCase()+k.slice(1))}</button>`).join('')}</div></div>
-    <p class="tsub">Saved for this video only. Submit feedback and the next draft shows it.</p>${capLinesHtml()}`;
-  if(capFocus!==null){const row=b.querySelector(`.cline[data-cs="${capFocus}"] input`);capFocus=null;if(row){row.scrollIntoView({block:'center'});row.focus();row.select()}}}
-$('cbody').addEventListener('keydown',e=>{const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;e.stopPropagation();
-  if(e.key==='Enter'){e.preventDefault();saveCapLine(((data().items||{}).captions||[])[+i],e.target.value);const nx=e.target.closest('.cline').nextElementSibling;if(nx)nx.querySelector('input').focus()}
+  const a=capLook(),si=cs.findIndex(x=>x.s===capSel),sel=cs[si],sz=+(a.size_pct||6).toFixed(1),y=Math.round(a.y_pct||70);
+  b.innerHTML=(sel?`<div><div class="tcap" style="margin-bottom:8px"><span>This caption at ${fmtx(sel.s)}</span><span>Enter saves</span></div><input class="cword" data-ci="${si}" value="${esc(capText(sel).text)}" placeholder="(taken out)" aria-label="this caption"></div>`:'')
+    +`<div><div class="tcap" style="margin-bottom:8px"><span>Look</span></div><div class="clooks">${Object.entries(c.looks||{}).map(([k,l])=>`<button class="clook${(c.look||(c.base||{}).style)===k?' on':''}" data-cl="${esc(k)}">${capTile(k,l)}${esc(k[0].toUpperCase()+k.slice(1))}</button>`).join('')}</div></div>
+    <div class="cstyle"><div class="tf"><span>Size</span><div class="tfv"><input type="range" id="csize" min="2" max="12" step="0.1" value="${sz}" aria-label="caption size"><output id="csizen" class="num">${sz}</output></div></div>
+    <div class="tf"><span>Position</span><div class="tfv"><input type="range" id="cy" min="15" max="85" step="1" value="${y}" aria-label="caption position, top to bottom"><output id="cyn" class="num">${y}%</output></div></div>
+    <div class="tf top"><span>Colour</span><div class="tfv col">${capCols('color',a.color||'#FFFFFF')}</div></div>
+    <div class="tf top"><span>Highlight</span><div class="tfv col">${capCols('highlight',a.highlight_color||a.color||'#FFFFFF')}</div></div></div>
+    <div><div class="tcap" style="margin-bottom:8px"><span>Words at a time</span></div><div class="cgroup">${CGROUPS.map(([k,n])=>`<button data-cw="${k}"${c.words===k?' class="on"':''}>${n}</button>`).join('')}</div></div>
+    <p class="tsub">Changes show on the video as a preview. Drag the caption to move it. Saved for this video only: submit feedback and the next draft has them.</p>${capLinesHtml()}`;
+  if(capFocus!==null){const row=b.querySelector(`.cline[data-cs="${capFocus}"] input`);capFocus=null;if(row)row.scrollIntoView({block:'nearest'});const w=b.querySelector('.cword');if(w){w.focus();w.select()}}}
+$('cbody').addEventListener('keydown',e=>{const k=e.target.dataset&&e.target.dataset.chex;
+  if(k){e.stopPropagation();if(e.key==='Enter'&&/^#[0-9a-f]{6}$/i.test(e.target.value))saveCapStyle({[k]:e.target.value.toUpperCase()});return}
+  const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;e.stopPropagation();
+  if(e.key==='Enter'){e.preventDefault();saveCapLine(((data().items||{}).captions||[])[+i],e.target.value);const row=e.target.closest('.cline'),nx=row&&row.nextElementSibling;if(nx)nx.querySelector('input').focus()}
   if(e.key==='Escape'){e.target.value=capText(((data().items||{}).captions||[])[+i]).text;e.target.blur()}});
 $('cbody').addEventListener('focusin',e=>{const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;const c=((data().items||{}).captions||[])[+i];if(c){v.currentTime=c.s+.02;v.pause()}});
-$('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw]'),l=e.target.closest('[data-cl]');
+// sliders and the colour wheel draw as they move and save on let go; a swatch saves on click
+$('cbody').addEventListener('input',e=>{const t=e.target;
+  if(t.id==='csize'){capLive.size_pct=+t.value;$('csizen').textContent=t.value}else if(t.id==='cy'){capLive.y_pct=+t.value;$('cyn').textContent=t.value+'%'}
+  else if(t.dataset.cpick){capLive[t.dataset.cpick==='color'?'color':'highlight_color']=t.value.toUpperCase()}else return;drawCapPrev()});
+$('cbody').addEventListener('change',e=>{const t=e.target;
+  if(t.id==='csize')saveCapStyle({size:+t.value});else if(t.id==='cy')saveCapStyle({y:+t.value});else if(t.dataset.cpick)saveCapStyle({[t.dataset.cpick]:t.value.toUpperCase()})});
+$('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw]'),l=e.target.closest('[data-cl]'),cc=e.target.closest('[data-cc]');
   const sk=e.target.closest('[data-cseek]'),dl=e.target.closest('[data-cdel]'),cs=(data().items||{}).captions||[];
-  if(sk){v.currentTime=cs[+sk.dataset.cseek].s+.02;v.pause();return}
+  if(cc){const k=cc.dataset.cc;capLive[k==='color'?'color':'highlight_color']=cc.dataset.col;cc.parentNode.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===cc));drawCapPrev();return saveCapStyle({[k]:cc.dataset.col})}
+  if(sk){capSel=cs[+sk.dataset.cseek].s;v.currentTime=capSel+.02;v.pause();$('cbody')._s=null;renderCapPanel();return}
   if(dl){return saveCapLine(cs[+dl.dataset.cdel],'')}
   if(!w&&!l)return;
   const r=await post('/captions',w?{words:w.dataset.cw}:{look:l.dataset.cl});if(!r.id)return toast(r.error||'That did not save.');
   toast(w?`Captions: ${w.dataset.cw==='sentence'?'a sentence':w.dataset.cw+' word'+(w.dataset.cw==='1'?'':'s')} at a time. Submit feedback to send it.`:`Captions: the ${l.dataset.cl} look. Submit feedback to send it.`);
   $('cbody')._s=null;await load()});
+// the live caption: while the Captions panel is open, the line on screen drawn in the style the next draft gets, over a
+// dimmed copy of the one in the video, marked Preview. Unchanged, it is only a target: drag it up or down to move it.
+function drawCapPrev(){if(capDrag)return;const L=$('cplayer'),it=data().items||{},t=v.currentTime;
+  const c=tool==='captions'&&S&&view&&view.stage==='edit'&&!cmp&&isCur()&&it.cap?(it.captions||[]).find(x=>x.s<=t&&t<x.e):null;
+  if(!c){if(L.firstChild)L.innerHTML='';L._s='';return}
+  const a=capLook(),ch=capChanged(),W=L.offsetWidth,H=L.offsetHeight,fs=Math.max(W,H)*(a.size_pct||6)/100,cw=a.width_pct||86;
+  const ws=capText(c).text.split(/\s+/).filter(Boolean),n=(c.w||[]).filter(s=>+s<=t).length-1,hi=a.highlight_color||a.color||'#FFFFFF';
+  const cs=x=>a.case==='upper'?x.toUpperCase():a.case==='lower'?x.toLowerCase():x;
+  const st=`top:${a.y_pct||70}%;font-size:${fs}px;max-width:none;font-family:'${esc(a.font_match||'TikTok Sans')}',system-ui,sans-serif;font-weight:${a.weight||800};color:${a.color||'#FFFFFF'};`
+    +(a.stroke?`-webkit-text-stroke:${Math.max(2,fs*.1)}px #000;paint-order:stroke fill;`:a.box||a.shadow===false?'':'text-shadow:0 .04em .18em rgba(0,0,0,.5);');
+  const words=ws.map((w,i)=>`<span${i===Math.max(0,n)&&hi!==(a.color||'#FFFFFF')?` style="color:${hi}"`:''}>${esc(cs(w))}</span>`).join(' ');
+  const old=`<div class="cpwas" style="left:${(100-it.cap.w)/2}%;top:${it.cap.y-it.cap.h/2}%;width:${it.cap.w}%;height:${it.cap.h}%"></div>`;
+  const h=(ch?old:'')+`<div class="cpline${ch?'':' hit'}" id="cpline" style="${esc(st)}" title="Drag up or down to move the captions"><b${a.box?` style="background:${a.box_color||'#000'};padding:0 .2em;border-radius:.15em"`:''}>${words}</b>${ch?'<small>Preview</small>':''}</div>`;
+  const sig=h+W+'x'+H;if(L._s===sig)return;L._s=sig;L.innerHTML=h;
+  const el=$('cpline'),mw=W*cw/100;if(el.scrollWidth>mw)el.style.fontSize=fs*mw/el.scrollWidth+'px'}   // one line, fitted as Captions.tsx fits it
+$('cplayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#cpline');if(!el)return;e.preventDefault();el.setPointerCapture(e.pointerId);
+  const H=$('cplayer').offsetHeight,y0=e.clientY,p0=capLook().y_pct||70;let moved=false;   // moved in place: a redraw would drop the pointer
+  el.onpointermove=m=>{if(Math.abs(m.clientY-y0)>3)moved=capDrag=true;if(!moved)return;capLive.y_pct=Math.round(Math.min(85,Math.max(15,p0+(m.clientY-y0)/H*100)));
+    el.style.top=capLive.y_pct+'%';el.classList.remove('hit');const s=$('cy');if(s){s.value=capLive.y_pct;$('cyn').textContent=capLive.y_pct+'%'}};
+  el.onpointerup=()=>{el.onpointermove=el.onpointerup=null;capDrag=false;if(moved&&capLive.y_pct!=null)return saveCapStyle({y:capLive.y_pct});
+    const t=v.currentTime,c=((data().items||{}).captions||[]).find(x=>x.s<=t&&t<x.e);if(c)openCapLine(c)}});   // a click, not a drag: this line in the panel
 // the Sounds panel, CapCut's way: Your sounds first (the sound library, kept for every video): upload or drop files in,
 // play one, Add puts it at the playhead, drag it onto the timeline, x takes it out of the library. A song (over 2 s)
 // lands as a whole clip. Under it, the sound for each moment of the edit, a dropdown each (custom/sounds/choices.json,

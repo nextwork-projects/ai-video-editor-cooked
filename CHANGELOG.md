@@ -3,6 +3,7 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- Click a caption and the Captions panel opens on that line: its words, then Look, Size, Position, Colour, Highlight and Words at a time. Each change shows on the video at once as a preview, and you can drag the caption up or down. Saved for this video only; the next draft has it.
 - Text is edited on the video, like CapCut: click a text to type straight into it, drag it to move it, drag any corner to size it, and drag a side to bring its width in (it wraps sooner). Enter saves, Esc cancels. The panel shows the same text, size and width.
 - Text takes a font (10 Google fonts, TikTok Sans by default) and a colour: 24 colours, a colour wheel for any colour, or a hex code. On a box the colour is the box, and its words turn black or white to read.
 - Block: a new look with one box that hugs the whole text. Box keeps a box on each line.
