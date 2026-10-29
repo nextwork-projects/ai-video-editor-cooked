@@ -12,7 +12,10 @@ import { useFamily } from "./Captions";
 //   onscreen: a b-roll reel's text, copied from the reference reel (broll-reel reel.py): its words, place, size and
 //          colour; on its own solid box when the reel had one, else with a dark stroke. It cuts in and out like the reel's.
 //   label: text the user typed on the review page (texts.json), in TikTok's own three looks: "plain" white, white with
-//          a black "outline", or black on a white "box"; centred on x_pct/y_pct, size_pct of the frame's short side
+//          a black "outline", or black on a white "box"; centred on x_pct/y_pct, size_pct of the frame's short side.
+//          font: a Google font picked on the page (default TikTok Sans). color: the type's colour, or the box's on "box"
+//          (its type then black or white, whichever reads). "block": one box hugging the whole text. The text is as
+//          wide as its words, up to width_pct of the frame (84 unless the user brought it in), and wraps there
 export type TextItem =
   | { kind: "onscreen"; text: string; start: number; end: number; box: [number, number, number, number]; size_pct: number;
       color: string; box_color?: string | null }
@@ -20,7 +23,9 @@ export type TextItem =
   | { kind: "cta"; text: string; label?: string; start: number; end: number; y_pct: number; size_pct: number }
   | { kind: "list"; items: { text: string; at: number }[]; start: number; end: number; x_pct: number; y_pct: number; size_pct: number }
   | { kind: "stamp"; start: number; end: number; box: [number, number, number, number] }
-  | { kind: "label"; text: string; style: "plain" | "outline" | "box"; start: number; end: number; x_pct: number; y_pct: number; size_pct: number };
+  | { kind: "label"; text: string; style: "plain" | "outline" | "box" | "block"; start: number; end: number; x_pct: number; y_pct: number; size_pct: number;
+      font?: string; color?: string; width_pct?: number };
+type Label = Extract<TextItem, { kind: "label" }>;
 
 const POP_S = 0.18;
 
@@ -43,18 +48,8 @@ export const Texts: React.FC<{ items: TextItem[]; t: number; width: number; heig
           );
         }
         if (x.kind === "label") {
-          const fs = (x.size_pct / 100) * Math.min(width, height);
-          const box = x.style === "box";
-          return (
-            <div key={i} style={{ position: "absolute", left: `${x.x_pct}%`, top: `${x.y_pct}%`, transform: "translate(-50%, -50%)", width: "84%",
-              textAlign: "center", fontFamily: `${tiktok}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: 700, fontSize: fs,
-              lineHeight: box ? 1.32 : 1.15, whiteSpace: "pre-wrap" }}>
-              <span style={{ color: box ? "#000000" : "#FFFFFF", ...(box
-                ? { background: "#FFFFFF", padding: `${fs * 0.06}px ${fs * 0.24}px`, borderRadius: fs * 0.18,
-                    WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" }
-                : x.style === "outline" ? { WebkitTextStroke: `${fs * 0.14}px #000`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>{x.text}</span>
-            </div>
-          );
+          return x.font && x.font !== "TikTok Sans" ? <FontLabel key={i} x={x} width={width} height={height} />
+            : <LabelText key={i} x={x} width={width} height={height} family={tiktok} />;
         }
         if (x.kind === "title" || x.kind === "cta") {
           const fs = (x.size_pct / 100) * height;
@@ -109,5 +104,32 @@ export const Texts: React.FC<{ items: TextItem[]; t: number; width: number; heig
         );
       })}
     </>
+  );
+};
+
+// a typed text in its own font: the font loads before the frame renders (useFamily holds the render)
+const FontLabel: React.FC<{ x: Label; width: number; height: number }> = ({ x, width, height }) => {
+  const family = useFamily(x.font, 700);
+  return family ? <LabelText x={x} width={width} height={height} family={family} /> : null;
+};
+
+const ink = (hex: string) => {   // black or white type on a box of this colour
+  const n = parseInt(hex.replace("#", ""), 16);
+  return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150 ? "#000000" : "#FFFFFF";
+};
+
+const LabelText: React.FC<{ x: Label; width: number; height: number; family: string }> = ({ x, width, height, family }) => {
+  const fs = (x.size_pct / 100) * Math.min(width, height);
+  const box = x.style === "box", block = x.style === "block", c = x.color ?? "#FFFFFF";
+  return (
+    <div style={{ position: "absolute", left: `${x.x_pct}%`, top: `${x.y_pct}%`, transform: "translate(-50%, -50%)", width: "max-content",
+      maxWidth: `${x.width_pct ?? 84}%`, textAlign: "center", fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: 700,
+      fontSize: fs, lineHeight: box ? 1.32 : 1.15, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
+      ...(block ? { background: c, color: ink(c), padding: `${fs * 0.22}px ${fs * 0.4}px`, borderRadius: fs * 0.28 } : {}) }}>
+      <span style={{ color: block ? ink(c) : box ? ink(c) : c, ...(box
+        ? { background: c, padding: `${fs * 0.06}px ${fs * 0.24}px`, borderRadius: fs * 0.18,
+            WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" }
+        : x.style === "outline" ? { WebkitTextStroke: `${fs * 0.14}px #000`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>{x.text}</span>
+    </div>
   );
 };

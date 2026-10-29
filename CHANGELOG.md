@@ -3,6 +3,14 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- Text is edited on the video, like CapCut: click a text to type straight into it, drag it to move it, drag any corner to size it, and drag a side to bring its width in (it wraps sooner). Enter saves, Esc cancels. The panel shows the same text, size and width.
+- Text takes a font (10 Google fonts, TikTok Sans by default) and a colour: 24 colours, a colour wheel for any colour, or a hex code. On a box the colour is the box, and its words turn black or white to read.
+- Block: a new look with one box that hugs the whole text. Box keeps a box on each line.
+- Texts already in the video can be clicked on the video to change them. Font, colour, width and Block stay when Claude plans the video again.
+- Drag a text on the timeline's Text row to move it in time, or drag either edge to make it start or end somewhere else.
+- A Video row on the timeline: Split (or S) splits the video at the playhead, click a piece and press Delete to cut it, Delete again puts it back. The page plays without the cut pieces straight away; Submit feedback and Claude cuts those words from the next draft.
+- Drop an audio file (a song, a voice-over, a sound; up to 200 MB) on the timeline, or Choose an audio file under + Sound. It plays with the video at once. Drag it along the Sounds row, drag its edges to trim it, click it for its volume, Play and Remove, or press Delete. Sounds from your library drag along the row too.
+- Drop a video or an image on the timeline (at that spot) or on the video (at the playhead). It goes in Anything to add? with the words said there, and Claude puts it on screen on them.
 
 ## ai-editor 2.7.28, creator-teardown 2.7.28 (2026-10-24)
 - One Claude control on the video page: a dot and what Claude is doing (working on your notes, waiting for your notes, open, or not running), with one button. Show Claude brings its Terminal window to the front; Start Claude carries on in the Claude that worked on the video. Copy for Claude, Copy session and Open a new Claude are gone.

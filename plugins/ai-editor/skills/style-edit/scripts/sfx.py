@@ -160,6 +160,27 @@ def own_cue(edit_dir, name):
     return out.relative_to(edit_dir).as_posix(), attack(x)
 
 
+def clip_cue(edit_dir, x):
+    """An audio file the user dropped on the timeline (<edit>/audio/<sound>, a sounds.json item of kind "clip"): its
+    in..in+dur part at its volume, with 20 ms fades so a trim never clicks, into .sfx/clip-<id>.wav. Played whole,
+    unlike a library sound (own_cue cuts those to MAX_OWN_S). Returns src relative to the edit."""
+    edit_dir = Path(edit_dir)
+    f = edit_dir / "audio" / Path(str(x["sound"])).name
+    if not f.is_file() or f.suffix.lower() not in SOUND_EXT:
+        raise ValueError(f"{x['sound']} is not in this edit's audio folder")
+    a, d, vol = max(0.0, float(x.get("in") or 0)), float(x["dur"]), min(2.0, max(0.0, float(x.get("vol", 1))))
+    if d <= 0.05:
+        raise ValueError(f"{x['sound']} is trimmed to nothing")
+    out = edit_dir / ".sfx" / f"clip-{''.join(ch for ch in str(x['id']) if ch.isalnum())}.wav"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    nch = min(2, channels(edit_dir / "cut.mp4")) if (edit_dir / "cut.mp4").exists() else 2
+    fo = max(0.0, d - 0.02)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{d:.3f}", "-i", str(f),
+                    "-af", f"volume={vol:.3f},afade=t=in:d=0.02,afade=t=out:st={fo:.3f}:d=0.02", "-ar", str(SR), "-ac", str(nch),
+                    str(out)], check=True)
+    return out.relative_to(edit_dir).as_posix()
+
+
 def channels(src):
     out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries",
                           "stream=channels", "-of", "csv=p=0", str(src)], capture_output=True, text=True).stdout

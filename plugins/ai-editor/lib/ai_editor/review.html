@@ -1,5 +1,6 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1"><title>Review · cooked.</title><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23121211'/%3E%3Cg transform='translate%2810 10%29 scale%28.6875%29' fill='%23F2F0EA' color='%23F2F0EA'%3E%3Cpath d='M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z'/%3E%3Cpath d='M45 36H58A3 3 0 0 1 58 42H45Z'/%3E%3Cpath d='M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17' fill='none' stroke='currentColor' stroke-width='5' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Review · cooked.</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Inter:wght@700&family=Lobster&family=Montserrat:wght@700&family=Permanent+Marker&family=Playfair+Display:wght@700&family=Poppins:wght@700&family=Roboto+Mono:wght@700&family=TikTok+Sans:wght@700&display=swap"><link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23121211'/%3E%3Cg transform='translate%2810 10%29 scale%28.6875%29' fill='%23F2F0EA' color='%23F2F0EA'%3E%3Cpath d='M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z'/%3E%3Cpath d='M45 36H58A3 3 0 0 1 58 42H45Z'/%3E%3Cpath d='M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17' fill='none' stroke='currentColor' stroke-width='5' stroke-linecap='round'/%3E%3C/g%3E%3C/svg%3E">
 
 <style>
 /* stone, monochrome: black marks the current thing and the one button to press; green only what is done */
@@ -316,6 +317,16 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .eitem:hover{border-color:#FFFFFF;z-index:2;overflow:visible}.eitem.pend{border-style:dashed}.eitem.gone{opacity:.3;pointer-events:none}
 .eitem .ex{display:none;position:absolute;top:-8px;right:-8px;width:16px;height:16px;border-radius:8px;place-items:center;font-size:12px;line-height:1;color:var(--onink);background:var(--ink);box-shadow:0 0 0 2px var(--page);z-index:3}
 .eitem:hover .ex{display:grid}   /* x sits on the corner, never under the click that opens it */
+.eitem.snd[data-sp2]{cursor:grab}.eitem.snd.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}.eitem.snd.drag{cursor:grabbing;z-index:4}
+#sndpick .sedit{display:flex;flex-direction:column;gap:8px;padding:4px}#sndpick .sedit b{font-size:13px;color:var(--strong)}
+#sndpick .sedit .row{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}#sndpick .sedit input[type=range]{flex:1;accent-color:var(--ink)}
+#sndpick .sedit button{height:28px;padding:0 10px;border-radius:8px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}
+.eitem.txt.drag{cursor:grabbing;border-color:#FFFFFF;z-index:4}.eitem.txt:not(.pend){cursor:grab}
+.eitem.txt::before,.eitem.txt::after{content:"";position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize}.eitem.txt::before{left:-1px}.eitem.txt::after{right:-1px}
+.eitem.vid{background:#33404F;border-color:#55687E;color:#FFFFFF;padding:0 6px;cursor:pointer}.eitem.vid span{font-size:10px;font-weight:500;white-space:nowrap;overflow:hidden}
+.eitem.vid.sel{border-color:#FFFFFF;box-shadow:0 0 0 1px #FFFFFF}
+.eitem.vid.cut{background:repeating-linear-gradient(135deg,rgba(255,255,255,.08) 0 6px,transparent 6px 12px);border-style:dashed;color:var(--quiet)}
+.etrack.dropon{outline:2px dashed var(--ink);outline-offset:2px}
 .eph{position:absolute;top:8px;bottom:0;width:2px;margin-left:-1px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none;z-index:3}
 .timeline{position:relative}
 #sndpick{position:absolute;z-index:20;width:260px;max-height:320px;overflow:auto;padding:8px;border-radius:12px;background:var(--raise);border:1px solid var(--line);box-shadow:var(--pop)}
@@ -447,6 +458,20 @@ body.tside #tside{display:flex}
 #tbody[hidden],#cbody[hidden],#sbody[hidden]{display:none!important}
 #sbody{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:10px}
 .srow{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.slib,.smom{display:flex;flex-direction:column;gap:10px}.smom{padding-top:16px;border-top:1px solid var(--line)}
+.slhead{display:flex;align-items:center;justify-content:space-between}.slhead b{font-size:14px;line-height:18px;color:var(--strong)}
+.slhead button{height:30px;padding:0 12px;border-radius:8px;background:var(--ink);color:var(--onink);font-size:13px;font-weight:600}
+.sdrop{display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 10px;border:1.5px dashed var(--line2);border-radius:12px;font-size:13px;line-height:18px;font-weight:600;color:var(--body);text-align:center;cursor:pointer}
+.sdrop small{font-size:11px;font-weight:400;color:var(--muted)}.sdrop:hover,.sdrop.on{border-color:var(--ink);color:var(--ink);background:var(--hover)}
+#sfind{height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 10px;font-size:13px}
+.slrows{display:flex;flex-direction:column;gap:2px}
+.slrow{display:flex;align-items:center;gap:10px;padding:6px 6px;border-radius:10px;cursor:grab}.slrow:hover{background:var(--hover)}.slrow[hidden]{display:none}
+.slrow>div{flex:1;min-width:0}.slrow b{display:block;font-size:13px;line-height:17px;font-weight:600;color:var(--strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slrow small{display:block;font-size:11px;line-height:14px;color:var(--muted)}
+.sladd{height:28px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink);flex-shrink:0}.sladd:hover{border-color:var(--ink)}
+.slrm{width:24px;height:24px;border-radius:6px;font-size:15px;line-height:1;color:var(--quiet);flex-shrink:0;opacity:0}.slrow:hover .slrm{opacity:1}.slrm:hover{color:var(--ink);background:var(--chip)}
+.smrow{display:flex;flex-direction:column;gap:6px}.smrow b{display:block;font-size:13px;line-height:17px;color:var(--strong)}.smrow small{display:block;font-size:12px;line-height:16px;color:var(--muted)}
+.smsel{display:flex;gap:8px;align-items:center}.smsel select{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font-size:13px}
 .srow .sh{display:flex;align-items:flex-start;gap:10px}.srow .sh div{flex:1;min-width:0}.srow b{display:block;font-size:14px;line-height:18px;color:var(--strong)}
 .srow small{display:block;font-size:12px;line-height:16px;color:var(--muted)}
 .splay{width:32px;height:32px;border-radius:16px;flex-shrink:0;display:grid;place-items:center;background:var(--ink);color:var(--onink)}.splay:disabled{opacity:.3}
@@ -472,16 +497,25 @@ body.tside #tside{display:flex}
 .clook>span{height:64px;border-radius:10px;background:#3A3D44 linear-gradient(160deg,#5B6270,#2B2E35);display:grid;place-items:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;outline:1.5px solid transparent;outline-offset:2px;overflow:hidden;padding:0 6px}
 .clook:hover>span{outline-color:var(--line2)}.clook.on>span{outline-color:var(--ink)}.clook.on{color:var(--strong);font-weight:600}
 #tbody{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:14px}
-.ttiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.ttile{height:64px;border-radius:10px;background:#3A3D44 linear-gradient(160deg,#5B6270,#2B2E35);display:grid;place-items:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;font-weight:700;font-size:15px;outline:1.5px solid transparent;outline-offset:2px}
+.ttiles{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.ttile{height:44px;border-radius:8px;background:#3A3836;display:grid;place-items:center;font-family:'TikTok Sans',system-ui,-apple-system,sans-serif;font-weight:700;font-size:12px;outline:1.5px solid transparent;outline-offset:2px}
 .ttile:hover{outline-color:var(--line2)}.ttile.on{outline-color:var(--ink)}
 .tcap{display:flex;justify-content:space-between;font-size:12px;line-height:16px;color:var(--muted)}
 .ttime{display:flex;align-items:center;gap:6px;font-size:13px;line-height:16px;color:var(--strong)}.ttime b{flex:1;font-weight:600}
 .ttime button{height:28px;padding:0 9px;border-radius:8px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.ttime button:hover{border-color:var(--ink)}
-.tnew #tdel{color:var(--flag);margin-right:auto;padding:0}
+.tnew #tdel{color:var(--flag);padding:0}
 @media (max-width:760px){#tside{width:auto;border-right:0;border-bottom:1px solid var(--line)}body.tside main{flex-direction:column}}
 .tsub{margin:0;color:var(--muted);font-size:13px;line-height:18px}
-.tnew{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--line);border-radius:12px}
+.tnew{display:flex;flex-direction:column;gap:14px}
+.tnew textarea{min-height:56px;resize:vertical;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:8px 10px;font:inherit;font-size:14px;line-height:20px;color:var(--strong);outline:none}.tnew textarea:focus{border-color:var(--ink)}
+.tf{display:flex;align-items:center;gap:10px;min-height:32px}.tf.top{align-items:flex-start}.tf.top>span{padding-top:2px}
+.tf>span{width:46px;flex-shrink:0;font-size:12px;line-height:16px;color:var(--muted)}
+.tfv{flex:1;min-width:0;display:flex;align-items:center;gap:8px}.tfv.col{flex-direction:column;align-items:stretch}
+.tfv b{flex:1;font-size:13px;font-weight:600;color:var(--strong);white-space:nowrap}
+.tfv button{height:28px;padding:0 8px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink);white-space:nowrap}.tfv button:hover{border-color:var(--ink)}
+.tfv input[type=range]{flex:1;min-width:0;accent-color:var(--ink)}.tfv output{width:34px;text-align:right;font-size:12px;color:var(--body)}
+.tfv select{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font-size:13px}
+.tfoot{display:flex;align-items:center;gap:8px}.tfoot span{flex:1}
 .tnew b{font-size:13px;line-height:16px;color:var(--strong)}
 .tnew input{height:36px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:0 10px;font:inherit;font-size:14px;color:var(--strong);outline:none}.tnew input:focus{border-color:var(--ink)}
 .tnew .row{display:flex;gap:8px;align-items:center}.tnew .row span{flex:1;font-size:12px;line-height:16px;color:var(--muted)}
@@ -499,13 +533,32 @@ body.tside #tside{display:flex}
 .cwas{position:absolute;pointer-events:none;outline:1px dashed rgba(255,255,255,.75);background:rgba(12,10,9,.55);display:grid;place-items:center}
 .cwas span{font-size:11px;line-height:14px;color:#FFFFFF;background:rgba(12,10,9,.7);padding:2px 6px;border-radius:5px;white-space:nowrap;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis}
 .cbar{position:absolute;left:50%;bottom:10px;transform:translateX(-50%);pointer-events:auto;display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--pill);box-shadow:var(--pop);white-space:nowrap;max-width:calc(100% - 12px)}
-#clayer,#hits,#tlayer{-webkit-user-select:none;user-select:none}
+#clayer,#hits,#tlayer{-webkit-user-select:none;user-select:none}#tedit{pointer-events:none}
 .cnew{position:absolute;pointer-events:none;outline:1px dashed rgba(255,255,255,.8)}.cnew img{width:100%;height:100%;object-fit:contain;display:block}
 .cbar button{height:26px;padding:0 8px;border-radius:7px;font-size:12px;line-height:26px;font-weight:600;color:var(--pilltx)}.cbar button:hover{background:rgba(255,255,255,.12)}
 .cbar button.go{background:#FFFFFF;color:#0C0A09}.cbar button:disabled{opacity:.4}
 .tl[data-tclick]{pointer-events:auto;cursor:pointer}.tl[data-tclick]:hover{outline:1px dashed rgba(255,255,255,.8);outline-offset:4px}
-#tprev{pointer-events:auto;cursor:move;touch-action:none;outline:1px dashed rgba(255,255,255,.8);outline-offset:4px}
+/* the text being edited, CapCut's way: drag it to move, click to type in it, a corner sizes it, a side brings its width in */
+.tl.ed{width:max-content;pointer-events:auto;cursor:move;touch-action:none;outline:1px solid rgba(255,255,255,.95);outline-offset:4px}
+.tl.ed [contenteditable]{outline:none;cursor:move;caret-color:currentColor}.tl.ed.typing [contenteditable]{cursor:text}
+.tl.ed [contenteditable]:empty::before{content:"Type your text";opacity:.55}
+.tl.ed i{position:absolute;width:10px;height:10px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.4);z-index:2}
+.tl.ed [data-h=nw]{left:-9px;top:-9px;cursor:nwse-resize}.tl.ed [data-h=ne]{right:-9px;top:-9px;cursor:nesw-resize}
+.tl.ed [data-h=sw]{left:-9px;bottom:-9px;cursor:nesw-resize}.tl.ed [data-h=se]{right:-9px;bottom:-9px;cursor:nwse-resize}
+.tl.ed [data-h=w],.tl.ed [data-h=e]{top:50%;width:6px;height:16px;margin-top:-8px;border-radius:3px;cursor:ew-resize}.tl.ed [data-h=w]{left:-7px}.tl.ed [data-h=e]{right:-7px}
+.ts-block{display:block}
+.tl.hit span{color:transparent!important;-webkit-text-stroke:0!important;background:none!important}   /* baked in the video: only the click target */
+.tpickrow{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:16px;color:var(--strong)}.tpickrow b{font-weight:600}
+#tfont{width:100%;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font-size:14px}
+.tcols{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px}
+.tcols button{aspect-ratio:1;width:100%;min-width:0;padding:0;border-radius:6px;border:1px solid var(--line2)}.tcols button.on{outline:2px solid var(--ink);outline-offset:1px}
+.tcustom{display:flex;align-items:center;gap:8px}
+.tcustom label{position:relative;width:28px;height:28px;border-radius:50%;flex-shrink:0;cursor:pointer;background:conic-gradient(#FF3B30,#FFCC00,#34C759,#00C7BE,#0A84FF,#BF5AF2,#FF2D92,#FF3B30)}
+.tcustom label span{position:absolute;inset:6px;border-radius:50%;border:2px solid var(--panel)}
+.tcustom input[type=color]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+#thex{flex:1;min-width:0;height:28px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font:13px ui-monospace,Menlo,monospace;text-transform:uppercase}
 .ts-plain,.ts-outline{color:#FFFFFF}.ts-outline{-webkit-text-stroke:.14em #000;paint-order:stroke fill}
+.ts-block{color:#000000;background:#FFFFFF;padding:.22em .4em;border-radius:.28em}
 .ts-box{color:#000000;background:#FFFFFF;padding:.06em .24em;border-radius:.18em;-webkit-box-decoration-break:clone;box-decoration-break:clone}
 .tl:has(.ts-box){line-height:1.32}
 #pics{grid-row:3;grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap;padding:2px}#pics:empty{display:none}
@@ -721,7 +774,7 @@ body.making #making{display:flex}
 </ol><div id="keys"></div></section>
 
 <main>
-<section id="tside" aria-label="Text"><div class="tsh"><b id="tsht">Text</b><button id="tplus" title="Add text (the default look)" aria-label="add text">+</button><button id="tclose" title="Close" aria-label="close the text panel">×</button></div><div id="tbody"></div><div id="cbody" hidden></div><div id="sbody" hidden></div></section><input type="file" id="sndfile" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus" hidden>
+<section id="tside" aria-label="Text"><div class="tsh"><b id="tsht">Text</b><button id="tplus" title="Add text (the default look)" aria-label="add text">+</button><button id="tclose" title="Close" aria-label="close the text panel">×</button></div><div id="tbody"></div><div id="cbody" hidden></div><div id="sbody" hidden></div></section>
 <div class="left">
  <div class="stagewrap">
  <div id="stagebar" role="status"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="4" cy="4.5" r="2.2"/><circle cx="4" cy="11.5" r="2.2"/><path d="M5.8 5.6L14 11.5M5.8 10.4L14 4.5"/></svg><span id="stagetext"></span></div>
@@ -732,7 +785,7 @@ body.making #making{display:flex}
   <div id="pair">
    <figure class="pl" id="p2"><figcaption id="cap2"></figcaption><div class="player"><video id="v2" preload="auto" muted playsinline></video><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
    <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><video id="v" preload="auto" playsinline></video>
-    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="clayer"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
+    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
@@ -758,7 +811,7 @@ body.making #making{display:flex}
   <div class="trow"><div class="mini" id="mini"></div></div>
   <div id="tracks"></div>
   </div></div>
-  <div id="edtracks"></div><div id="sndpick" hidden></div>
+  <div id="edtracks"></div><div id="sndpick" hidden></div><input type="file" id="audfile" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus" hidden>
  </div>
 </div>
 <div class="rsz" id="rszside" role="separator" aria-orientation="vertical" aria-label="drag to resize the notes panel" title="drag to resize"></div>
@@ -786,7 +839,7 @@ let themeAt=0;   // a poll already in flight still carries the old theme: ignore
 const $=id=>document.getElementById(id),v=$('v'),v2=$('v2'),bar=$('bar'),ta=$('ta'),box=$('box');
 const SPEEDS=[0.5,1,1.25,1.5,2],FPS=30,STAGE={cut:'The cut',edit:'The edit'};
 const KEYS=[['Play or pause','space'],['Back or forward 5 s','j l'],['Back or forward 1 s','← →'],['One frame',', .'],['Slower or faster','[ ]'],
- ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
+ ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Split the video','s'],['Cut the picked piece','delete'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
 $('keys').innerHTML=KEYS.map(([a,k])=>`<div><span>${a}</span><span>${k.split(' ').map(x=>'<kbd>'+x+'</kbd>').join('&nbsp;&nbsp;')}</span></div>`).join('');
 const TICK='<svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SPIN='<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--line)" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
@@ -1135,17 +1188,65 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const texts=textItems().map(x=>`<div class="eitem txt${x.fresh?' pend':''}" data-et="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(x.start)}–${fmtx(x.end)}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`).join('');
   const clip=(t0,d,cls,attrs,name,peaks,at)=>`<div class="eitem snd${cls}" ${attrs} style="left:${pc(t0)}%;width:${(d||.3)/T*100}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`;
   const snds=(it.sfx||[]).map(x=>clip(x.start??x.t,x.d,gone.has(x.t.toFixed(2))?' gone':'',`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,sname(x.src),x.peaks,x.t)).join('')
-    +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>clip(x.t,x.d,' pend',`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),x.peaks,x.t)).join('');
+    +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>{const n=(x.peaks||[]).length,c=x.kind==='clip'&&x.d,pk=c?x.peaks.slice(Math.floor(x.in/x.d*n),Math.ceil((x.in+x.dur)/x.d*n)):x.peaks;
+      return clip(x.t,c?x.dur:x.d,' pend'+(ssel===x.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),pk,x.t)}).join('');
   const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c);return `<div class="eitem cap${ct.edited?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(c.s)}%;width:${pc(c.e)-pc(c.s)}%" title="${esc(ct.text||c.text)} · ${fmtx(c.s)} · click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
-  const h=`<div class="edwrap"><div class="edleft"><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
+  const said=(a,b)=>W.filter(w=>w.t!=null&&w.t>=a&&w.t<b).map(w=>w.w).join(' ');
+  const vids=vpieces().map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':said(x.a,x.b)||fmtx(x.b-x.a))}</span></div>`).join('');
+  const h=`<div class="edwrap"><div class="edleft"><button id="vsplit" title="Split the video at the playhead (s)">Split</button><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
-    <div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
+    <div class="etrack" data-row="vid">${vids}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
   if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
     E.querySelectorAll('.eitem.snd').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}edPh()}
+// the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
+// draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
+let vsel=null,edDragged=0;
+const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
+function vpieces(){const T=D(),c=cuts(),b=[0,...c.splits.filter(t=>t>0&&t<T),T];
+  return b.slice(0,-1).map((a,i)=>({a,b:b[i+1],cut:c.gone.some(([x,y])=>a>=x-.01&&b[i+1]<=y+.01)}))}
+async function setCuts(c){S.cuts=c;$('edtracks')._h=null;renderEdTracks();
+  const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');$('edtracks')._h=null;await load()}   // ok, or the note it made
+function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.splits.some(x=>Math.abs(x-t)<.1))return;
+  setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)});toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
+function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
+  const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
+  setCuts({...c,gone});toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
+function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp)return;const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(g)v.currentTime=g[1]}
+// drag a text on the Text row to move it in time, or drag its edge to trim it; it saves on release (texts.json)
+$('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.txt');if(!it||it.dataset.ef||e.button||e.target.closest('[data-ex]'))return;
+  const x=(S.texts||[]).find(x=>String(x.id)===it.dataset.et);if(!x)return;
+  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
+  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=x.start,en=x.end,moved=false;
+  it.setPointerCapture(e.pointerId);
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3)moved=true;if(!moved)return;const dt=(ev.clientX-x0)/W0*T;
+    if(mode==='m'){st=Math.max(0,Math.min(T-(x.end-x.start),x.start+dt));en=st+x.end-x.start}
+    else if(mode==='l')st=Math.max(0,Math.min(x.end-.2,x.start+dt));else en=Math.min(T,Math.max(x.start+.2,x.end+dt));
+    it.classList.add('drag');it.style.left=st/T*100+'%';it.style.width=(en-st)/T*100+'%';v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02};
+  it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
+    const r=await post('/text/edit',{id:x.id,start:Math.round(st*100)/100,end:Math.round(en*100)/100});
+    toast(r.ok||r.id?`"${x.text}" now ${fmtx(st)}–${fmtx(en)}.`:r.error||'That did not save.');$('edtracks')._h=null;await load()}});
+// drop a video or an image on the timeline (at the spot) or on the video (at the playhead): it goes in "Anything to
+// add?" with the words said there, so Claude puts it on screen on them
+const dropT=e=>{const tk=e.target.closest('.etrack');if(!tk)return v.currentTime;const r=tk.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*D()};
+['timeline','p1'].forEach(id=>{const el=$(id);
+  el.addEventListener('dragover',e=>{const ty=[...e.dataTransfer.types];if(!S||view.stage!=='edit'||!ty.includes('Files')&&!ty.includes('application/x-cooked-sound'))return;e.preventDefault();
+    document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'));const tk=e.target.closest('.etrack');if(tk)tk.classList.add('dropon')});
+  el.addEventListener('dragleave',e=>{if(!el.contains(e.relatedTarget))document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'))});
+  el.addEventListener('drop',e=>{const lib=e.dataTransfer.getData('application/x-cooked-sound');
+    if(lib&&S&&view.stage==='edit'){e.preventDefault();document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'));return libAdd(lib,Math.round(dropT(e)*100)/100)}
+    if(!S||view.stage!=='edit'||!e.dataTransfer.files.length)return;e.preventDefault();
+    document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'));const t=dropT(e);
+    const say=W.filter(w=>w.t!=null&&w.t>=t-.3&&w.t<=t+2.5).map(w=>w.w).join(' ').slice(0,120)||`at ${fmtx(t)}`;
+    const fs=[...e.dataTransfer.files],au=fs.filter(f=>/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg|opus)$/i.test(f.name)),rest=fs.filter(f=>!au.includes(f));
+    au.reduce((p,f)=>p.then(()=>upAudio(f,t)),Promise.resolve());
+    if(rest.length){addImgs(rest,say);toast(`Adding it at ${fmtx(t)}${say.startsWith('at ')?'':` on "${say}"`}. Submit feedback and Claude puts it there.`)}})});
 function edPh(){const ph=$('eph'),T=D();if(ph&&T)ph.style.left=v.currentTime/T*100+'%'}
 $('edtracks').addEventListener('click',async e=>{
   const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem')){const r=tk.getBoundingClientRect();v.currentTime=Math.max(0,(e.clientX-r.left)/r.width*D());return}   /* click empty track: go there */
+  if(performance.now()-edDragged<300)return;
+  if(e.target.id==='vsplit')return splitAt(v.currentTime);
+  const vp=e.target.closest('[data-va]');if(vp){ssel=null;vsel=+vp.dataset.va;v.pause();v.currentTime=vsel+.02;$('edtracks')._h=null;return renderEdTracks()}
   if(e.target.id==='addtx'){if(tool!=='text')openTool('text');setText('outline');return}
   if(e.target.id==='addsnd'){return openSndPick(e.target)}
   if(e.target.id==='capedit'){return openCapLine(null)}
@@ -1157,12 +1258,63 @@ $('edtracks').addEventListener('click',async e=>{
   if(ti){if(tool!=='text')openTool('text');return editText(ti.dataset.et,ti.dataset.ef)}
   if(si&&ex){e.stopPropagation();const r=await post('/sfx/remove',{t:+si.dataset.st,src:si.dataset.ssrc,...(si.dataset.sp2?{placed:si.dataset.sp2}:{})});
     if(!r.id)return toast(r.error||'That did not save.');toast('Sound removed. Submit feedback and the next draft drops it.');$('edtracks')._h=null;return load()}
+  if(si&&si.dataset.sp2&&placed(si.dataset.sp2)){ssel=si.dataset.sp2;$('edtracks')._h=null;renderEdTracks();return openSndEdit(document.querySelector(`#edtracks [data-sp2="${CSS.escape(ssel)}"]`)||si)}   // the row was redrawn
   if(si){v.currentTime=Math.max(0,+si.dataset.st-.6);v.play();setTimeout(()=>v.pause(),1600)}});   /* hear it in place */
+// the sounds the user put on the timeline (sounds.json): a library sound, or an audio file dropped there (kind "clip",
+// played from "in" for "dur" at "vol"). Not in the draft yet, they play live with the video, so they are heard at once.
+let ssel=null;const LIVE={};
+const placed=id=>(S.placed_sounds||[]).find(x=>x.id===id);
+const sndLen=x=>x.kind==='clip'?x.dur:(x.d||.5);
+function liveAudio(){const inDraft=new Set(((data().items||{}).sfx||[]).map(x=>x.placed).filter(Boolean)),t=v.currentTime,on=!!(S&&view&&view.stage==='edit'&&!cmp);
+  const keep=new Set();
+  for(const x of on?(S.placed_sounds||[]):[]){if(inDraft.has(x.id))continue;keep.add(x.id);
+    const a=LIVE[x.id]||(LIVE[x.id]=new Audio(x.kind==='clip'?'/audio/'+encodeURIComponent(x.sound):'/sound-file?name='+encodeURIComponent(x.sound)));
+    const at=(x.in||0)+t-x.t,live=!v.paused&&t>=x.t&&t<x.t+sndLen(x);
+    a.volume=Math.min(1,x.vol??1);a.muted=v.muted;a.playbackRate=v.playbackRate;
+    if(live){if(a.paused){a.currentTime=at;a.play().catch(()=>{})}else if(Math.abs(a.currentTime-at)>.25)a.currentTime=at}
+    else if(!a.paused)a.pause()}
+  for(const id in LIVE)if(!keep.has(id)){LIVE[id].pause();delete LIVE[id]}}
+['play','pause','seeked','timeupdate','ratechange','volumechange'].forEach(k=>v.addEventListener(k,liveAudio));
+function openSndEdit(el){const x=placed(ssel);if(!x)return;const P=$('sndpick'),tr=$('timeline').getBoundingClientRect(),r=el.getBoundingClientRect();
+  P.innerHTML=`<div class="sedit"><b>${esc(x.sound.replace(/\.[a-z0-9]+$/i,''))}</b><span class="tsub">${fmtx(x.t)} · ${sndLen(x).toFixed(1)} s${x.kind==='clip'?' · drag an edge to trim it':''}</span>
+    ${x.kind==='clip'?`<div class="row">Volume<input type="range" id="svol" min="0" max="1" step="0.05" value="${x.vol??1}"><span id="svoln">${Math.round((x.vol??1)*100)}%</span></div>`:''}
+    <div class="row"><button id="splayit">${PLAY} Play</button><span style="flex:1"></span><button id="srm">Remove</button></div></div>`;
+  P.style.left=Math.max(0,Math.min(tr.width-260,r.left-tr.left))+'px';P.style.bottom=(tr.bottom-r.top+6)+'px';P.hidden=false;P.dataset.t=x.t}
+$('sndpick').addEventListener('input',e=>{if(e.target.id!=='svol')return;const x=placed(ssel);if(!x)return;x.vol=+e.target.value;$('svoln').textContent=Math.round(x.vol*100)+'%';liveAudio();
+  clearTimeout($('sndpick')._vt);$('sndpick')._vt=setTimeout(()=>post('/sfx/move',{placed:x.id,vol:x.vol}),400)});
+$('sndpick').addEventListener('click',async e=>{const x=placed(ssel);if(!x)return;
+  if(e.target.closest('#splayit')){v.currentTime=Math.max(0,x.t-.3);v.play();return}
+  if(e.target.closest('#srm')){$('sndpick').hidden=true;return delSnd(x)}});
+async function delSnd(x){const r=await post('/sfx/remove',{t:x.t,src:x.sound,placed:x.id});ssel=null;if(!r.id)return toast(r.error||'That did not save.');
+  toast('Sound removed.');$('edtracks')._h=null;await load()}
+// drag a placed sound along the Sounds row to move it; a dropped audio clip's edges trim it (CapCut's way)
+$('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.snd[data-sp2]');if(!it||e.button||e.target.closest('[data-ex]'))return;
+  const x=placed(it.dataset.sp2);if(!x)return;const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
+  const clipped=x.kind==='clip',mode=clipped&&e.clientX-r.left<7?'l':clipped&&r.right-e.clientX<7?'r':'m',o={t:x.t,in:x.in||0,dur:x.dur};let moved=false;
+  it.setPointerCapture(e.pointerId);
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3)moved=true;if(!moved)return;const dt=(ev.clientX-x0)/W0*T;
+    if(mode==='m')x.t=Math.max(0,Math.min(T-.1,o.t+dt));
+    else if(mode==='l'){const k=Math.max(-o.in,Math.min(o.dur-.2,dt));x.t=o.t+k;x.in=o.in+k;x.dur=o.dur-k}
+    else x.dur=Math.max(.2,Math.min(x.d-o.in,T-o.t,o.dur+dt));
+    it.classList.add('drag');it.style.left=x.t/T*100+'%';it.style.width=sndLen(x)/T*100+'%';v.pause();v.currentTime=mode==='r'?x.t+x.dur-.05:x.t};
+  it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
+    const r=await post('/sfx/move',{placed:x.id,t:Math.round(x.t*100)/100,...(clipped?{in:Math.round(x.in*100)/100,dur:Math.round(x.dur*100)/100}:{})});
+    toast(r.id||r.ok?`${x.sound.replace(/\.[a-z0-9]+$/i,'')} at ${fmtx(x.t)}. It plays there now; Submit feedback and the next draft has it.`:r.error||'That did not save.');
+    $('edtracks')._h=null;await load()}});
+// an audio file onto the timeline (a song, a voice-over, a sound): streamed in, a clip on the Sounds row at once
+async function upAudio(f,t){toast(`Adding ${f.name}...`);
+  const r=await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/audio/upload?name='+encodeURIComponent(f.name)+'&at='+t.toFixed(2));
+    x.upload.onprogress=e=>{if(e.lengthComputable)toast(`Adding ${f.name}... ${Math.round(e.loaded/e.total*100)}%`)};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Drop it again.'});x.send(f)});
+  if(!r.id)return toast(r.error||'That audio was not added.');toast(`${f.name} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load()}
+$('audfile').onchange=e=>{const f=e.target.files[0],t=+($('sndpick').dataset.t||v.currentTime);e.target.value='';if(f)upAudio(f,t)};
 function openSndPick(btn){const P=$('sndpick'),own=((S.sounds_ui||{}).own)||[],groups={};
   own.forEach(f=>{const m=f.match(/^([a-z0-9]+) /i),g=m?m[1]:'Yours';(groups[g]=groups[g]||[]).push(f)});
   P.innerHTML=`<div class="tcap" style="margin:2px 4px 4px"><span>Add a sound at ${fmtx(v.currentTime)}</span></div>`+(own.length?Object.entries(groups).map(([g,fs])=>`<h4>${esc(g[0].toUpperCase()+g.slice(1))}</h4>${fs.map(f=>`<div class="sitem"><button class="splay sm" data-pp2="${esc(f)}" title="Play">${PLAY}</button><button class="spick" data-add="${esc(f)}">${esc(f.replace(/\.[a-z0-9]+$/i,'').replace(/^[a-z0-9]+ /i,''))}</button></div>`).join('')}`).join('')
-    :'<p class="tsub" style="padding:4px">No sounds of your own yet. Add one in the Sounds panel (+ Your own).</p>');
+    :'<p class="tsub" style="padding:4px">No sounds of your own yet. Add one in the Sounds panel (+ Your own).</p>')
+    +`<div class="sitem"><button class="spick" id="sfilepick">Choose an audio file... (or drop one on the timeline)</button></div>`;
   const r=btn.getBoundingClientRect(),tr=$('timeline').getBoundingClientRect();P.style.left=(r.left-tr.left)+'px';P.style.bottom=(tr.bottom-r.top+6)+'px';P.hidden=false;P.dataset.t=v.currentTime}
+$('sndpick').addEventListener('click',e=>{if(e.target.closest('#sfilepick')){$('sndpick').hidden=true;$('audfile').click()}});
 $('sndpick').addEventListener('click',async e=>{const pp=e.target.closest('[data-pp2]'),ad=e.target.closest('[data-add]');
   if(pp)return sndPlay('zoom',pp.dataset.pp2);
   if(!ad)return;const r=await post('/sfx/add',{t:+$('sndpick').dataset.t,sound:ad.dataset.add});$('sndpick').hidden=true;
@@ -1760,8 +1912,8 @@ function skip(t){
   const n=KEEP.find(r=>r[0]>t-h);
   if(n){if(Math.abs(v.currentTime-n[0])>.001)v.currentTime=n[0]}else if(!v.paused){v.pause();v.currentTime=KEEP[KEEP.length-1][1]-.01}
 }
-if('requestVideoFrameCallback' in HTMLVideoElement.prototype){const f=(_,m)=>{skip(m.mediaTime);v.requestVideoFrameCallback(f)};v.requestVideoFrameCallback(f)}
-v.addEventListener('timeupdate',()=>skip(v.currentTime));v.addEventListener('play',()=>skip(v.currentTime));
+if('requestVideoFrameCallback' in HTMLVideoElement.prototype){const f=(_,m)=>{skip(m.mediaTime);skipGone(m.mediaTime);v.requestVideoFrameCallback(f)};v.requestVideoFrameCallback(f)}
+v.addEventListener('timeupdate',()=>{skip(v.currentTime);skipGone(v.currentTime)});v.addEventListener('play',()=>skip(v.currentTime));
 
 // player
 const toggle=()=>{v.paused?v.play():v.pause()};
@@ -1920,7 +2072,7 @@ async function upAssets(fs,say){
 function addUrl(){const u=$('addurl'),us=(u?u.value:'').split(/\s+/).filter(Boolean).map(x=>/^https?:\/\//i.test(x)?x:'https://'+x);if(!us.length)return;
   if(us.some(x=>!/^https?:\/\/[^\s\/]+\.[^\s]+$/i.test(x))){addMsg='That is not a link. Paste a web address, like github.com/name/repo.';addSig='';return renderAdds()}
   const say=($('addsay')||{}).value||'';u.value='';addAssets(us.map(url=>({url,say})))}
-function addImgs(fs){addMsg='';const say=($('addsay')||{}).value||'',ok=[...fs].filter(f=>/^image\/(png|jpeg|gif|webp)$/.test(f.type)||/\.(mp4|mov|m4v|webm)$/i.test(f.name));
+function addImgs(fs,at){addMsg='';const say=at??(($('addsay')||{}).value||''),ok=[...fs].filter(f=>/^image\/(png|jpeg|gif|webp)$/.test(f.type)||/\.(mp4|mov|m4v|webm)$/i.test(f.name));
   if(ok.length<fs.length){addMsg='Add a video (.mp4, .mov, .m4v, .webm) or an image (.png, .jpg, .gif, .webp).';addSig='';renderAdds()}
   if(ok.length)upAssets(ok,say)}
 $('adds').onclick=e=>{const rm=e.target.closest('[data-arm]');if(rm){post('/assets',{remove:+rm.dataset.arm}).then(r=>{if(r.items){S.assets=r.items;renderAdds()}});return}
@@ -1942,7 +2094,13 @@ box.addEventListener('drop',e=>{e.preventDefault();box.classList.remove('drag');
 // A tile adds a text in that look at the playhead (3 s, or over an i/o range); type, drag it on the video, Add text.
 // Click any text (on the video or in the list) to change its words, look, place or time, then Save, or Delete it.
 // Not sent yet: the note changes (/edit). Sent: texts.json changes with a note for Claude (/text/edit, /text/delete).
-const TSTY={plain:'Plain',outline:'Outline',box:'Box'},TEXT_SIZE=6;
+const TSTY={plain:'Plain',outline:'Outline',box:'Box',block:'Block'},TEXT_SIZE=6;
+// the fonts and colours a text can take (review.py TEXT_FONTS; Texts.tsx loads the same Google fonts for the render)
+const TFONTS=['TikTok Sans','Inter','Montserrat','Poppins','Bebas Neue','Anton','Playfair Display','Permanent Marker','Lobster','Roboto Mono'];
+const TCOLS=['#FFFFFF','#D1D1D6','#8E8E93','#48484A','#000000','#FF3B30','#FF6961','#FF9500',
+  '#FFCC00','#FFD60A','#FFF3A3','#34C759','#A8E05F','#00C7BE','#5AC8FA','#0A84FF',
+  '#1E3A8A','#5E5CE6','#BF5AF2','#FF2D92','#FFB3C7','#A2845E','#7C2D12','#064E3B'];
+const inkOn=h=>{const n=parseInt(h.slice(1),16);return .299*(n>>16)+.587*((n>>8)&255)+.114*(n&255)>150?'#000000':'#FFFFFF'};
 let tx=null,tsig='',tpanel=false;   // tx: the text being made or changed {style,x,y,word,start,end,edit:{id,fresh}}
 const tword=()=>{const w=$('tword');return w?w.value.trim():tx?tx.word||'':''};
 const editable=c=>!(S.sent&&!c.queued)&&c.round>=S.round;
@@ -1957,27 +2115,37 @@ function setText(style,edit){
   if(!style){tx=null}
   else{const[a,b]=noteSpan(),t0=edit?edit.start:a;
     tx={style,x:edit?edit.x_pct:(tx&&tx.x)||50,y:edit?edit.y_pct:(tx&&tx.y)||40,size:edit?edit.size_pct:(tx&&tx.size)||TEXT_SIZE,word:edit?edit.text:tword(),
+        font:(edit?edit.font:tx&&tx.font)||'TikTok Sans',color:(edit?edit.color:tx&&tx.color)||'#FFFFFF',w:(edit?edit.width_pct:tx&&tx.w)||84,
         start:t0,end:edit?edit.end:(b??Math.min(t0+3,v.duration||t0+3)),edit:edit||(tx&&tx.edit)||null};
     if(!tpanel)openPanel(true);
     if(!(v.currentTime>=tx.start&&v.currentTime<tx.end))v.currentTime=tx.start+.05}
   document.body.classList.toggle('texting',!!tx);tsig=null;$('tbody')._tf=null;renderTextPanel();renderTexts();
-  if(tx){v.pause();setTimeout(()=>{const w=$('tword');if(w){w.focus();w.select()}},0)}}
+  if(tx){v.pause();setTimeout(()=>{const sp=$('tprev')&&$('tprev').firstChild;if(sp)typeIn(sp,true);else{const w=$('tword');if(w){w.focus();w.select()}}},0)}}
+// put the caret in the text on the video: all of it picked (a new or just-opened text), or where the user clicked
+function typeIn(sp,all,x,y){$('tprev').classList.add('typing');sp.focus();const r=document.createRange(),sel=getSelection();
+  const at=x!=null&&document.caretRangeFromPoint?document.caretRangeFromPoint(x,y):null;
+  if(at&&sp.contains(at.startContainer))r.setStart(at.startContainer,at.startOffset);else{r.selectNodeContents(sp);if(!all)r.collapse(false)}
+  sel.removeAllRanges();sel.addRange(r)}
 function textItems(){   // sent ones (texts.json) and this edit's text notes not in it yet
   const sent=S.texts||[],ids=new Set(sent.map(x=>x.id));
   const fresh=S.comments.filter(c=>c.add_text&&c.stage==='edit'&&!ids.has('edit'+c.round+'-'+c.id))   // with Claude, not in texts.json yet: shown, locked
-    .map(c=>({id:c.id,text:c.text,style:c.add_text.style,x_pct:c.add_text.x_pct,y_pct:c.add_text.y_pct,start:c.t,end:c.t_end??c.t+3,fresh:editable(c),locked:!editable(c)}));
+    .map(c=>({id:c.id,text:c.text,style:c.add_text.style,x_pct:c.add_text.x_pct,y_pct:c.add_text.y_pct,size_pct:c.add_text.size_pct,font:c.add_text.font,color:c.add_text.color,width_pct:c.add_text.width_pct,start:c.t,end:c.t_end??c.t+3,fresh:editable(c),locked:!editable(c)}));
   return [...fresh,...sent.map(x=>({...x,fresh:false}))].sort((a,b)=>a.start-b.start)}
 function renderTextPanel(){
   const l=$('tbody');if(!tpanel||!S)return;
-  if(!l._tx){l._tx=1;l.innerHTML=`<div><div class="tcap" style="margin-bottom:8px"><span>Pick a look</span></div><div class="ttiles" id="ttiles">${Object.entries(TSTY).map(([k,n])=>`<button class="ttile" data-ts="${k}" title="${n}"><span class="ts-${k}">${n}</span></button>`).join('')}</div></div><div id="tform"></div><div class="tlist" id="trows"></div>`}
+  if(!l._tx){l._tx=1;l.innerHTML=`<div class="ttiles" id="ttiles" role="group" aria-label="look">${Object.entries(TSTY).map(([k,n])=>`<button class="ttile" data-ts="${k}" title="${n}"><span class="ts-${k}">${n}</span></button>`).join('')}</div><div id="tform"></div><div class="tlist" id="trows"></div>`}
   document.querySelectorAll('#ttiles [data-ts]').forEach(b=>b.classList.toggle('on',!!tx&&b.dataset.ts===tx.style));
   const f=$('tform'),sig=tx?(tx.edit?'e'+tx.edit.id:'n'):'';
-  if(l._tf!==sig){l._tf=sig;f.innerHTML=tx?`<div class="tnew">${tx.edit?'<b>Change this text</b>':'<b>New text</b>'}<input id="tword" placeholder="Type your text" maxlength="120" aria-label="the text" value="${esc(tx.word||'')}">
-    <div class="ttime"><b id="tspan"></b><button id="tstart" title="Start at the playhead">Start here</button><button id="tend" title="End at the playhead">End here</button></div>
-    <div class="ttime"><b>Size</b><input type="range" id="tsize" min="2" max="20" step="0.5" value="${tx.size}" aria-label="text size"></div>
-    <div class="row"><span>Drag it on the video</span></div>
-    <div class="row">${tx.edit?'<button id="tdel">Delete</button>':'<span></span>'}<button id="tcancel">Cancel</button><button id="tadd" ${tword()?'':'disabled'}>${tx.edit?'Save':'Add text'}</button></div></div>`:''}
-  if(tx&&$('tspan'))$('tspan').textContent=fmtx(tx.start)+' – '+fmtx(tx.end);
+  if(l._tf!==sig){l._tf=sig;f.innerHTML=tx?`<div class="tnew"><textarea id="tword" rows="2" placeholder="Type your text" maxlength="120" aria-label="the text">${esc(tx.word||'')}</textarea>
+    <div class="tf"><span>Time</span><div class="tfv"><b id="tspan" class="num"></b><button id="tstart" title="Start at the playhead">Set start</button><button id="tend" title="End at the playhead">Set end</button></div></div>
+    <div class="tf"><span>Size</span><div class="tfv"><input type="range" id="tsize" min="2" max="20" step="0.5" value="${tx.size}" aria-label="text size"><output id="tsizen" class="num">${tx.size}</output></div></div>
+    <div class="tf"><span>Width</span><div class="tfv"><input type="range" id="twidth" min="15" max="84" step="1" value="${tx.w}" aria-label="text width"><output id="twidthn" class="num">${tx.w}%</output></div></div>
+    <div class="tf"><span>Font</span><div class="tfv"><select id="tfont" aria-label="font">${TFONTS.map(f=>`<option value="${f}"${f===tx.font?' selected':''}>${f}</option>`).join('')}</select></div></div>
+    <div class="tf top"><span>${tx.style==='box'||tx.style==='block'?'Box':'Colour'}</span><div class="tfv col"><div class="tcols" id="tcols">${TCOLS.map(c=>`<button data-tc="${c}" style="background:${c}" title="${c}" aria-label="colour ${c}"${c===tx.color?' class="on"':''}></button>`).join('')}</div>
+      <div class="tcustom"><label title="Any colour"><input type="color" id="tcol" value="${tx.color.toLowerCase()}" aria-label="any colour"><span></span></label><input id="thex" value="${tx.color}" maxlength="7" aria-label="colour as hex" spellcheck="false"></div></div></div>
+    <div class="tfoot">${tx.edit?'<button id="tdel">Delete</button>':''}<span></span><button id="tcancel">Cancel</button><button id="tadd" ${tword()?'':'disabled'}>${tx.edit?'Save':'Add text'}</button></div>
+    <p class="tsub">On the video: drag to move it, click to type, a corner sizes it, a side makes it narrower. Enter is a new line, ⌘ Enter saves.</p></div>`:''}
+  if(tx&&$('tspan'))$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end);
   const all=textItems(),on=x=>tx&&tx.edit&&String(tx.edit.id)===String(x.id);
   const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)} · Claude has it</span></div></div>`
     :`<div class="titem${on(x)?' on':''}" data-tedit="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}" title="Click to change it"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
@@ -1991,12 +2159,13 @@ function bakeLine(){const b=(S&&S.bake)||{},live=(S.texts||[]).some(x=>!(S.texts
     :live&&b.state==='off'?(b.why==='Claude has this draft'?'Claude adds it to the draft it is making.':'It goes into the video with the next render.'):'';
   return m?`<p class="tsub">${esc(m)}</p>`:''}
 function editText(id,fresh){const x=textItems().find(x=>String(x.id)===String(id)&&!!x.fresh===!!fresh);if(!x)return;
-  inT=outT=null;renderBar();setText(x.style,{id:x.id,fresh:x.fresh,text:x.text,x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,start:x.start,end:x.end})}
+  inT=outT=null;renderBar();setText(x.style,{id:x.id,fresh:x.fresh,text:x.text,x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end})}
 async function delText(id,fresh){const r=fresh?await post('/delete',{id:+id}):await post('/text/delete',{id});
   if(tx&&tx.edit&&String(tx.edit.id)===String(id))setText(null);toast(r.error||'Text deleted');await load()}
 $('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool(tool==='captions'?null:'captions');$('railsnd').onclick=()=>openTool(tool==='sounds'?null:'sounds');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
 $('tbody').addEventListener('click',async e=>{
-  const st=e.target.closest('#ttiles [data-ts]');if(st){if(tx){tx.style=st.dataset.ts;tsig=null;renderTextPanel();renderTexts()}else setText(st.dataset.ts);return}
+  const st=e.target.closest('#ttiles [data-ts]');if(st){if(tx){tx.style=st.dataset.ts;tsig=null;$('tbody')._tf=null;renderTextPanel();renderTexts()}else setText(st.dataset.ts);return}
+  const tc=e.target.closest('[data-tc]');if(tc&&tx){setTcol(tc.dataset.tc);return}
   if(e.target.id==='tcancel'){setText(null);return}
   if(e.target.id==='tadd'){saveText();return}
   if(e.target.id==='tstart'||e.target.id==='tend'){const t=Math.round(v.currentTime*100)/100;
@@ -2007,8 +2176,16 @@ $('tbody').addEventListener('click',async e=>{
   const ed=e.target.closest('[data-tedit]');if(ed)return editText(ed.dataset.tedit,ed.dataset.fresh);
   const sk=e.target.closest('[data-tseek]');if(sk){v.currentTime=+sk.dataset.tseek;v.pause()}});
 $('tbody').addEventListener('input',e=>{if(e.target.id==='tword'){tx.word=e.target.value;$('tadd').disabled=!tword();renderTexts()}
-  if(e.target.id==='tsize'){tx.size=+e.target.value;renderTexts()}});
-$('tbody').addEventListener('keydown',e=>{if(e.target.id!=='tword')return;e.stopPropagation();if(e.key==='Enter'){e.preventDefault();saveText()}if(e.key==='Escape')setText(null)});
+  if(e.target.id==='twidth'){tx.w=+e.target.value;renderTexts()}
+  if(e.target.id==='tsize'||e.target.id==='twidth')tnums()
+  if(e.target.id==='tsize'){tx.size=+e.target.value;renderTexts()}
+  if(e.target.id==='tfont'){tx.font=e.target.value;renderTexts()}
+  if(e.target.id==='tcol')setTcol(e.target.value.toUpperCase());
+  if(e.target.id==='thex'){const h=e.target.value.trim().replace(/^#?/,'#').toUpperCase();if(/^#[0-9A-F]{6}$/.test(h))setTcol(h)}});
+function tnums(){const a=$('tsizen'),b=$('twidthn');if(a)a.textContent=tx.size;if(b)b.textContent=tx.w+'%'}
+function setTcol(c){tx.color=c;document.querySelectorAll('#tcols [data-tc]').forEach(b=>b.classList.toggle('on',b.dataset.tc===c));const i=$('tcol');if(i)i.value=c.toLowerCase();
+  const h=$('thex');if(h&&document.activeElement!==h)h.value=c;renderTexts()}
+$('tbody').addEventListener('keydown',e=>{if(e.target.id==='thex'){e.stopPropagation();return}if(e.target.id!=='tword')return;e.stopPropagation();if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();saveText()}if(e.key==='Escape')setText(null)});
 // the Captions panel: how many words show at a time (1, 3, 5 or a sentence) and the look (the caption presets, drawn in
 // their own look). A choice is saved for this video (POST /captions, taste "this video only", which plan.py reads) with a
 // note; the next draft shows it.
@@ -2046,37 +2223,66 @@ $('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw
   const r=await post('/captions',w?{words:w.dataset.cw}:{look:l.dataset.cl});if(!r.id)return toast(r.error||'That did not save.');
   toast(w?`Captions: ${w.dataset.cw==='sentence'?'a sentence':w.dataset.cw+' word'+(w.dataset.cw==='1'?'':'s')} at a time. Submit feedback to send it.`:`Captions: the ${l.dataset.cl} look. Submit feedback to send it.`);
   $('cbody')._s=null;await load()});
-// the Sounds panel (the sound library): each moment that can have a sound, and what plays there. Play hears a pick,
-// Default is the built-in sound, Off leaves the moment silent, and + Your own adds a sound file (it stays in the library
-// for every video). Picks are for every video (custom/sounds/choices.json, sfx.py builds the kit from them), with a note.
+// the Sounds panel, CapCut's way: Your sounds first (the sound library, kept for every video): upload or drop files in,
+// play one, Add puts it at the playhead, drag it onto the timeline, x takes it out of the library. A song (over 2 s)
+// lands as a whole clip. Under it, the sound for each moment of the edit, a dropdown each (custom/sounds/choices.json,
+// for every video, with a note).
 const PLAY='<svg width="14" height="14" viewBox="0 0 14 14"><path d="M4 2.5v9l7.5-4.5z" fill="currentColor"/></svg>';
-let sndAudio=null,sndFor=null;
-function sndPlay(cue,c){if(sndAudio)sndAudio.pause();if(c==='none')return;sndAudio=new Audio(`/sound-preview?cue=${encodeURIComponent(cue)}&c=${encodeURIComponent(c)}`);sndAudio.play().catch(()=>toast('Could not play that sound'))}
-let sndOpen=null;   // the moment whose list of sounds is open
+const STOP='<svg width="14" height="14" viewBox="0 0 14 14"><rect x="3" y="3" width="8" height="8" rx="1.5" fill="currentColor"/></svg>';
+let sndAudio=null,sndKey='',sndFind='';
+function sndStop(){if(sndAudio)sndAudio.pause();sndAudio=null;sndKey='';document.querySelectorAll('#sbody [data-pk]').forEach(b=>b.innerHTML=PLAY)}
+function sndHear(key,url){const same=sndKey===key;sndStop();if(same||!url)return;
+  sndAudio=new Audio(url);sndKey=key;sndAudio.onended=sndStop;sndAudio.play().catch(()=>toast('Could not play that sound'));
+  const b=document.querySelector(`#sbody [data-pk="${CSS.escape(key)}"]`);if(b)b.innerHTML=STOP}
+function sndPlay(cue,c){sndHear('c:'+cue+':'+c,c==='none'?null:`/sound-preview?cue=${encodeURIComponent(cue)}&c=${encodeURIComponent(c)}`)}
 const sndName=f=>f==='default'?'Built-in':f==='none'?'Off':f.replace(/\.[a-z0-9]+$/i,'');
-function renderSndPanel(){const b=$('sbody'),u=(S&&S.sounds_ui)||{cues:[],own:[]},sig=JSON.stringify(u)+sndOpen;if(b._s===sig)return;b._s=sig;
-  const groups={};u.own.forEach(f=>{const m=f.match(/^([a-z0-9]+) /i),g=m?m[1]:'Yours';(groups[g]=groups[g]||[]).push(f)});
-  const item=(cue,f,on)=>`<div class="sitem${on?' on':''}"><button class="splay sm" data-pp="${esc(cue)}" data-pv="${esc(f)}" title="Play"${f==='none'?' disabled':''}>${PLAY}</button><button class="spick" data-sc="${esc(cue)}" data-sv="${esc(f)}">${esc(sndName(f).replace(/^[a-z0-9]+ /i,m=>groups[m.trim()]?'':m))}</button>${on?'<span>Picked</span>':''}</div>`;
-  b.innerHTML=`<p class="tsub">Pick the sound for each moment. Your picks are for every video. ${u.own.length} of your own sounds are in the library.</p>`+u.cues.map(x=>{const open=sndOpen===x.cue;
-    return `<div class="srow"><div class="sh"><div><b>${esc(x.label)}</b><small>When ${esc(x.when)}</small><small class="snow">Now: <strong>${esc(sndName(x.choice))}</strong></small></div>
-      <button class="splay" data-sp="${esc(x.cue)}" title="Play what is picked"${x.choice==='none'?' disabled':''}>${PLAY}</button></div>
-      <div class="sopts"><button data-so="${esc(x.cue)}">${open?'Close':'Change'}</button><button class="sadd" data-sa="${esc(x.cue)}" title="Add a sound file for this moment">+ Your own</button></div>
-      ${open?`<div class="slist"><h4>Built in</h4>${['default','none'].map(f=>item(x.cue,f,x.choice===f)).join('')}${Object.entries(groups).map(([g,fs])=>`<h4>${esc(g[0].toUpperCase()+g.slice(1))}</h4>${fs.map(f=>item(x.cue,f,x.choice===f)).join('')}`).join('')}</div>`:''}</div>`}).join('')}
-$('sbody').addEventListener('click',async e=>{const pl=e.target.closest('[data-sp]'),pp=e.target.closest('[data-pp]'),pk=e.target.closest('[data-sv]'),ad=e.target.closest('[data-sa]'),op=e.target.closest('[data-so]');
-  if(pl){const x=((S.sounds_ui||{}).cues||[]).find(c=>c.cue===pl.dataset.sp);if(x)sndPlay(x.cue,x.choice);return}
-  if(pp)return sndPlay(pp.dataset.pp,pp.dataset.pv);
-  if(op){sndOpen=sndOpen===op.dataset.so?null:op.dataset.so;$('sbody')._s=null;renderSndPanel();return}
-  if(ad){sndFor=ad.dataset.sa;$('sndfile').click();return}
-  if(!pk)return;const cue=pk.dataset.sc,v=pk.dataset.sv;sndPlay(cue,v);
-  const r=await post('/sound',{cue,choice:v});if(!r.ok&&!r.id)return toast(r.error||'That did not save.');
-  toast(`${(((S.sounds_ui||{}).cues||[]).find(c=>c.cue===cue)||{}).label||'Sound'}: ${v==='default'?'the built-in sound':v==='none'?'off':sndName(v)}. Submit feedback so this video gets it.`);
-  $('sbody')._s=null;await load()});
-$('sndfile').onchange=e=>{const f=e.target.files[0];e.target.value='';if(!f||!sndFor)return;
-  if(f.size>10*1024*1024)return toast('Sounds under 10 MB only.');
-  const rd=new FileReader();rd.onload=async()=>{const r=await post('/sound/add',{cue:sndFor,name:f.name,data:rd.result});
-    if(!r.ok&&!r.id)return toast(r.error||'That did not save.');toast(`Added ${f.name}. It plays for that moment now.`);$('sbody')._s=null;await load();sndPlay(sndFor,f.name.replace(/[^A-Za-z0-9._ -]/g,'').trim())};rd.readAsDataURL(f)};
+const secs=d=>d==null?'':d<60?d.toFixed(1)+' s':Math.floor(d/60)+':'+String(Math.round(d%60)).padStart(2,'0');
+function renderSndPanel(){const b=$('sbody'),u=(S&&S.sounds_ui)||{cues:[],own:[],own_len:{}},sig=JSON.stringify(u);
+  if(b._s===sig||b.contains(document.activeElement)&&document.activeElement.id==='sfind')return;b._s=sig;
+  const rows=u.own.map(f=>`<div class="slrow" draggable="true"${sndFind&&!f.toLowerCase().includes(sndFind.toLowerCase())?' hidden':''} data-snd="${esc(f)}" title="Drag onto the timeline">
+      <button class="splay sm" data-pk="o:${esc(f)}" data-lp="${esc(f)}" aria-label="play ${esc(f)}">${PLAY}</button>
+      <div><b>${esc(sndName(f))}</b><small>${secs((u.own_len||{})[f])}${((u.own_len||{})[f]||0)>2.05?' · plays whole':''}</small></div>
+      <button class="sladd" data-ladd="${esc(f)}">Add</button><button class="slrm" data-lrm="${esc(f)}" aria-label="remove ${esc(f)} from the library" title="Remove from your sounds">×</button></div>`).join('');
+  const opt=(c,f)=>`<option value="${esc(f)}"${c===f?' selected':''}>${esc(sndName(f))}</option>`;
+  b.innerHTML=`<div class="slib"><div class="slhead"><b>Your sounds</b><button id="supload">Upload</button></div>
+    <label class="sdrop" id="sdrop"><input type="file" id="slibfile" accept="audio/*,.wav,.mp3,.m4a,.aac,.flac,.ogg,.opus" multiple hidden>Drop sound files here or click to choose<small>mp3, wav, m4a, aac, flac, ogg. Kept for every video.</small></label>
+    ${u.own.length>6?`<input id="sfind" placeholder="Search your sounds" value="${esc(sndFind)}" aria-label="search your sounds">`:''}
+    <div class="slrows">${rows}</div>
+    ${u.own.length?'<p class="tsub">Drag a sound onto the timeline, or Add puts it at the playhead.</p>':''}</div>
+    <div class="smom"><div class="slhead"><b>Sound for each moment</b></div><p class="tsub">Used in every video.</p>
+    ${u.cues.map(x=>`<div class="smrow"><div><b>${esc(x.label)}</b><small>When ${esc(x.when)}</small></div>
+      <div class="smsel"><select data-cue="${esc(x.cue)}" aria-label="sound for ${esc(x.label)}">${opt(x.choice,'default')}${opt(x.choice,'none')}${u.own.length?`<optgroup label="Your sounds">${u.own.map(f=>opt(x.choice,f)).join('')}</optgroup>`:''}</select>
+      <button class="splay sm" data-pk="c:${esc(x.cue)}:${esc(x.choice)}" data-sp="${esc(x.cue)}" aria-label="play"${x.choice==='none'?' disabled':''}>${PLAY}</button></div></div>`).join('')}</div>`}
+// files into the library, one at a time, streamed (a song can be big)
+async function libUpload(fs){fs=[...fs].filter(f=>/^audio\//.test(f.type)||/\.(wav|mp3|m4a|aac|flac|ogg|opus)$/i.test(f.name));
+  if(!fs.length)return toast('Add a sound file: wav, mp3, m4a, aac, flac, ogg or opus.');let n=0;
+  for(const f of fs){const r=await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/sound/library/upload?name='+encodeURIComponent(f.name));
+      x.upload.onprogress=e=>{if(e.lengthComputable)toast(`Adding ${f.name}... ${Math.round(e.loaded/e.total*100)}%`)};
+      x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Add it again.'});x.send(f)});
+    if(!r.ok){toast(r.error||`${f.name} was not added.`);continue}n++;S.sounds_ui=r.sounds;$('sbody')._s=null;renderSndPanel()}
+  if(n)toast(n===1?'Added to your sounds.':`${n} sounds added.`)}
+async function libAdd(name,t){const r=await post('/sfx/add',{t,sound:name});if(!r.id)return toast(r.error||'That did not save.');
+  toast(`${sndName(name)} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load()}
+$('sbody').addEventListener('click',async e=>{const lp=e.target.closest('[data-lp]'),la=e.target.closest('[data-ladd]'),lr=e.target.closest('[data-lrm]'),cp=e.target.closest('[data-sp]');
+  if(e.target.closest('#supload')){$('slibfile').click();return}
+  if(lp)return sndHear('o:'+lp.dataset.lp,'/sound-file?name='+encodeURIComponent(lp.dataset.lp));
+  if(la)return libAdd(la.dataset.ladd,Math.round(v.currentTime*100)/100);
+  if(lr){const r=await post('/sound/library/remove',{name:lr.dataset.lrm});if(!r.ok)return toast(r.error||'That did not save.');
+    S.sounds_ui=r.sounds;$('sbody')._s=null;renderSndPanel();return toast(`${sndName(lr.dataset.lrm)} taken out of your sounds.`)}
+  if(cp){const x=((S.sounds_ui||{}).cues||[]).find(c=>c.cue===cp.dataset.sp);if(x)sndPlay(x.cue,x.choice)}});
+$('sbody').addEventListener('change',async e=>{if(e.target.id==='slibfile'){const fs=e.target.files;await libUpload(fs);e.target.value='';return}
+  const cue=e.target.dataset&&e.target.dataset.cue;if(!cue)return;const c=e.target.value;sndPlay(cue,c);
+  const r=await post('/sound',{cue,choice:c});if(!r.ok&&!r.id)return toast(r.error||'That did not save.');
+  toast(`${(((S.sounds_ui||{}).cues||[]).find(x=>x.cue===cue)||{}).label||'Sound'}: ${sndName(c)}. Submit feedback so this video gets it.`);$('sbody')._s=null;await load()});
+$('sbody').addEventListener('input',e=>{if(e.target.id!=='sfind')return;sndFind=e.target.value;const q=sndFind.toLowerCase();   // filter in place: the box keeps its caret
+  document.querySelectorAll('#sbody .slrow').forEach(r=>r.hidden=!!q&&!r.dataset.snd.toLowerCase().includes(q))});
+$('sbody').addEventListener('keydown',e=>{if(e.target.id==='sfind')e.stopPropagation()});
+$('sbody').addEventListener('dragstart',e=>{const r=e.target.closest('[data-snd]');if(!r)return;e.dataTransfer.setData('application/x-cooked-sound',r.dataset.snd);e.dataTransfer.effectAllowed='copy'});
+['dragover','dragenter'].forEach(k=>$('sbody').addEventListener(k,e=>{if(![...e.dataTransfer.types].includes('Files'))return;e.preventDefault();const d=$('sdrop');if(d)d.classList.add('on')}));
+$('sbody').addEventListener('dragleave',e=>{if(!$('sbody').contains(e.relatedTarget)){const d=$('sdrop');if(d)d.classList.remove('on')}});
+$('sbody').addEventListener('drop',e=>{if(!e.dataTransfer.files.length)return;e.preventDefault();const d=$('sdrop');if(d)d.classList.remove('on');libUpload(e.dataTransfer.files)});
 async function saveText(){const text=tword();if(!tx||!text)return;
-  const look={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size},ed=tx.edit,t={start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100};
+  const look={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w},ed=tx.edit,t={start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100};
   let r;
   if(!ed)r=await post('/text/add',{text,...look,...t});
   else if(ed.fresh)r=await post('/edit',{id:ed.id,text,add_text:look,t:t.start,t_end:t.end});
@@ -2087,20 +2293,41 @@ function renderTexts(){
   const L=$('tlayer'),fs=sz=>Math.min(L.offsetWidth,L.offsetHeight)*(sz||TEXT_SIZE)/100,t=v.currentTime,edit=!!(S&&view&&view.stage==='edit');
   $('railtext').hidden=$('railcap').hidden=$('railsnd').hidden=$('railtools').hidden=!edit;if(!edit&&tool)openTool(null);
   if(tpanel)renderTextPanel();if(tool==='captions')renderCapPanel();if(tool==='sounds')renderSndPanel();
-  const one=(a,text,id,k)=>`<div class="tl"${id?` id="${id}"`:''}${k?` data-tclick="${esc(k)}"`:''} style="left:${a.x_pct}%;top:${a.y_pct}%;font-size:${fs(a.size_pct)}px"><span class="ts-${a.style}">${esc(text)}</span></div>`;
+  const one=(a,text,id,k,hit)=>`<div class="tl${hit?' hit':''}"${id?` id="${id}"`:''}${k?` data-tclick="${esc(k)}"`:''} style="${tlStyle(a,fs)}"><span class="ts-${a.style}" style="${tsCol(a)}">${esc(text)}</span></div>`;
   const editing=tx&&tx.edit&&tx.edit.fresh?tx.edit.id:null,moving=tx&&tx.edit&&!tx.edit.fresh?String(tx.edit.id):null,baked=S&&S.texts_baked||[];
   const html=(edit&&!cmp?S.comments.filter(c=>c.add_text&&c.id!==editing&&c.stage===view.stage&&c.round===view.round&&c.t<=t&&t<c.t_end&&onAlt(c)):[]).map(c=>one(c.add_text,c.text,'','f'+c.id)).join('')
     +(edit&&!cmp&&isCur()?(S.texts||[]).filter(x=>x.start<=t&&t<x.end&&!baked.includes(x.id)&&String(x.id)!==moving).map(x=>one(x,x.text,'','s'+x.id)).join(''):'')   // typed, not in the video yet
-    +(tx?one({style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size},tword()||'Type your text','tprev'):'');
-  if(html!==tsig){tsig=html;L.innerHTML=html}}
+    +(edit&&!cmp&&isCur()&&!tx?(S.texts||[]).filter(x=>x.start<=t&&t<x.end&&baked.includes(x.id)).map(x=>one(x,x.text,'','s'+x.id,1)).join(''):'')   // in the video: click it to change it
+    ;
+  if(html!==tsig){tsig=html;L.innerHTML=html}
+  drawEdit(fs)}
+const tlStyle=(a,fs)=>`left:${a.x_pct}%;top:${a.y_pct}%;font-size:${fs(a.size_pct)}px;max-width:${a.width_pct||84}%;width:max-content;font-family:'${esc(a.font||'TikTok Sans')}',system-ui,sans-serif`;
+const tsCol=a=>{const c=a.color||'#FFFFFF';return a.style==='box'||a.style==='block'?`background:${c};color:${inkOn(c)}`:`color:${c}`};
+// the text being edited: built once per edit and restyled in place, so the caret stays where the user types
+function drawEdit(fs){const E=$('tedit');if(!tx){if(E.firstChild)E.innerHTML='';return}
+  let el=$('tprev');if(!el){E.innerHTML=`<div class="tl ed" id="tprev"><span contenteditable="plaintext-only" spellcheck="false" aria-label="the text"></span>${['nw','ne','sw','se','w','e'].map(h=>`<i data-h="${h}"></i>`).join('')}</div>`;el=$('tprev')}
+  const a={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w},sp=el.firstChild;
+  el.style.cssText=tlStyle(a,fs);sp.className='ts-'+tx.style;sp.style.cssText=tsCol(a);
+  if(document.activeElement!==sp&&sp.textContent!==(tx.word||''))sp.textContent=tx.word||''}
+$('tedit').addEventListener('input',e=>{if(!tx||!e.target.isContentEditable)return;tx.word=e.target.innerText.replace(/\n$/,'');
+  const w=$('tword');if(w){w.value=tx.word;const b=$('tadd');if(b)b.disabled=!tword()}});
+$('tedit').addEventListener('keydown',e=>{if(!e.target.isContentEditable)return;e.stopPropagation();
+  if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();e.target.blur();saveText()}if(e.key==='Escape'){e.target.blur();setText(null)}});
+$('tedit').addEventListener('focusout',e=>{const el=$('tprev');if(el)el.classList.remove('typing')});
 new ResizeObserver(()=>{tsig=null;renderTexts()}).observe($('tlayer'));
 $('tlayer').addEventListener('pointerdown',e=>{
   const k=e.target.closest('[data-tclick]');if(k&&!tx){e.preventDefault();editText(k.dataset.tclick.slice(1),k.dataset.tclick[0]==='f');return}   // a text drawn live: click it to change it
-  const el=e.target.closest('#tprev');if(!el||!tx)return;e.preventDefault();el.setPointerCapture(e.pointerId);
-  const vert=v.videoHeight>v.videoWidth,mv=ev=>{const r=$('tlayer').getBoundingClientRect(),cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
-    tx.x=cl((ev.clientX-r.left)/r.width*100,vert?20:12,vert?73:88);tx.y=cl((ev.clientY-r.top)/r.height*100,vert?16:8,vert?72:92);   // reels: inside the safe zone
-    el.style.left=tx.x+'%';el.style.top=tx.y+'%'};
-  el.onpointermove=mv;el.onpointerup=()=>{el.onpointermove=null;tsig=null;const w=$('tword');if(w)w.focus()}});
+});
+$('tedit').addEventListener('pointerdown',e=>{const el=e.target.closest('#tprev');if(!el||!tx)return;const sp=el.firstChild,h=e.target.dataset.h;
+  if(!h&&document.activeElement===sp)return;   // typing: the click moves the caret
+  e.preventDefault();el.setPointerCapture(e.pointerId);const L=$('tlayer').getBoundingClientRect(),x0=e.clientX,y0=e.clientY;let moved=false;
+  const end=f=>{el.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)>3)moved=true;if(moved)f(ev)};el.onpointerup=ev=>{el.onpointermove=el.onpointerup=null;if(!moved&&!h)typeIn(sp,false,ev.clientX,ev.clientY)}};
+  if(h==='w'||h==='e'){const cx=L.left+tx.x/100*L.width;   // a side: the text's width, the box hugs what is left
+    return end(ev=>{tx.w=Math.round(Math.min(84,Math.max(15,Math.abs(ev.clientX-cx)*2/L.width*100)));const z=$('twidth');if(z)z.value=tx.w;tnums();renderTexts()})}
+  if(h){const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,s0=tx.size,d=ev=>Math.hypot(ev.clientX-cx,ev.clientY-cy),d0=Math.max(8,d(e));
+    return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner scales it from its centre
+  const vert=v.videoHeight>v.videoWidth,ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
+  end(ev=>{tx.x=cl(ox+(ev.clientX-x0)/L.width*100,vert?20:12,vert?73:88);tx.y=cl(oy+(ev.clientY-y0)/L.height*100,vert?16:8,vert?72:92);renderTexts()})});   // reels: inside the safe zone
 // a trial reel on screen (its version picked, after Make): the note goes to that trial on the Trial reels tab, at this moment
 const onTrial=()=>!!(S&&isCur()&&!previewOn&&alt&&S.trials&&S.trials.state==='chosen'&&(viewRound().alts||[]).some(a=>a.name===alt&&a.trial));
 async function save(){const text=ta.value.trim();if(ta.disabled||(!text&&!pics.length))return;
@@ -2118,9 +2345,11 @@ const approve=async()=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;r
   try{await post('/event',{type:'approve'});await load(true)}catch(e){}finally{approving=false;render()}};
 $('approve').onclick=approve;$('mapprove').onclick=approve;
 document.addEventListener('keydown',e=>{
-  const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT';
+  const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&txEditable()&&HIST.length){e.preventDefault();return txUndo()}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&txEditable()){e.preventDefault();return txOp('cut')}
+  if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&ssel&&placed(ssel)){e.preventDefault();$('sndpick').hidden=true;return delSnd(placed(ssel))}
+  if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&vsel!=null&&view.stage==='edit'){e.preventDefault();return cutPiece(vsel)}
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&/^[=+\-_]$/.test(e.key)){e.preventDefault();return setZoom(zm*(/[=+]/.test(e.key)?2:.5))}   // the timeline, not the page
   if(!typing&&e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.key==='Z'){tfol=true;return setZoom(1)}
   if(typing||e.target.isContentEditable||e.target.closest?.('#askq')||document.documentElement.dataset.askOpen||e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key;   // never while typing or while Claude's question is up
@@ -2133,8 +2362,10 @@ document.addEventListener('keydown',e=>{
   else if(k==='o'&&inT!==null){outT=v.currentTime;renderBar();boxTime()}
   else if(k==='c'){e.preventDefault();openBox()}
   else if(k==='z'&&S.vertical)$('safebtn').click();
+  else if(k==='s'&&view.stage==='edit'&&$('timeline').classList.contains('edon'))splitAt(v.currentTime);
   else if(k==='?')$('howbtn').click();else if(k==='f')$('full').click();else if(k==='m')$('mute').click();
   else if(k==='Escape'&&txSel){txSel=null;hideBar();paintSel()}
+  else if(k==='Escape'&&vsel!=null){vsel=null;$('edtracks')._h=null;renderEdTracks()}
   else if(k==='Escape'){inT=outT=null;$('how').classList.remove('open');renderBar();boxTime()}
 });
 $('howbtn').onclick=e=>{e.stopPropagation();$('how').classList.toggle('open')};

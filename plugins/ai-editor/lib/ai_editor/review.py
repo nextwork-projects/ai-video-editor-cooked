@@ -383,11 +383,59 @@ def sounds_info():
     """The Sounds panel: each moment that can have a sound, what plays there now, and the user's own files."""
     sfx = sfx_mod()
     c = sfx.choices()
+    own = sfx.own_sounds()
     return {"cues": [{"cue": k, "label": sfx.LABELS[k][0], "when": sfx.LABELS[k][1], "choice": c[k]} for k in sfx.LABELS],
-            "own": sfx.own_sounds()}
+            "own": own, "own_len": {n: sound_shape(sfx.library_dir() / n, n=8).get("d") for n in own}}
 
 
 SOUND_MAX_MB = 10
+LIBRARY_MAX_MB = 100   # a sound file put in the library from the Sounds panel (a song fits)
+
+
+def library_upload(name, stream, n):
+    """One sound file into the sound library (custom/sounds, kept for every video), streamed. Returns its saved name;
+    ValueError with the words to show."""
+    sfx = sfx_mod()
+    name = re.sub(r"[^A-Za-z0-9._ -]", "", Path(str(name or "")).name).strip()[:80]
+    if not name or Path(name).suffix.lower() not in sfx.SOUND_EXT:
+        raise ValueError("Add a sound file: wav, mp3, m4a, aac, flac, ogg or opus.")
+    if not 0 < n <= LIBRARY_MAX_MB * 1024 * 1024:
+        raise ValueError(f"Sounds under {LIBRARY_MAX_MB} MB only.")
+    lib = sfx.library_dir()
+    lib.mkdir(parents=True, exist_ok=True)
+    out, k = lib / name, 1
+    while out.exists():
+        out, k = lib / f"{Path(name).stem} {k}{Path(name).suffix}", k + 1
+    tmp, left = out.with_name("." + out.name + ".part"), n
+    with open(tmp, "wb") as f:
+        while left > 0:
+            b = stream.read(min(1 << 20, left))
+            if not b:
+                break
+            f.write(b)
+            left -= len(b)
+    if left:
+        tmp.unlink(missing_ok=True)
+        raise ValueError("The upload stopped part way. Add it again.")
+    os.replace(tmp, out)
+    if not sound_shape(out, n=8).get("d"):
+        out.unlink(missing_ok=True)
+        raise ValueError(f"{name} did not play as audio.")
+    return out.name
+
+
+def library_remove(name):
+    """A sound out of the library, into custom/sounds/.removed (kept, not deleted); a moment that used it goes back
+    to the built-in sound."""
+    sfx = sfx_mod()
+    if name not in sfx.own_sounds():
+        raise ValueError("That sound is not in your library.")
+    lib = sfx.library_dir()
+    (lib / ".removed").mkdir(exist_ok=True)
+    os.replace(lib / name, lib / ".removed" / name)
+    for cue, pick in sfx.choices().items():
+        if pick == name:
+            sfx.choose(cue, "default")
 
 
 def placed_raw(folder):
@@ -397,10 +445,53 @@ def placed_raw(folder):
 
 
 def placed_sounds(folder):
-    """placed_raw with each sound's length and waveform, for the page."""
+    """placed_raw with each sound's length and waveform, for the page. A dropped audio file (kind "clip") is its whole
+    file's: the page draws its in..in+dur part."""
     items = placed_raw(folder)
     lib = sfx_mod().library_dir()
-    return [{**x, **sound_shape(lib / x["sound"], cap=sfx_mod().MAX_OWN_S)} for x in items if isinstance(x, dict) and "sound" in x]
+    return [{**x, **(sound_shape(Path(folder) / "audio" / x["sound"], n=240) if x.get("kind") == "clip"
+                     else sound_shape(lib / x["sound"], cap=sfx_mod().MAX_OWN_S))} for x in items if isinstance(x, dict) and "sound" in x]
+
+
+AUDIO_MAX_MB = 200   # a song dropped on the timeline
+
+
+def save_audio(folder, name, stream, n, t, dur_of):
+    """One audio file dropped on the timeline: n bytes into <edit>/audio/, and a sounds.json clip at t for its length
+    (up to the video's end). Returns the item; ValueError with the words to show."""
+    sfx = sfx_mod()
+    name = re.sub(r"[^A-Za-z0-9._ -]", "", Path(str(name or "")).name).strip()[:80]
+    if not name or Path(name).suffix.lower() not in sfx.SOUND_EXT:
+        raise ValueError("Drop an audio file: wav, mp3, m4a, aac, flac, ogg or opus.")
+    if not 0 < n <= AUDIO_MAX_MB * 1024 * 1024:
+        raise ValueError(f"Audio under {AUDIO_MAX_MB} MB only.")
+    d = Path(folder) / "audio"
+    d.mkdir(exist_ok=True)
+    out, k = d / name, 1
+    while out.exists():   # never over another clip's file
+        out, k = d / f"{Path(name).stem}-{k}{Path(name).suffix}", k + 1
+    tmp, left = out.with_name(out.name + ".part"), n
+    with open(tmp, "wb") as f:
+        while left > 0:
+            b = stream.read(min(1 << 20, left))
+            if not b:
+                break
+            f.write(b)
+            left -= len(b)
+    if left:
+        tmp.unlink(missing_ok=True)
+        raise ValueError("The upload stopped part way. Drop it again.")
+    os.replace(tmp, out)
+    length = sound_shape(out, n=240).get("d")
+    if not length:
+        out.unlink(missing_ok=True)
+        raise ValueError(f"{name} did not play as audio.")
+    t = round(max(0.0, t), 2)
+    x = {"id": secrets.token_hex(4), "t": t, "sound": out.name, "kind": "clip", "in": 0.0,
+         "dur": round(max(0.1, min(length, dur_of - t if dur_of else length)), 2), "vol": 1.0}
+    f = Path(folder) / "sounds.json"
+    f.write_text(json.dumps({"items": placed_raw(folder) + [x]}, indent=1), encoding="utf-8")
+    return x
 
 
 _SHAPE = {}
@@ -735,8 +826,11 @@ def note_tags(plan, transcript, stage, t, te=None, on=None):
     return (words_at(transcript, t, te if te is not None else t) if not chunks else ""), card
 
 
-TEXT_STYLES = ("plain", "outline", "box")   # TikTok's and Instagram's own: white, white with a black edge, black on white
+TEXT_STYLES = ("plain", "outline", "box", "block")   # TikTok's and Instagram's own: white, white with a black edge, black on
+# white (each line its own box); block: one box that hugs the whole text
 TEXT_SIZE, TEXT_HOLD_S = 6.0, 3.0   # % of the frame's short side; seconds on screen when no range is marked
+TEXT_FONTS = ("TikTok Sans", "Inter", "Montserrat", "Poppins", "Bebas Neue", "Anton", "Playfair Display",
+              "Permanent Marker", "Lobster", "Roboto Mono")   # Google fonts Texts.tsx loads; TikTok Sans is the default
 
 
 def text_look(add):
@@ -748,6 +842,16 @@ def text_look(add):
         raise ValueError("add_text takes style, x_pct and y_pct") from e
     if out["style"] not in TEXT_STYLES:
         raise ValueError("Text goes on the edit, in plain, outline or box.")
+    if add.get("font") and add["font"] != "TikTok Sans":   # only set when picked, so older rows keep their bake key
+        if add["font"] not in TEXT_FONTS:
+            raise ValueError(f"Pick one of the fonts: {', '.join(TEXT_FONTS)}.")
+        out["font"] = add["font"]
+    if add.get("color") and str(add["color"]).upper() != "#FFFFFF":
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(add["color"])):
+            raise ValueError("A colour is #RRGGBB.")
+        out["color"] = str(add["color"]).upper()
+    if add.get("width_pct") is not None and float(add["width_pct"]) < 84:   # the text's width brought in: it wraps sooner
+        out["width_pct"] = round(max(15.0, float(add["width_pct"])), 1)
     return out
 
 
@@ -764,17 +868,47 @@ def put_texts(folder, notes):
     return len(rows)
 
 
+def timeline_cuts(body):
+    """The Video row's {splits, gone} cleaned: splits sorted and unique, gone ranges merged, at most 200 of each.
+    ValueError when they are not numbers."""
+    splits = sorted({round(float(t), 2) for t in body.get("splits") or [] if float(t) > 0})[:200]
+    gone = []
+    for a, b in sorted([round(float(a), 2), round(float(b), 2)] for a, b in (body.get("gone") or [])[:200]):
+        if b - a < 0.05:
+            continue
+        if gone and a <= gone[-1][1]:
+            gone[-1][1] = max(gone[-1][1], b)
+        else:
+            gone.append([a, b])
+    return {"splits": splits, "gone": gone}
+
+
+def cuts_text(transcript, gone):
+    """The note for the timeline's cut pieces: each range on the edit's clock with the words said in it (a word is
+    in when its middle is, apply_edits' rule), for Claude to take out of spans.json and render again. "" for none."""
+    if not gone:
+        return ""
+    try:
+        words = [w for w in words_of(transcript) if "start" in w]
+    except (OSError, ValueError, TypeError):
+        words = []
+    said = lambda a, b: " ".join(w["text"].strip() for w in words if a - 1e-3 <= (w["start"] + w["end"]) / 2 <= b + 1e-3)
+    parts = [f'{fmt(a)}-{fmt(b)}' + (f' ("{said(a, b)}")' if said(a, b) else " (no words)") for a, b in gone]
+    return (f"Cut from the video on the timeline: {'; '.join(parts)}. Take these out of the cut (spans.json, the words "
+            f"quoted), then plan and render again. The page plays the draft without them already.")
+
+
 def typed_labels(folder):
     """texts.json as plan.json's "label" texts (plan.py typed_texts does the same when Claude plans)."""
     f = Path(folder) / "texts.json"
-    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct")
+    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct")
     return [{"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}}
             for x in ((load(f).get("items") or []) if f.exists() else [])]
 
 
 def label_key(x):
     return (str(x.get("text")), x.get("style"), *(round(float(x.get(k) or 0), 2) for k in ("start", "end", "x_pct", "y_pct")),
-            round(float(x.get("size_pct") or TEXT_SIZE), 1))
+            round(float(x.get("size_pct") or TEXT_SIZE), 1), x.get("font"), x.get("color"), x.get("width_pct"))
 
 
 def baked_texts(folder, d):
@@ -1646,6 +1780,7 @@ def make_handler(folder, token):
                 d["sfx_removed"] = [float(k) for k, v in ((load(ovf).get("sfx") or {}) if ovf.exists() else {}).items()
                                     if isinstance(v, dict) and v.get("deleted")]
                 d["cap_words"] = ((load(ovf).get("words") or {}) if ovf.exists() else {})   # caption words retyped, for the next draft
+                d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
                 d["sounds_ui"] = sounds_info() if d.get("stage") == "edit" else None   # the Sounds panel
                 d["captions_ui"] = captions_info(folder) if d.get("stage") == "edit" else None   # the Captions panel
@@ -1726,6 +1861,17 @@ def make_handler(folder, token):
                     except (OSError, subprocess.CalledProcessError, ValueError):
                         return self.send(404, {})
                 return self.file(f, "audio/wav")
+            if path.startswith("/audio/"):   # a dropped audio file, played live on the page while the video plays
+                p = folder / "audio" / Path(unquote(path)).name
+                if not p.is_file():
+                    return self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "audio/mpeg")
+            if path == "/sound-file":   # a library sound as it is, for the same live playing
+                sfx = sfx_mod()
+                if q.get("name", "") not in sfx.own_sounds():
+                    return self.send(404, {})
+                p = sfx.library_dir() / q["name"]
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "audio/wav")
             if path.startswith("/card-img/"):   # a card's own picture, under this edit only: the move and resize preview
                 p = (folder / unquote(path[len("/card-img/"):])).resolve()
                 if folder.resolve() not in p.parents or p.suffix.lower() not in CARD_IMG or not p.is_file():
@@ -1766,6 +1912,29 @@ def make_handler(folder, token):
                     self.close_connection = True   # the unread body must not be taken as the next request
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"items": items})
+            if urlsplit(self.path).path == "/sound/library/upload":   # the Sounds panel: a file into the sound library
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    name = library_upload(unquote(q.get("name", [""])[0]), self.rfile, int(self.headers.get("Content-Length") or 0))
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "name": name, "sounds": sounds_info()})
+            if urlsplit(self.path).path == "/audio/upload":   # an audio file dropped on the timeline, streamed in
+                q = parse_qs(urlsplit(self.path).query)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                        raise ValueError("Audio goes on the edit, before it is approved.")
+                    dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
+                    x = save_audio(folder, unquote(q.get("name", [""])[0]), self.rfile, n, float(q.get("at", ["0"])[0]), dur)
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.timeline_note("sounds-timeline", "Sounds on the timeline", f"add {x['sound']} at {fmt(x['t'])} "
+                                          f"for {x['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).")
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:
@@ -1960,6 +2129,33 @@ def make_handler(folder, token):
                     update(rj, put)
                     return self.send(200, {**old, "text": text, "ok": True, "sounds": info})
                 return self.comment({"t": 0.0, "text": text, "on": {"k": "sounds", "text": "all sounds"}})
+            if path == "/sound/library/remove":   # the Sounds panel's x: out of the library (kept in .removed)
+                try:
+                    library_remove(str(body.get("name") or ""))
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "sounds": sounds_info()})
+            if path == "/sfx/move":   # the Sounds row: a sound the user put there dragged, trimmed or turned up or down
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Sounds change on the edit, before it is approved."})
+                items = placed_raw(folder)
+                x = next((i for i in items if i.get("id") == body.get("placed")), None)
+                if not x:
+                    return self.send(404, {"error": "That sound is gone already."})
+                try:
+                    x["t"] = round(max(0.0, float(body.get("t", x["t"]))), 2)
+                    if x.get("kind") == "clip":
+                        x["in"] = round(max(0.0, float(body.get("in", x.get("in", 0)))), 2)
+                        x["dur"] = round(max(0.1, float(body.get("dur", x["dur"]))), 2)
+                        x["vol"] = round(min(2.0, max(0.0, float(body.get("vol", x.get("vol", 1))))), 2)
+                except (TypeError, ValueError):
+                    return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
+                (folder / "sounds.json").write_text(json.dumps({"items": items}, indent=1), encoding="utf-8")
+                line = f"{Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
+                return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
+                                          "Plan again so they are in (sounds.json and overrides.json sfx).")
             if path in ("/sfx/add", "/sfx/remove"):   # the timeline's Sounds row: put a library sound at a moment, or take one out
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -1974,6 +2170,12 @@ def make_handler(folder, token):
                         if name not in sfx.own_sounds():
                             raise ValueError
                         x = {"id": secrets.token_hex(4), "t": t, "sound": name}
+                        length = sound_shape(sfx.library_dir() / name, n=8).get("d") or 0
+                        if length > sfx.MAX_OWN_S + 0.05:   # a song from the library: a clip as long as it is
+                            (folder / "audio").mkdir(exist_ok=True)
+                            shutil.copy2(sfx.library_dir() / name, folder / "audio" / name)
+                            dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
+                            x.update(kind="clip", **{"in": 0.0}, dur=round(max(0.1, min(length, dur - t if dur > t else length)), 2), vol=1.0)
                         f.write_text(json.dumps({"items": items + [x]}, indent=1), encoding="utf-8")
                         line = f"add {Path(name).stem} at {fmt(t)}"
                     elif body.get("placed"):
@@ -2035,6 +2237,37 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True})
                 return self.comment({"t": t, "t_end": te, "text": f"{what} {label} as shown on the page: overrides.json has it "
                                      f"(card {key}). Plan again so it shows."})
+            if path == "/timeline/cut":   # the timeline's Video row: {splits: [t], gone: [[a, b]]} on the edit's clock.
+                # The page skips the gone pieces at once; one note tells Claude the words to cut from the next draft
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "The video is cut on the edit, before it is approved."})
+                try:
+                    cuts = timeline_cuts(body)
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "timeline/cut takes splits [t] and gone [[start, end]]"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                ov["cuts"] = cuts
+                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
+                            and c["round"] >= d["round"] and editable(d, c)), None)
+                text = cuts_text(d.get("transcript"), cuts["gone"])
+                if old:
+                    def put(x):
+                        if text:
+                            for c in x["comments"]:
+                                if c["id"] == old["id"]:
+                                    c.update(text=text, t=cuts["gone"][0][0], t_end=cuts["gone"][-1][1], edited=now())
+                        else:   # every piece put back: nothing to tell Claude
+                            x["comments"] = [c for c in x["comments"] if c["id"] != old["id"]]
+                    update(rj, put)
+                    return self.send(200, {"ok": True, "cuts": cuts})
+                if not text:
+                    return self.send(200, {"ok": True, "cuts": cuts})
+                return self.comment({"t": cuts["gone"][0][0], "t_end": cuts["gone"][-1][1], "text": text,
+                                     "on": {"k": "cuts", "text": "cuts on the timeline"}})
             if path in ("/text/add", "/text/delete", "/text/edit"):   # the Text tool: texts.json changes on the spot and
                 # the page draws it at once; bake_soon puts it in the video with no Claude. Only while Claude has the
                 # round does a note tell it as well (it plans texts.json in itself)
@@ -2058,7 +2291,8 @@ def make_handler(folder, token):
                 if not text:
                     return self.send(400, {"error": "Type the text first."})
                 try:
-                    new = {**x, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct") if k in body}})}
+                    new = {k: v for k, v in x.items() if k not in ("font", "color", "width_pct")}   # text_look sets them again when kept
+                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct") if k in body}})}
                     if body.get("start") is not None:
                         new["start"] = round(max(0.0, float(body["start"])), 2)
                         new["end"] = round(max(new["start"] + 0.1, float(body.get("end") or new["start"] + TEXT_HOLD_S)), 2)
@@ -2070,7 +2304,8 @@ def make_handler(folder, token):
                 if path == "/text/add":
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)
                 what = [w for w, k in (("words", "text"), ("look", "style"), ("place", "x_pct"), ("place", "y_pct"),
-                                       ("size", "size_pct"), ("time", "start")) if new.get(k) != x.get(k)]
+                                       ("size", "size_pct"), ("font", "font"), ("colour", "color"), ("width", "width_pct"), ("time", "start"),
+                                       ("time", "end")) if new.get(k) != x.get(k)]
                 return tell(f'Change the on-screen text "{x["text"]}" ({", ".join(dict.fromkeys(what)) or "no change"}): '
                             f'texts.json has it now as "{text}". Plan again so it shows.', new)
             if path == "/delete":
@@ -3914,7 +4149,28 @@ def demo():
     assert row["id"] == nt["id"] and (row["text"], row["size_pct"], row["start"], row["end"]) == ("new one", 9.0, 3.0, 4.0), row
     st = json.loads(get("/state").read())
     assert st["bake"]["state"] in ("waiting", "working", "off") and st["texts_baked"] == [], st["bake"]
+    # a font and a colour (Texts.tsx draws them); a drag on the timeline sends only the times and keeps them
+    post("/text/edit", {"id": nt["id"], "font": "Anton", "color": "#ff3b30"})
+    post("/text/edit", {"id": nt["id"], "start": 5, "end": 7.5})
+    row = load(folder / "texts.json")["items"][-1]
+    assert (row["font"], row["color"], row["start"], row["end"]) == ("Anton", "#FF3B30", 5.0, 7.5), row
+    post("/text/edit", {"id": nt["id"], "font": "TikTok Sans", "color": "#FFFFFF"})   # back to the default: the keys go
+    assert not {"font", "color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    bad = urllib.request.Request(base + "/text/edit?t=" + tok, json.dumps({"id": nt["id"], "font": "Comic Sans"}).encode(), method="POST")
+    try:
+        urllib.request.urlopen(bad)
+        raise AssertionError("a font not in TEXT_FONTS saved")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
     post("/text/delete", {"id": nt["id"]})
+    # the timeline's Video row: split and cut pieces, merged, kept in overrides.json, one note that a put-back removes
+    assert timeline_cuts({"splits": [3, 1, 1, 0], "gone": [[2, 3], [1, 2], [5, 5.01]]}) == {"splits": [1, 3], "gone": [[1, 3]]}
+    r = post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]]})
+    note = [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
+    assert load(folder / "overrides.json")["cuts"] == {"splits": [1.0, 2.0], "gone": [[1.0, 2.0]]} and r["id"] and len(note) == 1 and "0:01.0-0:02.0" in note[0]["text"], note
+    assert json.loads(get("/state").read())["cuts"]["gone"] == [[1.0, 2.0]]
+    post("/timeline/cut", {"splits": [1, 2], "gone": []})
+    assert not [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
     # the Captions panel: words at a time and the look, saved for this video only, with a note each
     from ai_editor import taste as _taste
     cc1 = post("/captions", {"words": "sentence"})
@@ -3978,8 +4234,22 @@ def demo():
                 raise AssertionError(bad)
             except urllib.error.HTTPError as e:
                 assert e.code == 400, bad
+        # an audio file dropped on the timeline: a clip as long as the file, then moved, trimmed and turned down
+        import wave
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1), w.setsampwidth(2), w.setframerate(8000), w.writeframes(b"\x10\x20" * 8000 * 2)
+        up = urllib.request.Request(base + "/audio/upload?name=my%20song.wav&at=1.5&t=" + tok, buf.getvalue(), method="POST")
+        urllib.request.urlopen(up).read()
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x.get("kind") == "clip")
+        assert (clip["sound"], clip["t"], clip["in"], clip["vol"]) == ("my song.wav", 1.5, 0.0, 1.0) and 0 < clip["dur"] <= 2.0, clip
+        assert (folder / "audio" / "my song.wav").is_file() and get("/audio/my%20song.wav").read()[:4] == b"RIFF"
+        post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip
+        post("/sfx/remove", {"t": 3, "placed": clip["id"], "src": "my song.wav"})
+        post("/delete", {"id": sa["id"]})   # the sounds note, so the next one starts clean
         (folder / "overrides.json").unlink()
-        post("/delete", {"id": sa["id"]})
         post("/delete", {"id": s1["id"]})
     finally:
         if keep_lib is None:

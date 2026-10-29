@@ -812,9 +812,9 @@ def placed_sounds(plan, edit_dir):
     import sfx
     fps = plan.get("fps") or 30
     for x in json.loads(f.read_text(encoding="utf-8")).get("items") or []:
-        try:
-            src, att = sfx.own_cue(edit_dir, x["sound"])
-        except (ValueError, KeyError, OSError) as e:
+        try:   # a dropped audio file plays from its moment; a library sound lands its hit there
+            src, att = (sfx.clip_cue(edit_dir, x), 0.0) if x.get("kind") == "clip" else sfx.own_cue(edit_dir, x["sound"])
+        except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as e:
             print(f"warning: a placed sound was skipped: {e}", file=sys.stderr)
             continue
         t = float(x["t"])
@@ -831,7 +831,8 @@ def typed_texts(edit_dir):
     if not f or not f.exists():
         return []
     keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct")
-    return [{"kind": "label", **{k: x[k] for k in keep}} for x in json.loads(f.read_text(encoding="utf-8")).get("items") or []]
+    extra = ("font", "color", "width_pct")   # set only when the user picked them (review.py text_look)
+    return [{"kind": "label", **{k: x[k] for k in keep}, **{k: x[k] for k in extra if x.get(k) is not None}} for x in json.loads(f.read_text(encoding="utf-8")).get("items") or []]
 
 
 def under_titles(cards, texts):
@@ -2991,6 +2992,10 @@ def demo():
                                                                       "end": 4.0, "x_pct": 50, "y_pct": 40, "size_pct": 6}]}), encoding="utf-8")
         assert typed_texts(td) == [{"kind": "label", "text": "wait for it", "style": "box", "start": 1.0, "end": 4.0,
                                     "x_pct": 50, "y_pct": 40, "size_pct": 6}], typed_texts(td)
+        (Path(td) / "texts.json").write_text(json.dumps({"items": [{"id": "t1", "text": "hug", "style": "block", "start": 0, "end": 1,
+            "x_pct": 50, "y_pct": 40, "size_pct": 6, "font": "Anton", "color": "#FFD60A", "width_pct": 60}]}), encoding="utf-8")
+        assert {k: typed_texts(td)[0][k] for k in ("style", "font", "color", "width_pct")} == \
+            {"style": "block", "font": "Anton", "color": "#FFD60A", "width_pct": 60}, typed_texts(td)   # a re-plan keeps the look
     with tempfile.TemporaryDirectory() as td:   # the timeline's placed sounds (sounds.json) join the plan's sfx, in time order
         import sfx
         keep = sfx.own_cue
