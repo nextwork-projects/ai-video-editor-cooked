@@ -1215,7 +1215,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const snds=(it.sfx||[]).map(x=>clip(x.start??x.t,x.d,gone.has(x.t.toFixed(2))?' gone':'',`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,sname(x.src),x.peaks,x.t)).join('')
     +(S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>{const n=(x.peaks||[]).length,c=x.kind==='clip'&&x.d,pk=c?x.peaks.slice(Math.floor(x.in/x.d*n),Math.ceil((x.in+x.dur)/x.d*n)):x.peaks;
       return clip(x.t,c?x.dur:x.d,' pend'+(ssel===x.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),pk,x.t)}).join('');
-  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c);return `<div class="eitem cap${ct.edited?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(c.s)}%;width:${pc(c.e)-pc(c.s)}%" title="${esc(ct.text||c.text)} · ${fmtx(c.s)} · click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
+  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c),[cs0,ce0]=capAt(c);return `<div class="eitem cap${ct.edited||capMoved(c)?' pend':''}${!ct.text?' gone':''}" data-ec="${i}" style="left:${pc(cs0)}%;width:${pc(ce0)-pc(cs0)}%" title="${esc(ct.text||c.text)} · ${fmtx(cs0)}–${fmtx(ce0)} · drag an edge to change how long it shows, click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
   const cp=k=>(S.cards_pending||[]).find(p=>p.key===k)||{};
   const imgs=(it.cards||[]).map(x=>{const p=cp(x.key),a=p.start??x.s,b=p.end??x.e;return `<div class="eitem img${p.key?' pend':''}${p.deleted?' gone':''}${csel&&csel.x.key===x.key?' sel':''}" data-ek="${esc(x.key)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(x.label)} · ${fmtx(a)}–${fmtx(b)} · click to select, drag to move, drag an edge to trim"><span>${esc(x.label.replace(/^the /,''))}</span></div>`}).join('');
   const vsps=cuts().splits.filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
@@ -1227,6 +1227,29 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
     <div class="etrack" data-row="vid">${vids}${vsps}</div><div class="etrack" data-row="img">${imgs}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
   if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
     E.querySelectorAll('.eitem.snd,.eitem.img').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}edPh()}
+// a caption page's time: as dragged on the Captions row (overrides.json cap_times, by its first word) until the bake has it
+const capAt=c=>{const o=(S&&S.cap_times||{})[(c.w||[])[0]];return o?[o[0],o[1]]:[c.s,c.e]};
+const capMoved=c=>{const[a,b]=capAt(c);return Math.abs(a-c.s)>.01||Math.abs(b-c.e)>.01};
+// drag a caption on the Captions row: an edge makes it show longer or shorter, the middle moves it; never over its
+// neighbours. It saves on release and bakes into the video by itself; the page shows it at its new time at once
+$('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.cap');if(!it||e.button||e.target.closest('[data-ex]'))return;
+  const cs=(data().items||{}).captions||[],i=+it.dataset.ec,c=cs[i];if(!c||!(c.w||[]).length)return;
+  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX,[o0,o1]=capAt(c);
+  const P=i?cs[i-1]:null,N=i<cs.length-1?cs[i+1]:null,[p0,p1]=P?capAt(P):[0,0],[n0,n1]=N?capAt(N):[T,T];
+  const mode=e.clientX-r.left<6?'l':r.right-e.clientX<6?'r':'m';let a=o0,b=o1,pe=p1,ns=n0,moved=false;   // an edge into a neighbour pushes its edge too
+  it.setPointerCapture(e.pointerId);
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3)moved=true;if(!moved)return;const dt=(ev.clientX-x0)/W0*T;
+    if(mode==='m'){a=Math.max(p1,Math.min(n0-(o1-o0),o0+dt));b=a+o1-o0}
+    else if(mode==='l'){a=Math.max(P?p0+.1:0,Math.min(o1-.1,o0+dt));pe=Math.min(p1,a)}else{b=Math.min(N?n1-.1:T,Math.max(o0+.1,o1+dt));ns=Math.max(n0,b)}
+    it.style.left=a/T*100+'%';it.style.width=(b-a)/T*100+'%';v.pause();v.currentTime=mode==='r'?Math.max(a,b-.04):a+.02;
+    const ct={...(S.cap_times||{}),[c.w[0]]:[a,b]};if(P&&pe!==p1)ct[P.w[0]]=[p0,pe];if(N&&ns!==n0)ct[N.w[0]]=[ns,n1];S.cap_times=ct;drawCapPrev()};   // the caption on the video follows
+  it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();const r2=x=>Math.round(x*100)/100;
+    const put=x=>x.c?post('/captions/time',{w:x.c.w[0],s:r2(x.s),e:r2(x.e),text:x.c.text}):null;
+    const now=[{c,s:a,e:b},P&&pe!==p1&&{c:P,s:p0,e:pe},N&&ns!==n0&&{c:N,s:ns,e:n1}].filter(Boolean),was=[{c,s:o0,e:o1},P&&pe!==p1&&{c:P,s:p0,e:p1},N&&ns!==n0&&{c:N,s:n0,e:n1}].filter(Boolean);
+    const save=xs=>Promise.all(xs.map(put)).then(()=>{$('edtracks')._h=null;return load()});
+    if(typeof edPush==='function')edPush('caption timing',()=>save(was),()=>save(now));
+    const res=await Promise.all(now.map(put));toast(res.every(x=>x&&(x.ok||x.id))?`"${c.text}" shows ${fmtx(a)}–${fmtx(b)}.`:'That did not save.');
+    $('edtracks')._h=null;await load()}});
 // the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
 // draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
 let vsel=null,edDragged=0;
@@ -2080,6 +2103,14 @@ $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if
 // it back, Delete takes it out, Note leaves a note about it. Until the bake, the page draws it at its new place
 // (S.cards_pending) over its old spot.
 let csel=null;   // {x: the card (review.py screen_items), box, orig} in % of the frame
+// CapCut's rule: a click anywhere but on the picked thing (or its own bar and panel) lets it go; an open text saves first
+document.addEventListener('pointerdown',e=>{const on=sel=>e.target.closest(sel);
+  if(csel&&!on('#csel,.cbar,.eitem.img,[data-hit],#tside')){csel=null;drawCard()}
+  if((vsel!=null||ssel)&&!on('.eitem.vid,.eitem.snd,#sndpick,#tside,.vsp,#vsplit')){vsel=null;ssel=null;$('sndpick').hidden=true;$('edtracks')._h=null;renderEdTracks()}
+  if(tx&&tx.edit&&on('#p1 .player')&&!on('#tprev')){if(tword())saveText();else setText(null)}},true);
+v.addEventListener('timeupdate',()=>{const t=v.currentTime;
+  if(csel&&(t<csel.x.s-.05||t>=csel.x.e+.05)){csel=null;drawCard()}
+  if(tx&&tx.edit&&!v.paused&&(t<tx.start-.05||t>=tx.end+.05)&&!$('tedit').contains(document.activeElement)&&document.activeElement!==$('tword')){if(tword())saveText();else setText(null)}});
 function selectCard(x){if(!noteOk())return;v.pause();const p=(S.cards_pending||[]).find(p=>p.key===x.key&&p.box),b=p?p.box:x.box;
   csel={x,box:b.slice(),orig:b.slice(),saved:!!p};drawCard()}
 const cmoved=()=>!!csel&&csel.box.some((q,i)=>Math.abs(q-csel.orig[i])>.2);
@@ -2342,9 +2373,12 @@ $('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw
 // the live caption: while the Captions panel is open, the line on screen drawn in the style the next draft gets, over a
 // dimmed copy of the one in the video, marked Preview. Unchanged, it is only a target: drag it up or down to move it.
 function drawCapPrev(){if(capDrag)return;const L=$('cplayer'),it=data().items||{},t=v.currentTime;
-  const c=tool==='captions'&&S&&view&&view.stage==='edit'&&!cmp&&isCur()&&it.cap?(it.captions||[]).find(x=>x.s<=t&&t<x.e):null;
-  if(!c){if(L.firstChild)L.innerHTML='';L._s='';return}
-  const a=capLook(),ch=capChanged(),W=L.offsetWidth,H=L.offsetHeight,fs=Math.max(W,H)*(a.size_pct||6)/100,cw=a.width_pct||86;
+  const can=S&&view&&view.stage==='edit'&&!cmp&&isCur()&&it.cap,moved=can&&(it.captions||[]).some(capMoved);
+  const c=can&&(tool==='captions'||moved)?(it.captions||[]).find(x=>{const[a,b]=capAt(x);return a<=t&&t<b}):null;
+  if(!c){const was=moved&&(it.captions||[]).some(x=>x.s<=t&&t<x.e);   // a page moved away from here: hide the old one
+    const hh=was?`<div class="cpwas" style="left:${(100-it.cap.w)/2}%;top:${it.cap.y-it.cap.h/2}%;width:${it.cap.w}%;height:${it.cap.h}%"></div>`:'';
+    if(L._s!==hh){L._s=hh;L.innerHTML=hh}return}
+  const a=capLook(),ch=capChanged()||moved,W=L.offsetWidth,H=L.offsetHeight,fs=Math.max(W,H)*(a.size_pct||6)/100,cw=a.width_pct||86;
   const ws=capText(c).text.split(/\s+/).filter(Boolean),n=(c.w||[]).filter(s=>+s<=t).length-1,hi=a.highlight_color||a.color||'#FFFFFF';
   const cs=x=>a.case==='upper'?x.toUpperCase():a.case==='lower'?x.toLowerCase():x;
   const st=`top:${a.y_pct||70}%;font-size:${fs}px;max-width:none;font-family:'${esc(a.font_match||'TikTok Sans')}',system-ui,sans-serif;font-weight:${a.weight||800};color:${a.color||'#FFFFFF'};`

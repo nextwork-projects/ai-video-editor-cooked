@@ -117,6 +117,11 @@ def apply_overrides(plan, edit_dir, plan_name=None):
     gone = [float(k) for k, o in (ov.get("zooms") or {}).items() if (o or {}).get("deleted")]   # "no zoom here" (plan.py beat zoom@T --drop)
     if gone:
         plan["zooms"] = [z for z in plan.get("zooms") or [] if not any(abs(z["start"] - t) < ZOOM_MATCH_S for t in gone)]
+    times = ov.get("cap_times") or {}   # a caption page dragged on the timeline: keyed by its first word's start
+    for ch in (plan.get("captions") or {}).get("chunks") or [] if times else []:
+        k = f"{ch['words'][0]['start']:.3f}" if ch.get("words") and "start" in ch["words"][0] else None
+        if k in times:
+            ch["start"], ch["end"] = (round(float(v), 3) for v in times[k])
     words = ov.get("words") or {}
     if words:
         for ch in plan["captions"]["chunks"]:
@@ -405,6 +410,12 @@ def demo():
     zs = apply_overrides({**base(), "zooms": [{"start": 0.0, "end": 3.6}, {"start": 7.3, "end": 10.9}]}, dz)["zooms"]
     assert zs == [{"start": 0.0, "end": 3.6}], zs
     shutil.rmtree(dz)
+    dc = Path(tempfile.mkdtemp())   # a caption page dragged on the timeline: found by its first word, applied once
+    (dc / "overrides.json").write_text(json.dumps({"cap_times": {"1.000": [1.3, 2.4]}}), encoding="utf-8")
+    ch = apply_overrides(base(), dc)["captions"]["chunks"]
+    assert (ch[0]["start"], ch[1]["start"], ch[1]["end"]) == (0, 1.3, 2.4), ch
+    assert apply_overrides(apply_overrides(base(), dc), dc)["captions"]["chunks"] == ch
+    shutil.rmtree(dc)
     s = Session(d, "plan.json")
     (d / "plan.json").write_text(json.dumps(base()), encoding="utf-8")
     s.change({"kind": "word", "key": "0.400", "from": "is", "to": "was", "action": "fix", "text": "caption 'is' -> 'was'"})

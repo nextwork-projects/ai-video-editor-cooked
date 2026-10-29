@@ -3,6 +3,8 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- Drag a caption's edges on the Captions row to show it longer or shorter, or drag it to move it; an edge pushes the next caption along. The video shows it at its new time straight away and it bakes into the video by itself.
+- A picked image lets go when the video plays past it or you click anywhere else, and an open text saves and closes the same way. No Done needed.
 - On the edit, select words in the transcript and press Delete to cut them: they strike through, the Video row and playback skip them at once, and Claude gets the words in one note. Delete on struck words puts them back, Cmd+Z undoes. The transcript also folds to its header with the arrow in its corner, kept in this browser.
 - Click a caption and the Captions panel opens on that line: its words, then Look, Size, Position, Colour, Highlight and Words at a time. Each change shows on the video at once as a preview, and you can drag the caption up or down. Saved for this video only; the next draft has it.
 - Timeline, CapCut style: drag a split line to move it (a cut gets longer or shorter with it, snapping to word starts), double-click one to remove it, and a new Images row shows every picture on screen: click it to select it on the video, drag it or its edges to change when it shows, and it goes into the video by itself. Cmd+Z and Shift+Cmd+Z undo and redo timeline edits.

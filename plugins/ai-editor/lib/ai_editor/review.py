@@ -1818,7 +1818,8 @@ def make_handler(folder, token):
                 d["sfx_removed"] = [float(k) for k, v in ((load(ovf).get("sfx") or {}) if ovf.exists() else {}).items()
                                     if isinstance(v, dict) and v.get("deleted")]
                 d["cap_words"] = ((load(ovf).get("words") or {}) if ovf.exists() else {})   # caption words retyped, for the next draft
-                d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})   # the timeline's splits and cut pieces
+                d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})
+                d["cap_times"] = ((load(ovf).get("cap_times") or {}) if ovf.exists() else {})   # caption pages retimed, until baked   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
                 d["sounds_ui"] = sounds_info() if d.get("stage") == "edit" else None   # the Sounds panel
                 snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
@@ -2256,6 +2257,27 @@ def make_handler(folder, token):
                 new = " ".join(w for w in words.values() if w)
                 line = f'"{old}" at {fmt(t)} now "{new}"' if new else f'"{old}" at {fmt(t)} taken out'
                 return self.timeline_note("caption-text", "Captions retyped", line, "Plan again so they show (overrides.json words).")
+            if path == "/captions/time":   # the timeline's Captions row: a page made longer, shorter or moved. overrides.json
+                # cap_times, keyed by its first word's start so a new plan finds it; baked in by itself (bake_soon)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Captions change on the edit, before it is approved."})
+                try:
+                    key, a, b = f"{float(body['w']):.3f}", round(float(body["s"]), 3), round(float(body["e"]), 3)
+                    if a < 0 or b - a < 0.1:
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "captions/time takes w (its first word's start), s and e"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                ov.setdefault("cap_times", {})[key] = [a, b]
+                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True})
+                return self.timeline_note("caption-times", "Caption timing", f'"{str(body.get("text") or "")[:60]}" now {fmt(a)}-{fmt(b)}',
+                                          "Plan again so it shows (overrides.json cap_times).")
             if path == "/card/edit":   # the video page: a card moved, resized or deleted: overrides.json, baked in by itself
                 # (bake_soon); a note for Claude only while it has the round
                 d = load(rj)
@@ -4326,6 +4348,14 @@ def demo():
     k2 = post("/captions/text", {"s": 2.0, "w": [2.0], "text": "", "old": "later"})
     assert k2["id"] == k1["id"] and k2["text"].startswith('Captions retyped: "hello world" at 0:01.0 now "hello world!"; "later" at 0:02.0 taken out.'), k2
     assert json.loads(get("/state").read())["cap_words"] == {"1.000": "hello", "1.300": "world!", "2.000": ""}
+    post("/captions/time", {"w": 1.0, "s": 0.9, "e": 1.8, "text": "hello world"})   # a page dragged on the Captions row
+    assert json.loads(get("/state").read())["cap_times"] == {"1.000": [0.9, 1.8]} and load(folder / "overrides.json")["cap_times"]
+    for bad in ({"w": 1, "s": 2, "e": 2.05}, {"w": "x", "s": 0, "e": 1}, {"s": 0, "e": 1}):
+        try:
+            post("/captions/time", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
     try:
         post("/captions/text", {"s": 1.0, "w": [], "text": "x"})
         raise AssertionError("a line with no words")
