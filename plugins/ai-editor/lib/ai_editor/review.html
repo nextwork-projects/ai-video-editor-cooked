@@ -651,6 +651,17 @@ body.staged #stagebar{display:flex}
 .learn .lact .go:disabled{opacity:.45}
 .learn .lact .skip{height:32px;border:0;background:none;color:var(--quiet);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
 .learn .lact .skip:hover{color:var(--strong)}
+.lars{display:flex;flex-direction:column}
+.lar{display:flex;flex-direction:column;gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.lar:first-child{border-top:0;padding-top:2px}
+.lar.off .lto{opacity:.45}
+.lto{display:flex;align-items:center;gap:6px;margin-left:30px;font-size:12px;line-height:16px;color:var(--quiet)}
+.lto{min-width:0}.lto i{font-style:normal;white-space:nowrap;flex-shrink:0}.lto button{min-width:0}
+.lto button{display:inline-flex;align-items:center;gap:4px;max-width:100%;height:24px;padding:0 8px;border:1px solid var(--line2);border-radius:7px;background:var(--panel);color:var(--strong);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.lto button{height:auto;min-height:24px;padding-top:3px;padding-bottom:3px;text-align:left}.lto button span{white-space:normal}.lto button svg{flex-shrink:0;color:var(--quiet)}
+.lar .lmenu{margin-left:30px}.lar .lmenu .t b{white-space:normal}
+.lmenu .lab{font-size:11px;line-height:14px;color:var(--quiet);padding:6px 10px 2px}
+.learn .lsum{font-size:12px;line-height:16px;color:var(--quiet)}
 .learn .lerr{font-size:12px;line-height:16px;color:var(--quiet)}
 .learn p.ok{display:flex;align-items:center;gap:8px;color:var(--strong);font-weight:600}.learn p.ok svg{color:var(--ok);flex-shrink:0}
 .lrules{display:flex;flex-direction:column;gap:10px}
@@ -1588,7 +1599,7 @@ function rcptHtml(id){
   return `<div class="rcpt">${TICK}<span>${r.status==='added'?'Saved to':'Already in'} ${esc(r.style)}: ${esc(r.rule)}.${r.status==='added'?` <button data-undo="${r.id}">Undo</button>`:''}</span></div>`;
 }
 // the final approve: Claude's rules from this video's notes, each ticked, into the style on Update
-let lTo=null,lOpen=false,lName='',lErr='',untick=new Set(),introOff=false,sureBack=null;
+let lPick={},lOpen=-1,lName='',lErr='',untick=new Set(),introOff=false,sureBack=null;
 // a moment on one round at the same words on another (both cut transcripts list the same words), else the same time
 function mapT(t,from,to){
   const flat=k=>(((DATA[k]||{}).transcript||{}).lines||[]).flatMap(l=>l.tokens.filter(x=>'w' in x)),a=flat(from),b=flat(to);
@@ -1603,19 +1614,26 @@ function learnHtml(){
   if(L.state==='reading')return `<div class="learn">${head}<p class="wait"><i></i>Claude is reading your notes...</p></div>`;
   const open=L.state==='proposed',rs=(L.rules||[]).map((r,i)=>[r,i]).filter(([,i])=>open||L.chosen.includes(i));
   const rows='<div class="lrules">'+rs.map(([r,i])=>`<label class="lrule${open&&untick.has(i)?' off':''}"><input type="checkbox" data-li="${i}"${open&&untick.has(i)?'':' checked'}${open?'':' disabled'}><span>${esc(r.rule)}.</span></label>`).join('')+'</div>';
-  if(open){
-    const st=L.styles&&L.styles.length?L.styles:[{id:'',name:L.style||'My style',rules:0,here:true}],to=lTo==null?st.find(x=>x.here)||st[0]:lTo==='new'?null:st.find(x=>x.id===lTo)||st[0];
-    const sub=x=>[x.here?'This video\u2019s style':x.mine?'Every video':'',x.rules?plural(x.rules,'rule'):''].filter(Boolean).join(' · ')||'No rules yet';
+  if(open){   // Claude picked where each rule goes (its "to"); the user changes any from the menu under it
+    const st=L.styles&&L.styles.length?L.styles:[{id:'',name:L.style||'My style',rules:0,here:true}],sk=L.skills||[],all=[...st,...sk];
+    const here=st.find(x=>x.here)||st[0],pick=i=>{const k=lPick[i]??(L.rules[i].to||'');return k==='new'?'new':all.find(x=>x.id===k)||here};
+    const nm=t=>t==='new'?'New style from this video':t.skill?t.name+' skill':t.name;
+    const sub=x=>x.skill?x.skill:[x.here?'This video\u2019s style':x.mine?'Every video':'',x.rules?plural(x.rules,'rule'):''].filter(Boolean).join(' · ')||'No rules yet';
     const CHK='<svg width="14" height="14" viewBox="0 0 14 14"><path d="M2.5 7.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-    const menu=lOpen?`<div class="lmenu" role="listbox">${st.map(x=>`<button role="option" aria-selected="${to===x}" class="${to===x?'cur':''}" data-lto="${esc(x.id)}"><span class="ck">${to===x?CHK:''}</span><span class="t"><b>${esc(x.name)}</b><i>${esc(sub(x))}</i></span></button>`).join('')}<hr>
-      <button role="option" aria-selected="${!to}" class="${to?'':'cur'}" data-lto="+new"><span class="ck"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="t"><b>New style from this video</b><i>A copy of ${esc((st.find(x=>x.here)||st[0]).name)} with these rules</i></span></button></div>`:'';
-    const none=rs.every(([,i])=>untick.has(i)),noName=!to&&!lName.trim();
-    return `<div class="learn"><div>${head}<p>From your notes. Untick anything it should not keep.</p></div>${rows}
-    <div class="lsave"><span>Save to</span><button class="ldd" data-ldd aria-haspopup="listbox" aria-expanded="${lOpen}"><span class="nm">${to?esc(to.name):'New style from this video'}</span>${to&&to.rules?`<span class="sub">${plural(to.rules,'rule')}</span>`:''}<svg width="14" height="14" viewBox="0 0 14 14"><path d="M3.5 5.5l3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>${menu}
-      ${to?'':`<input class="lname" maxlength="40" placeholder="Name it, like Podcast clips" value="${esc(lName)}" aria-label="name the new style">`}${lErr?`<span class="lerr">${esc(lErr)}</span>`:''}</div>
-    <div class="lact"><button class="go" data-lsave${none||noName?' disabled':''}>${to?'Save to '+esc(to.name):'Save new style'}</button><button class="skip" data-lskip>Not now</button></div></div>`;
+    const CHV='<svg width="12" height="12" viewBox="0 0 14 14"><path d="M3.5 5.5l3.5 3.5 3.5-3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const opt=(x,i,t)=>`<button role="option" aria-selected="${t===x}" class="${t===x?'cur':''}" data-lto="${esc(x.id)}" data-lrow="${i}"><span class="ck">${t===x?CHK:''}</span><span class="t"><b>${esc(x.name)}</b><i>${esc(sub(x))}</i></span></button>`;
+    const menu=(i,t)=>`<div class="lmenu" role="listbox"><div class="lab">Styles</div>${st.map(x=>opt(x,i,t)).join('')}${sk.length?`<div class="lab">Your skills</div>${sk.map(x=>opt(x,i,t)).join('')}`:''}<hr>
+      <button role="option" aria-selected="${t==='new'}" class="${t==='new'?'cur':''}" data-lto="+new" data-lrow="${i}"><span class="ck"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M7 2.5v9M2.5 7h9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></span><span class="t"><b>New style from this video</b><i>A copy of ${esc(here.name)} with these rules</i></span></button></div>`;
+    const on=rs.filter(([,i])=>!untick.has(i)),wantNew=on.some(([,i])=>pick(i)==='new'),noName=wantNew&&!lName.trim();
+    const places=[...new Set(on.map(([,i])=>nm(pick(i))))],list=places.length<2?places.join(''):places.slice(0,-1).join(', ')+' and '+places[places.length-1];
+    const rowsP=rs.map(([r,i])=>{const t=pick(i),off=untick.has(i);return `<div class="lar${off?' off':''}"><label class="lrule"><input type="checkbox" data-li="${i}"${off?'':' checked'}><span>${esc(r.rule)}.</span></label>
+      <div class="lto"><i>Saves to</i><button data-ldd="${i}" aria-haspopup="listbox" aria-expanded="${lOpen===i}"${off?' disabled':''}><span>${esc(t==='new'?nm(t):t.name)}</span>${CHV}</button></div>${lOpen===i&&!off?menu(i,t):''}</div>`}).join('');
+    return `<div class="learn"><div>${head}<p>From your notes. Claude picked where each one goes; change any that are wrong.</p></div><div class="lars">${rowsP}</div>
+      ${wantNew?`<input class="lname" maxlength="40" placeholder="Name the new style, like Podcast clips" value="${esc(lName)}" aria-label="name the new style">`:''}${lErr?`<span class="lerr">${esc(lErr)}</span>`:''}
+      ${places.length?`<p class="lsum">Updates ${esc(list)}.</p>`:''}
+      <div class="lact"><button class="go" data-lsave${!on.length||noName?' disabled':''}>Save ${plural(on.length,'rule')}</button><button class="skip" data-lskip>Not now</button></div></div>`;
   }
-  if(L.state==='chosen')return `<div class="learn">${head}${rows}<p class="wait"><i></i>Saving to ${esc((L.to&&L.to.name)||L.style)}...</p></div>`;
+  if(L.state==='chosen')return `<div class="learn">${head}${rows}<p class="wait"><i></i>Saving your rules...</p></div>`;
   if(L.receipts&&L.receipts.length){const kept=(S.receipts||[]).filter(r=>L.receipts.includes(r.id)&&!r.undone).length;
     return `<div class="learn">${head}<div class="lrules">${L.receipts.map(rcptHtml).join('')}</div><p>${kept?`Your next video uses ${kept>1?'them':'it'}. Every rule is listed on the style's page.`:'Your style stays as it was.'}</p></div>`}
   return `<div class="learn">${head}${rows}<p class="ok">${TICK}${esc(L.summary||'Saved.')}</p></div>`;
@@ -1823,12 +1841,14 @@ $('introx').onclick=()=>{introOff=true;document.body.classList.remove('intro');p
 $('list').addEventListener('click',async e=>{
   const ub=e.target.closest('[data-undo]');
   if(ub){ub.disabled=true;const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+ub.dataset.undo})});if(!r.ok)alert('That rule was already taken out.');return load(true)}
-  if(e.target.closest('[data-ldd]')){lOpen=!lOpen;return renderList()}
+  const dd=e.target.closest('[data-ldd]');
+  if(dd){const i=+dd.dataset.ldd;lOpen=lOpen===i?-1:i;return renderList()}
   const lt=e.target.closest('[data-lto]');
-  if(lt){lTo=lt.dataset.lto==='+new'?'new':lt.dataset.lto;lOpen=false;lErr='';renderList();const n=$('list').querySelector('.lname');if(n)n.focus();return}
-  if(lOpen&&!e.target.closest('.lsave')){lOpen=false;renderList()}
+  if(lt){lPick[+lt.dataset.lrow]=lt.dataset.lto==='+new'?'new':lt.dataset.lto;lOpen=-1;lErr='';renderList();const n=$('list').querySelector('.lname');if(n&&lt.dataset.lto==='+new')n.focus();return}
+  if(lOpen>=0&&!e.target.closest('.lmenu')){lOpen=-1;renderList()}
   if(e.target.closest('[data-lsave],[data-lskip]')){const L=S.learn,save=!!e.target.closest('[data-lsave]'),chosen=L.rules.map((r,i)=>i).filter(i=>!untick.has(i));
-    const body=!save?{skip:true}:lTo==='new'?{chosen,new:lName}:lTo!=null?{chosen,to:lTo}:{chosen};
+    const to={};for(const i of chosen)if(lPick[i]!=null)to[i]=lPick[i];
+    const body=!save?{skip:true}:{chosen,to,...(Object.values(to).includes('new')||chosen.some(i=>lPick[i]==null&&L.rules[i].to==='new')?{new:lName}:{})};
     const r=await fetch('/learn',{method:'POST',body:JSON.stringify(body)});
     if(!r.ok){let j={};try{j=await r.json()}catch(x){}lErr=j.error||'That did not save. Try again.';return renderList()}
     lErr='';return load(true)}

@@ -93,7 +93,9 @@ python3 "$R" edits/<name> learn --propose '[{"rule": "Logos sit beside the head,
 python3 "$R" edits/<name> learn --done      # after `wait` prints the ticked rules
 ```
 
-`why` and `replace` are optional; `set` (a taste setting) only for a settings style. `--done` writes a skill
+`why` and `replace` are optional; `set` (a taste setting) only for a settings style. `to` says where each rule
+goes, one id from the list the LEARN prompt prints (this video's style, My style, another style, or one of the
+user's skills as `skill:<name>`): the page shows it pre-picked and the user can change it. `--done` writes a skill
 style's rules into its SKILL.md and a settings style's through `styleskill.learn`. A round's
 `learn --scope this-style` does the same for a skill style (the note is the reason).
 
