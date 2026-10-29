@@ -268,6 +268,25 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .vsel:focus-within{box-shadow:0 0 0 2px var(--line2)}
 #safebtn{display:none}body.vertical #safebtn{display:inline-flex}
 
+/* the edit, tidied (body.edcalm, calm()): edit tools only on the rail, transcript left, video big, one control row, one timeline */
+#railtx{display:none}body.edcalm #railtx{display:flex}
+body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd,body.edcalm #railtog{display:none}
+body.edcalm .rtile{cursor:pointer}
+body.edcalm.staged #stagebar,body.edcalm #back,body.edcalm #fwd{display:none}
+body.edcalm .transport #cmprow{display:flex;margin-right:4px}body.edcalm.canCompare .transport #cmprow .hint{display:none}
+body.edcalm .transport .tzoom{height:32px;margin-left:8px}
+body.edcalm #tscroll{display:none}body.edcalm #edtracks{margin-top:0}
+body.edcalm.withTx.vertical #tx{order:-2;flex:0 0 360px}body.edcalm.withTx.vertical #rsztx{display:none}
+body.edcalm.withTx.vertical.txfold #tx{display:none}
+body.edcalm.withTx.vertical #pair{flex:1 1 auto}
+body.edcalm.withTx.vertical .pl{width:min(calc(100cqw - 380px),calc(100cqh * var(--arw) / var(--arh)))}
+body.edcalm.withTx.vertical.txfold .pl{width:min(100cqw,calc(100cqh * var(--arw) / var(--arh)))}
+body.edcalm #mute,body.edcalm #safebtn,body.edcalm #full{width:32px;padding:0;font-size:0;justify-content:center}
+body.edcalm #mute::before,body.edcalm #safebtn::before,body.edcalm #full::before{content:"";width:16px;height:16px;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat}
+#mute{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9v6h4l5 4V5L8 9H4z'/%3E%3Cpath d='M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12'/%3E%3C/svg%3E")}
+#mute.off{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9v6h4l5 4V5L8 9H4z'/%3E%3Cpath d='M17 9l5 6M22 9l-5 6'/%3E%3C/svg%3E")}
+#safebtn{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'%3E%3Crect x='5' y='3' width='14' height='18' rx='2'/%3E%3Crect x='8' y='7' width='8' height='9' rx='1' stroke-dasharray='2 2'/%3E%3C/svg%3E")}
+#full{--ic:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5'/%3E%3C/svg%3E")}
 /* the scrubber: split at cut points (or chapters), numbered note pins above, the edit's cards and zooms under it */
 .timeline{flex-shrink:0;display:flex;flex-direction:column;gap:6px}
 .trow{display:flex;align-items:center;gap:12px}
@@ -308,8 +327,9 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 #edtracks{margin-top:12px}#edtracks:empty{display:none}
 .edwrap{display:flex}
 .edleft{width:84px;flex-shrink:0;display:flex;flex-direction:column;gap:6px;padding:30px 8px 0 0}
-.edleft button{height:30px;border-radius:7px;border:1px dashed var(--line2);font-size:12px;font-weight:600;color:var(--body);text-align:left;padding:0 8px;white-space:nowrap}
-.edleft button:hover{border-color:var(--ink);color:var(--ink)}
+.ehd{height:30px;display:flex;align-items:center;justify-content:space-between;gap:4px;padding-left:4px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.ehd button{width:24px;height:24px;border-radius:6px;display:grid;place-items:center;font-size:16px;line-height:1;color:var(--muted)}.ehd button:hover{background:var(--hover);color:var(--ink)}
+.ehd svg{width:14px;height:14px;pointer-events:none}
 .edright{flex:1;min-width:0;position:relative}
 .escroll{overflow-x:auto;overflow-y:visible;padding-top:8px}
 .einner{position:relative;width:calc(var(--zm,1)*100%)}
@@ -317,7 +337,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 .etrack{position:relative;height:30px;margin-top:6px;border-radius:6px;background:var(--rail);cursor:pointer}
 .eitem{position:absolute;top:3px;height:24px;border-radius:5px;border:1px solid var(--line2);display:flex;align-items:center;font-size:11px;line-height:14px;font-weight:600;cursor:pointer;min-width:10px}
 .eitem.txt{background:#4B3E91;border-color:#6E5FD0;color:#FFFFFF;padding:0 6px}.eitem.txt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.eitem.cap{background:#7A5B12;border-color:#B88A1F;color:#FFFFFF;padding:0 6px}.eitem.cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
+.eitem.cap{background:#3F3B36;border-color:#5C5750;color:#E7E5E4;padding:0 6px}.eitem.cap.sel{background:#7A5B12}.eitem.cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
 .eitem.snd{background:#1F5C4A;border-color:#2F8C6F;color:#FFFFFF;overflow:hidden}
 .eitem.snd svg.wv{position:absolute;inset:2px 0;width:100%;height:calc(100% - 4px)}
 .eitem.snd.narrow span{display:none}.eitem.snd.narrow:hover span{display:block;position:absolute;bottom:28px;left:0;background:var(--ink);color:var(--onink);border-radius:5px;padding:2px 6px}
@@ -809,6 +829,7 @@ body.making #making{display:flex}
  <a class="ritem" data-home data-view="mystyle" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/></svg></i>Styles</a>
  <a class="ritem" data-home data-view="skills" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M13 3 5 13.5h6l-1 7.5 8-10.5h-6z"/></svg></i>Skills</a>
  <div class="rdiv" id="railtools" hidden></div>
+ <button class="ritem rtool" id="railtx" type="button" title="The transcript: cut words out"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h9"/></svg></i>Transcript</button>
  <button class="ritem rtool" id="railmed" type="button" hidden title="Media: your images and videos, drag one onto the video"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-9 9"/></svg></i>Media</button>
  <button class="ritem rtool" id="railtext" type="button" hidden title="Text on the video"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 6V4h14v2M12 4v16M9 20h6"/></svg></i>Text</button>
  <button class="ritem rtool" id="railcap" type="button" hidden title="Captions: words at a time and the look"><i><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M7 15h4M13 15h4M7 11h10"/></svg></i>Captions</button>
@@ -1196,7 +1217,7 @@ function render(){
   if(PEND.length&&isCur()){ap.disabled=true;ap.className=''}
   ap.title=mine>0?'send or delete your notes before you approve':PEND.length?'apply or discard your transcript changes first':'';
   const fin=!mk&&p==='approve'&&isCur()&&(S.stage==='edit'&&!S.stills||S.final);   // the last approve: done, in green
-  if(mk||fin){ap.innerHTML=TICK+(mk?(S.stills?'Preview approved':'Cut approved'):'Approved');ap.className='approved';ap.disabled=true;ap.title=''}
+  if(mk||fin||undoAp){ap.innerHTML=TICK+(mk?(S.stills?'Preview approved':'Cut approved'):'Approved');ap.className='approved';ap.disabled=true;ap.title=''}   // approved and not picked up yet: never Approve beside Undo approve
   $('dl').hidden=!fin;$('dl').href='/download'+(alt?'?alt='+encodeURIComponent(alt):'');   // the finished video, named after it and its style
   sb.style.display=fin&&!undoAp?'none':'';
   if(matchMedia('(max-width:760px)').matches)$('mapprove').textContent=mk?(S.stills?'Preview approved':'Cut approved'):fin?'Approved':'Approve';else $('mapprove').innerHTML=ap.innerHTML;
@@ -1293,11 +1314,18 @@ function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';
   return `<svg class="wv" viewBox="0 0 ${n} 20" preserveAspectRatio="none" aria-hidden="true">${peaks.map((v,i)=>`<rect x="${i+.15}" y="${(10-Math.max(.6,v*9)).toFixed(2)}" width=".7" height="${(Math.max(.6,v*9)*2).toFixed(2)}" fill="rgba(255,255,255,.55)"/>`).join('')}</svg>`}
 // a caption line as it will read: its words with the retyped ones (overrides.json words) in place
 // a caption line as it will read: being typed (capTyping, by its start) wins, then the retyped words (overrides.json words)
+// the edit, tidied like CapCut: the app's pages leave the rail (the logo goes home), the transcript is a left panel,
+// the video big in the middle, one row of controls (Watch/Compare and the zoom move into it), one timeline
+function calm(on){if(document.body.classList.contains('edcalm')===on)return;document.body.classList.toggle('edcalm',on);
+  const tr=document.querySelector('.transport'),z=document.querySelector('.tzoom'),c=$('cmprow');
+  if(on){tr.insertBefore(c,$('speed').nextSibling);tr.appendChild(z)}else{$('stage').before(c);$('timeline').prepend(z)}}
+document.querySelector('.rtile').onclick=()=>{if(document.body.classList.contains('edcalm'))$('homebtn').click()};
+$('railtx').onclick=()=>$('txfold').click();
 const capTyping={};
 function capText(c){if(c&&capTyping[c.s]!=null)return {text:capTyping[c.s],edited:true};const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};
   const orig=c.text.split(/\s+/);return {text:c.w.map((k,i)=>k in cw?cw[k]:orig[i]||'').filter(Boolean).join(' '),edited:true}}
 function renderEdTracks(){const E=$('edtracks'),T=D();
-  const on=!!(S&&view&&view.stage==='edit'&&noteOk()&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);
+  const on=!!(S&&view&&view.stage==='edit'&&noteOk()&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
   if(!on){E.innerHTML='';E._h='';return}
   const pc=t=>Math.max(0,Math.min(100,t/T*100)),it=data().items||{};
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
@@ -1314,7 +1342,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const vsps=cuts().splits.filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
   const said=(a,b)=>W.filter(w=>w.t!=null&&w.t>=a&&w.t<b).map(w=>w.w).join(' ');
   const vids=vpieces().map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':said(x.a,x.b)||fmtx(x.b-x.a))}</span></div>`).join('');
-  const h=`<div class="edwrap"><div class="edleft"><button id="vsplit" title="Split the video at the playhead (s)">Split</button><span class="edlab">Images</span><button id="addtx" title="Add a text at the playhead">+ Text</button><button id="capedit" title="Edit the captions">Captions</button><button id="addsnd" title="Add one of your sounds at the playhead">+ Sound</button></div>
+  const h=`<div class="edwrap"><div class="edleft"><div class="ehd"><span>Video</span><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div><div class="ehd"><span>Images</span></div><div class="ehd"><span>Text</span><button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button></div><div class="ehd"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div><div class="ehd"><span>Sounds</span><button id="addsnd" title="Add one of your sounds at the playhead" aria-label="add a sound at the playhead">+</button></div></div>
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
     <div class="etrack" data-row="vid">${vids}${vsps}</div><div class="etrack" data-row="img">${imgs}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
@@ -2164,7 +2192,7 @@ $('back').onclick=()=>v.currentTime-=5;$('fwd').onclick=()=>v.currentTime+=5;
 function setSpeed(x){speed=x;v.playbackRate=x;try{localStorage.setItem('review-speed',x)}catch(e){}$('speed').textContent=x+'x'}
 $('speed').onclick=()=>setSpeed(SPEEDS[(SPEEDS.indexOf(speed)+1)%SPEEDS.length]);setSpeed(speed);
 v.addEventListener('loadedmetadata',()=>{v.playbackRate=speed;setZoom(zm);renderTracks();renderEdTracks()});
-$('mute').onclick=()=>{v.muted=!v.muted;$('mute').textContent=v.muted?'Muted':'Sound'};
+$('mute').onclick=()=>{v.muted=!v.muted;$('mute').textContent=v.muted?'Muted':'Sound';$('mute').classList.toggle('off',v.muted)};
 const PL=document.querySelector('#p1 .player');
 $('full').onclick=()=>document.fullscreenElement?document.exitFullscreen():PL.requestFullscreen();
 // full screen: the player with its own bar; scrub with a time under the cursor, the bar hides after 2 s still while playing
@@ -2233,7 +2261,9 @@ $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if
 let csel=null;   // {x: the card (review.py screen_items), box, orig} in % of the frame
 let lastPick=null,tlOpen=false;   // tlOpen: a text opened from its timeline clip gets no caret
 // Delete over a timeline clip takes that clip out, picked or not (the mouse wins over the last pick)
-function hoverDel(){const it=document.querySelector('#edtracks .eitem:hover');if(!it||it.classList.contains('gone'))return false;
+let hoverMoved=true;document.addEventListener('pointerdown',()=>{hoverMoved=false},true);document.addEventListener('pointermove',()=>{hoverMoved=true},true);
+function hoverDel(){if(lastPick&&!hoverMoved)return false;   // a click can scroll the rows: the clip under a still mouse is not the one picked
+  const it=document.querySelector('#edtracks .eitem:hover');if(!it||it.classList.contains('gone'))return false;
   if(it.dataset.sp2&&placed(it.dataset.sp2)){$('sndpick').hidden=true;delSnd(placed(it.dataset.sp2));return true}   // its popover goes too
   if(it.dataset.et&&it.querySelector('[data-ex]')){delText(it.dataset.et,!!it.dataset.ef);return true}   // not a text Claude has
   if(it.dataset.ec!=null){saveCapLine(((data().items||{}).captions||[])[+it.dataset.ec],'');return true}
@@ -2769,7 +2799,7 @@ OS.addEventListener('change',themeIcon);themeIcon();
 load();setInterval(load,3000);
 
 // the transcript folds to its header; the player takes the room. Kept in this browser
-{const set=x=>{document.body.classList.toggle('txfold',x);const b=$('txfold');b.title=x?'Show transcript':'Hide transcript';b.setAttribute('aria-label',b.title.toLowerCase());b.setAttribute('aria-expanded',String(!x));if(x){txSel=null;hideBar()}try{localStorage.setItem('rsz:txfold',x?'1':'')}catch(e){}dispatchEvent(new Event('resize'))};
+{const set=x=>{document.body.classList.toggle('txfold',x);$('railtx').classList.toggle('on',!x);const b=$('txfold');b.title=x?'Show transcript':'Hide transcript';b.setAttribute('aria-label',b.title.toLowerCase());b.setAttribute('aria-expanded',String(!x));if(x){txSel=null;hideBar()}try{localStorage.setItem('rsz:txfold',x?'1':'')}catch(e){}dispatchEvent(new Event('resize'))};
   let f=false;try{f=localStorage.getItem('rsz:txfold')==='1'}catch(e){}set(f);$('txfold').onclick=()=>set(!document.body.classList.contains('txfold'))}
 // drag handles (.rsz): sizes as CSS variables on <html>, kept in this browser; double-click puts one back
 (()=>{const R=document.documentElement.style,K='rsz:';
