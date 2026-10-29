@@ -273,7 +273,7 @@ body.dz #dropov{display:none!important}
 .pchip button{width:22px;height:22px;border:0;background:none;color:var(--t3);display:grid;place-items:center;flex-shrink:0;cursor:pointer}.pchip button:hover{color:var(--ink)}
 .cpick{border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;min-width:0}
 .cpick .bseg{overflow-x:auto}.cpick .bseg button{flex:1 0 auto;padding:0 12px;white-space:nowrap}
-.cgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(104px,100%),1fr));gap:8px;max-height:320px;overflow:auto}
+.cpick{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(104px,100%),1fr));gap:8px;max-height:320px;overflow:auto}   /* the clip picker; not .cgrid, the Styles rows */
 .ctile{position:relative;min-width:0;padding:0;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:var(--panel);text-align:left;color:var(--ink);cursor:pointer}
 .ctile.on{border:1.5px solid var(--ink)}
 .ctile .cp{display:block;position:relative;aspect-ratio:16/9;background:#222 center/cover}
@@ -1411,7 +1411,7 @@ function pickerSec(){
   return `<div class="cpick"><div class="between"><b style="font-size:14px">Pick clips</b><button class="btn quiet sm" style="height:30px;padding:0 12px;font-size:13px" onclick="nv.bpick=null;render()">Done</button></div>
     ${libs.length>1?`<div class="bseg" role="tablist">${libs.map(l=>`<button role="tab" aria-selected="${l.name===n}" class="${l.name===n?'on':''}" onclick="loadPick(${J(l.name)})">${esc(l.name)}</button>`).join('')}</div>`:''}
     <label class="bsrch">${SRCH}<input id="bcq" placeholder="Search clips" value="${esc(nv.bq)}" oninput="nv.bq=this.value;render()" aria-label="Search clips"></label>
-    ${!cs?'<div class="muted">Loading...</div>':shown.length?`<div class="cgrid">${shown.map(tile).join('')}</div>`:`<div class="muted">${q?'No clip has that name.':'No clips in this folder.'}</div>`}
+    ${!cs?'<div class="muted">Loading...</div>':shown.length?`<div class="cpick">${shown.map(tile).join('')}</div>`:`<div class="muted">${q?'No clip has that name.':'No clips in this folder.'}</div>`}
     <div class="muted" style="font-size:13px">Ticked clips go in for sure. Claude still picks the rest from the folders above.</div></div>`;
 }
 function clipsBlk(){

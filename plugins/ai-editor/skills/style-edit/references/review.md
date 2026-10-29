@@ -100,18 +100,29 @@ issue as the taste skill does (`taste.py issue`). `round` lists notes not learne
 
 The edit's approve (or the cut's, after `final`) ends the video. Its `LEARN:` block replaces the one
 above: it lists every note of the session with your replies, and the page shows "Teach <style> from
-this video" with "Claude is reading your notes...". Turn them into at most 6 one-line rules
-("Captions one size smaller", "Fewer zooms in the first 5 s"), leaving out one-off fixes, and post them:
+this video" with "Claude is reading your notes...". It also sums up the user's hands-on edits on the page
+(every move, resize, font, caption, cut and sound change is a row in `corrections.jsonl` with `from` and `to`;
+`edit_patterns` keeps only 2+ alike edits or a changed look setting), one line each, like "moved 4 of 5 cards up
+by about 12% of the frame [visuals]" or "made captions 19% bigger (size 3.6 -> 4.3) [captions] [set
+captions.size_pct=4.3]". Turn notes and edits into at most 8 one-line rules ("Captions one size smaller",
+"Fewer zooms in the first 5 s"), leaving out one-off fixes; copy a given `[set ...]` into the rule's `set` as
+it is, so the next draft changes (the card shows "Sets caption size to 4.3" under it). Post them:
 
 ```bash
 python3 "$R" edits/<name> learn --propose '[{"rule": "Captions one size smaller", "section": "captions", "set": "captions.size_pct=4.5"}]'
 ```
 
-`[]` when none is about the style; `set` only when a taste setting maps. Run `wait` again. The user
-ticks rules and presses Update my style (or Not now). `wait` prints the ticked rules; then
+`[]` when none is about the style; `set` only when a taste setting maps; `to` on each rule: where it belongs, an
+id from the LEARN prompt's list (this video's style, My style, a style, or a skill `skill:<name>`). Run `wait`
+again. The user ticks rules, changes any pick, and presses Save (or Not now). `wait` prints the ticked rules; then
 `learn --done` saves them with `styleskill.learn` into the style the edit used (one creator style,
-else My style) and the page says "Saved to <style>. Next video uses it." No notes all session: the
-page says so and LEARN asks nothing. Round 1 of the user's first 3 videos also shows a one-time line:
+else My style) and the page says "Saved to <style>. Next video uses it." No notes or edits all session:
+the page says so and LEARN asks nothing.
+
+Each draft then lists the rules it used: taste.py records the rule ids each run handed over
+(`rules-applied.json`: plan.py and the cut's settings, `taste.py show --edit` for word rules), `round` puts them
+on the round's data, and the notes panel shows "This draft used N of your rules" with each rule, where it lives,
+what it set, and Turn off (`taste.py off <id>`: kept, its setting and taste.md line come out; Turn on puts them back). Round 1 of the user's first 3 videos also shows a one-time line:
 their first videos teach it their style (dismissed for good with Got it; count in `ui.json`).
 
 With no `wait` running the page says Claude is not listening, and notes still save. The next

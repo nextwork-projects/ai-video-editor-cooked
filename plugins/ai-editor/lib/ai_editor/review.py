@@ -319,8 +319,13 @@ def round_data(folder, video, stage, rnd, plan, prev=None):
                                         music=snap_sha(folder, prev.get("snap")) != music_sha(folder))
         if old.get("duration") and dur and abs(old["duration"] - dur) >= 0.1:
             d["changes"].append({"t": None, "text": f"{abs(old['duration'] - dur):.1f} s {'shorter' if dur < old['duration'] else 'longer'}"})
+    try:   # the rules this draft used: what plan.py, the cut and Claude's taste read handed over (taste.record)
+        from ai_editor import taste
+        d["rules"] = taste.applied_ids(folder)
+    except Exception:
+        pass
     name = f"data-{stage}{rnd}.json"
-    (folder / "review" / name).write_text(json.dumps(d), encoding="utf-8")
+    save(folder / "review" / name, d)
     return name
 
 
@@ -339,21 +344,35 @@ def card_key(c):
 CAP_GROUPS = {"1": 1, "3": 3, "5": 5, "sentence": 12}   # the Captions panel's words at a time (12: breaks at the sentence's own commas and stops)
 
 
-def captions_info(folder):
+CAP_STYLE = {"size": ("size_pct", 2, 12), "y": ("y_pct", 15, 85), "color": ("color",), "highlight": ("highlight_color",)}   # the panel's style rows
+
+
+def captions_info(folder, plan=None):
     """The Captions panel: the looks (presets.py, built in then the user's) and this video's words at a time and look,
-    from taste (this video's settings win, as plan.py reads them)."""
+    from taste (this video's settings win, as plan.py reads them); "base" the caption style in the draft (its plan), and
+    "mine" this video's own size, place and colours, which the page draws over the video until a draft has them."""
     from ai_editor import presets, taste
     looks = {k: {f: v.get(f) for f in ("size_pct", "weight", "case", "color", "stroke", "stroke_color", "box", "box_color",
-                                     "shadow", "highlight_color", "words_per_caption") if v.get(f) is not None}
+                                     "shadow", "highlight_color", "words_per_caption", "font_match") if v.get(f) is not None}
              for k, v in presets.captions().items()}
     cap = (taste.load_json(folder, count=False) or {}).get("captions") or {}
     n = cap.get("words_per_caption")
-    return {"looks": looks, "look": cap.get("preset"),
+    keys = {f"captions.{k[0]}" for k in CAP_STYLE.values()}
+    mine = {r["setting"][9:]: r["value"] for r in taste.load_rules() if r.get("scope") == f"video:{folder.name}" and r.get("setting") in keys} \
+        if taste.rules_path().exists() else {}
+    try:
+        st = (load(plan).get("captions") or {}).get("style") or {} if plan else {}
+    except (OSError, ValueError):
+        st = {}
+    base = {f: st[f] for f in ("size_pct", "y_pct", "width_pct", "weight", "case", "color", "highlight_color", "stroke", "box",
+                               "box_color", "shadow", "font_match", "style") if st.get(f) is not None}
+    return {"looks": looks, "look": cap.get("preset"), "base": base, "mine": mine,
             "words": next((k for k, v in CAP_GROUPS.items() if v == n), str(n) if n else None)}
 
 
-def set_captions(folder, words=None, look=None):
-    """Save the Captions panel's choice for this video only (taste scope video:<name>), the way the taste skill does."""
+def set_captions(folder, words=None, look=None, style=None):
+    """Save the Captions panel's choice for this video only (taste scope video:<name>), the way the taste skill does.
+    style: {"size", "y", "color", "highlight"} (CAP_STYLE), each one a setting plan.py lays over the look."""
     from ai_editor import presets, taste
     said = []
     if words is not None:
@@ -369,6 +388,21 @@ def set_captions(folder, words=None, look=None):
         taste.add("Captions", f"Captions look: {look}", "captions.preset", look, scope=f"video:{folder.name}", edit=str(folder),
                   source="review")
         said.append(f"the {look} look")
+    for k, (key, *lim) in CAP_STYLE.items():
+        v = (style or {}).get(k)
+        if v is None:
+            continue
+        if lim:
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not lim[0] <= v <= lim[1]:
+                raise ValueError(f"{k}: a number from {lim[0]} to {lim[1]}")
+            v = round(float(v), 1 if k == "size" else None)   # the place in whole percent, as the slider moves it
+        elif not isinstance(v, str) or not presets.HEX.fullmatch(v):
+            raise ValueError(f"{k}: a colour like #FFD60A")
+        else:
+            v = v.upper()
+        what = {"size": f"size {v}", "y": f"{v}% down the frame", "color": f"colour {v}", "highlight": f"highlight {v}"}[k]
+        taste.add("Captions", f"Captions {what}", f"captions.{key}", v, scope=f"video:{folder.name}", edit=str(folder), source="review")
+        said.append(what)
     return said
 
 
@@ -383,11 +417,59 @@ def sounds_info():
     """The Sounds panel: each moment that can have a sound, what plays there now, and the user's own files."""
     sfx = sfx_mod()
     c = sfx.choices()
+    own = sfx.own_sounds()
     return {"cues": [{"cue": k, "label": sfx.LABELS[k][0], "when": sfx.LABELS[k][1], "choice": c[k]} for k in sfx.LABELS],
-            "own": sfx.own_sounds()}
+            "own": own, "own_len": {n: sound_shape(sfx.library_dir() / n, n=8).get("d") for n in own}}
 
 
 SOUND_MAX_MB = 10
+LIBRARY_MAX_MB = 100   # a sound file put in the library from the Sounds panel (a song fits)
+
+
+def library_upload(name, stream, n):
+    """One sound file into the sound library (custom/sounds, kept for every video), streamed. Returns its saved name;
+    ValueError with the words to show."""
+    sfx = sfx_mod()
+    name = re.sub(r"[^A-Za-z0-9._ -]", "", Path(str(name or "")).name).strip()[:80]
+    if not name or Path(name).suffix.lower() not in sfx.SOUND_EXT:
+        raise ValueError("Add a sound file: wav, mp3, m4a, aac, flac, ogg or opus.")
+    if not 0 < n <= LIBRARY_MAX_MB * 1024 * 1024:
+        raise ValueError(f"Sounds under {LIBRARY_MAX_MB} MB only.")
+    lib = sfx.library_dir()
+    lib.mkdir(parents=True, exist_ok=True)
+    out, k = lib / name, 1
+    while out.exists():
+        out, k = lib / f"{Path(name).stem} {k}{Path(name).suffix}", k + 1
+    tmp, left = out.with_name("." + out.name + ".part"), n
+    with open(tmp, "wb") as f:
+        while left > 0:
+            b = stream.read(min(1 << 20, left))
+            if not b:
+                break
+            f.write(b)
+            left -= len(b)
+    if left:
+        tmp.unlink(missing_ok=True)
+        raise ValueError("The upload stopped part way. Add it again.")
+    os.replace(tmp, out)
+    if not sound_shape(out, n=8).get("d"):
+        out.unlink(missing_ok=True)
+        raise ValueError(f"{name} did not play as audio.")
+    return out.name
+
+
+def library_remove(name):
+    """A sound out of the library, into custom/sounds/.removed (kept, not deleted); a moment that used it goes back
+    to the built-in sound."""
+    sfx = sfx_mod()
+    if name not in sfx.own_sounds():
+        raise ValueError("That sound is not in your library.")
+    lib = sfx.library_dir()
+    (lib / ".removed").mkdir(exist_ok=True)
+    os.replace(lib / name, lib / ".removed" / name)
+    for cue, pick in sfx.choices().items():
+        if pick == name:
+            sfx.choose(cue, "default")
 
 
 def placed_raw(folder):
@@ -397,10 +479,53 @@ def placed_raw(folder):
 
 
 def placed_sounds(folder):
-    """placed_raw with each sound's length and waveform, for the page."""
+    """placed_raw with each sound's length and waveform, for the page. A dropped audio file (kind "clip") is its whole
+    file's: the page draws its in..in+dur part."""
     items = placed_raw(folder)
     lib = sfx_mod().library_dir()
-    return [{**x, **sound_shape(lib / x["sound"], cap=sfx_mod().MAX_OWN_S)} for x in items if isinstance(x, dict) and "sound" in x]
+    return [{**x, **(sound_shape(Path(folder) / "audio" / x["sound"], n=240) if x.get("kind") == "clip"
+                     else sound_shape(lib / x["sound"], cap=sfx_mod().MAX_OWN_S))} for x in items if isinstance(x, dict) and "sound" in x]
+
+
+AUDIO_MAX_MB = 200   # a song dropped on the timeline
+
+
+def save_audio(folder, name, stream, n, t, dur_of):
+    """One audio file dropped on the timeline: n bytes into <edit>/audio/, and a sounds.json clip at t for its length
+    (up to the video's end). Returns the item; ValueError with the words to show."""
+    sfx = sfx_mod()
+    name = re.sub(r"[^A-Za-z0-9._ -]", "", Path(str(name or "")).name).strip()[:80]
+    if not name or Path(name).suffix.lower() not in sfx.SOUND_EXT:
+        raise ValueError("Drop an audio file: wav, mp3, m4a, aac, flac, ogg or opus.")
+    if not 0 < n <= AUDIO_MAX_MB * 1024 * 1024:
+        raise ValueError(f"Audio under {AUDIO_MAX_MB} MB only.")
+    d = Path(folder) / "audio"
+    d.mkdir(exist_ok=True)
+    out, k = d / name, 1
+    while out.exists():   # never over another clip's file
+        out, k = d / f"{Path(name).stem}-{k}{Path(name).suffix}", k + 1
+    tmp, left = out.with_name(out.name + ".part"), n
+    with open(tmp, "wb") as f:
+        while left > 0:
+            b = stream.read(min(1 << 20, left))
+            if not b:
+                break
+            f.write(b)
+            left -= len(b)
+    if left:
+        tmp.unlink(missing_ok=True)
+        raise ValueError("The upload stopped part way. Drop it again.")
+    os.replace(tmp, out)
+    length = sound_shape(out, n=240).get("d")
+    if not length:
+        out.unlink(missing_ok=True)
+        raise ValueError(f"{name} did not play as audio.")
+    t = round(max(0.0, t), 2)
+    x = {"id": secrets.token_hex(4), "t": t, "sound": out.name, "kind": "clip", "in": 0.0,
+         "dur": round(max(0.1, min(length, dur_of - t if dur_of else length)), 2), "vol": 1.0}
+    f = Path(folder) / "sounds.json"
+    save(f, {"items": placed_raw(folder) + [x]})
+    return x
 
 
 _SHAPE = {}
@@ -447,13 +572,213 @@ def caption_words(starts, text):
 
 def card_override(folder, key, change):
     """The video page's move, resize or delete of a card into <edit>/overrides.json (preview.py apply_overrides,
-    which plan.py runs after planning, so a re-plan keeps it). change: {"box": [x, y, w, h]} or {"deleted": True}."""
+    which plan.py runs after planning, so a re-plan keeps it). change: {"box": [x, y, w, h]}, {"start", "end"} or {"deleted": True}."""
     f = Path(folder) / "overrides.json"
     ov = load(f) if f.exists() else {}
     cards = ov.setdefault("cards", {})
     cards[key] = {**(cards.get(key) or {}), **change}
-    f.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+    save(f, ov)
     return cards[key]
+
+
+def log_edit(folder, change, target, frm, to, what=""):
+    """One hands-on edit on the page as a correction in <edit>/corrections.jsonl, the file preview.py writes
+    ({change, target, from, to, what}), with source "review" and the stage and round it was made on. edit_patterns
+    sums them up at the final approve, so what the user did teaches the style as well as what they typed."""
+    folder = Path(folder)
+    try:
+        d = load(folder / "review.json")
+    except (OSError, ValueError):
+        d = {}
+    row = {"at": now(), "source": "review", "stage": d.get("stage"), "round": d.get("round"), "change": change,
+           "target": str(target), "from": frm, "to": to, "what": what}
+    with contextlib.suppress(OSError), open(folder / "corrections.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps(row) + "\n")
+
+
+def edit_events(folder):
+    """The page's own rows of corrections.jsonl (preview.py's rows have another shape and stay out)."""
+    try:
+        rows = [json.loads(x) for x in (Path(folder) / "corrections.jsonl").read_text(encoding="utf-8").splitlines() if x.strip()]
+    except (OSError, ValueError):
+        return []
+    return [r for r in rows if isinstance(r, dict) and r.get("source") == "review" and r.get("change")]
+
+
+def card_was(folder, key, plan=None):
+    """A card's box before a move: its last move (overrides.json), a dropped card's own box, else where the plan has it."""
+    f = Path(folder) / "overrides.json"
+    ov = load(f) if f.exists() else {}
+    box = ((ov.get("cards") or {}).get(key) or {}).get("box") or next(
+        (a.get("box") for a in ov.get("added_cards") or [] if a.get("key") == key), None)
+    if box:
+        return box
+    try:
+        p = load(Path(plan) if plan else Path(folder) / "plan.json")
+    except (OSError, ValueError, TypeError):
+        return None
+    for c in p.get("cards") or []:
+        if "start" in c and card_key(c) == key:
+            return c["box"] if isinstance(c.get("box"), list) and len(c["box"]) == 4 else [0, 0, 100, 50] if c.get("layout") == "split" else [0, 0, 100, 100]
+    return None
+
+
+# what a taste setting is called on the learn card and in the rules a draft used ("sets caption size to 4.3")
+SET_WORDS = {"captions.size_pct": ("caption size", ""), "captions.y_pct": ("caption place", "% down the frame"),
+             "captions.words_per_caption": ("words a caption", ""), "captions.color": ("caption colour", ""),
+             "captions.highlight_color": ("caption highlight", ""), "captions.preset": ("caption look", ""),
+             "cut.max_pause": ("pause length", " s"), "cut.max_pause_wide": ("pause length on wide videos", " s"),
+             "zoom.per_min": ("zooms a minute", ""), "cards.per_min": ("cards a minute", ""), "sfx": ("sound effects", ""),
+             "layout.mode": ("layout", "")}
+
+
+def set_words(setting, value):
+    """"caption size to 4.3" for captions.size_pct = 4.3 (SET_WORDS), the key itself for one not listed."""
+    what, unit = SET_WORDS.get(setting, (setting, ""))
+    v = {True: "on", False: "off"}.get(value, value) if isinstance(value, bool) else value
+    return f"{what} to {v}{unit}"
+
+
+def set_text(st):
+    """A proposed rule's "set" ("captions.size_pct=4.3") as the card says it: "sets caption size to 4.3"."""
+    from ai_editor import taste
+    k, _, raw = (st or "").partition("=")
+    return f"sets {set_words(k, taste.parse(raw))}" if k and raw else ""
+
+
+def edit_patterns(events, ctx=None):
+    """The page's hands-on edits (log_edit rows) summed up into candidate rules, deterministically, for the LEARN
+    prompt: [{"line", "section", "n", "set"}]. Conservative: a pattern needs 2+ alike edits, or a look setting that
+    was changed (captions, a song's level); one-off fixes (a word retyped, a card retimed) never count.
+    ctx: {"cards": cards in the draft, "duration": seconds}, for "4 of 5 cards" and a cards-a-minute setting."""
+    import statistics
+    from collections import Counter
+    ctx, out = ctx or {}, []
+    put = lambda line, section, n, st=None: out.append({"line": line, "section": section, "n": n, "set": st})
+    num = lambda v: v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+    box = lambda b: b if isinstance(b, list) and len(b) == 4 and all(num(v) is not None for v in b) else None
+    # cards: each card's first box to its last; the ones taken out count apart
+    first, last, gone = {}, {}, set()
+    for e in events:
+        if e["change"] == "card.move" and box(e.get("to")):
+            if box(e.get("from")):
+                first.setdefault(e["target"], e["from"])
+            last[e["target"]] = e["to"]
+        elif e["change"] == "card.delete":
+            gone.add(e["target"])
+    moved = {k: (first[k], last[k]) for k in last if k in first and k not in gone}
+    total = max(int(ctx.get("cards") or 0), len(moved) + len(gone))
+    cy = lambda b: b[1] + b[3] / 2
+    for word, sign in (("up", -1), ("down", 1)):
+        ds = [abs(cy(b) - cy(a)) for a, b in moved.values() if sign * (cy(b) - cy(a)) >= 3]
+        if len(ds) >= 2 and 2 * len(ds) > len(moved):
+            put(f"moved {len(ds)} of {total} cards {word} by about {round(statistics.median(ds))}% of the frame", "visuals", len(ds))
+    for word, wide, ok in (("bigger", "wider", lambda r: r >= 1.1), ("smaller", "narrower", lambda r: r <= 0.9)):
+        rs = [b[2] / a[2] for a, b in moved.values() if a[2] and ok(b[2] / a[2])]
+        if len(rs) >= 2 and 2 * len(rs) > len(moved):
+            put(f"made {len(rs)} of {total} cards {word} (about {round(abs(statistics.median(rs) - 1) * 100)}% {wide})", "visuals", len(rs))
+    if len(gone) >= 2:
+        dur, n = float(ctx.get("duration") or 0), int(ctx.get("cards") or 0)
+        per = round((n - len(gone)) / (dur / 60), 1) if dur >= 20 and n > len(gone) else None
+        put(f"took out {len(gone)} of {total} cards", "visuals", len(gone), f"cards.per_min={per}" if per else None)
+    # captions: a look setting changed is a pattern on its own; first value seen to the last one set
+    cap = {}
+    for e in events:
+        if e["change"].startswith("captions."):
+            cap.setdefault(e["change"][9:], [e.get("from"), None])[1] = e.get("to")
+    for k, (a, b) in cap.items():
+        if b is None or a == b:
+            continue
+        if k == "size_pct" and num(b):
+            line = (f"made captions {round(abs(b - a) / a * 100)}% {'bigger' if b > a else 'smaller'} (size {a} -> {b})"
+                    if num(a) else f"set the caption size to {b}")
+        elif k == "y_pct" and num(b):
+            line = f"moved captions {'up' if b < a else 'down'} ({a}% -> {b}% down the frame)" if num(a) else f"put captions {b}% down the frame"
+        elif k == "words_per_caption" and num(b):
+            line = "showed captions a sentence at a time" if b >= 12 else f"showed captions {b} word{'' if b == 1 else 's'} at a time"
+        elif k in ("color", "highlight_color"):
+            line = f"changed the caption {'colour' if k == 'color' else 'highlight'} to {b}"
+        elif k == "preset":
+            line = f"picked the {b} caption look"
+        else:
+            continue
+        put(line, "captions", 1, f"captions.{k}={b}")
+    # on-screen texts: each one as it is now; a font, look or colour picked for most of them (2+)
+    rows = {}
+    for e in events:
+        if e["change"] in ("text.add", "text.edit") and isinstance(e.get("to"), dict):
+            rows[e["target"]] = e["to"]
+        elif e["change"] == "text.delete":
+            rows.pop(e["target"], None)
+    rs = list(rows.values())
+    for key, default, say in (("font", "TikTok Sans", "picked {v} for {n} of {t} texts"),
+                              ("style", "outline", "used the {v} text look for {n} of {t} texts"),
+                              ("color", "#FFFFFF", "made {n} of {t} texts {v}")):
+        if len(rs) < 2:
+            break
+        v, n = Counter(r.get(key) or default for r in rs).most_common(1)[0]
+        if v != default and n >= 2 and 3 * n >= 2 * len(rs):
+            put(say.format(v=v, n=n, t=len(rs)), "visuals", n)
+    big = [r["size_pct"] for r in rs if num(r.get("size_pct"))]
+    if len(big) >= 2 and len(big) == len(rs):
+        m = statistics.median(big)
+        if abs(m - TEXT_SIZE) / TEXT_SIZE >= 0.15 and all((x > TEXT_SIZE) == (m > TEXT_SIZE) for x in big):
+            put(f"made {len(big)} of {len(rs)} texts {'bigger' if m > TEXT_SIZE else 'smaller'} (size {TEXT_SIZE:g} -> {m:g})", "visuals", len(big))
+    # cuts on the timeline: pieces with no words in them are pauses the cut left (put back ones do not count)
+    back = {tuple(e["from"]) for e in events if e["change"] == "cut.restore" and isinstance(e.get("from"), list)}
+    pauses = [b - a for e in events if e["change"] == "cut.piece" and isinstance(e.get("to"), list) and len(e["to"]) == 2
+              and tuple(e["to"]) not in back and not str(e.get("what") or "").strip() for a, b in [e["to"]] if b - a >= 0.2]
+    if len(pauses) >= 2:
+        # ponytail: 3+ pauses cut by hand reads as "the cut is too slow", the taste table's faster 0.12 s; no measuring
+        put(f"cut {len(pauses)} pauses longer than {int(min(pauses) * 10) / 10:g} s", "cut", len(pauses),
+            "cut.max_pause=0.12" if len(pauses) >= 3 else None)
+    # sound: a dropped song's level is a look choice; the same sound added twice is a habit; sounds taken out
+    lv = {}
+    for e in events:
+        if e["change"] == "sfx.move" and (e.get("to") or {}).get("kind") == "clip":
+            lv.setdefault(e["target"], [(e.get("from") or {}).get("vol", 1.0), None])[1] = e["to"].get("vol")
+    for a, b in lv.values():
+        if num(a) is not None and num(b) is not None and abs(b - a) >= 0.2:
+            put(f"turned the dropped song {'down' if b < a else 'up'} to {round(b * 100)}%", "sound", 1)
+            break
+    adds = Counter(str(e.get("what") or "") for e in events if e["change"] == "sfx.add")
+    for name, n in adds.most_common():
+        if name and n >= 2:
+            put(f"added the {name} sound {n} times", "sound", n)
+    rm = sum(e["change"] == "sfx.remove" for e in events)
+    if rm >= 2:
+        put(f"took out {rm} sound effects", "sound", rm)
+    return out
+
+
+def edit_ctx(folder, d):
+    """edit_patterns' ctx from the draft the user was looking at: how many cards it had and how long it is."""
+    try:
+        p = load(Path(d["plan"])) if d.get("plan") else {}
+    except (OSError, ValueError):
+        p = {}
+    return {"cards": len(p.get("cards") or []), "duration": (data_of(folder, d.get("data")) or {}).get("duration") or 0}
+
+
+def rules_used(ids):
+    """The rules a draft used (taste.applied_ids) as the notes panel lists them: each rule, where it lives, what it
+    set, and whether it is turned off now. Rules gone from rules.json since drop out."""
+    from ai_editor import taste
+    try:
+        rules = {r["id"]: r for r in taste.load_rules()} if taste.rules_path().exists() else {}
+    except (OSError, ValueError):
+        return []
+    out = []
+    for i in ids or []:
+        r = rules.get(i)
+        if not r:
+            continue
+        sc = r.get("scope") or "all"
+        where = ("My style" if sc == "all" else "This video" if sc.startswith("video:")
+                 else shown_style(Path(r["style"])) if r.get("style") else "@" + sc[6:])
+        out.append({"id": i, "rule": r["rule"], "where": where, "off": bool(r.get("off")),
+                    "did": set_words(r["setting"], r.get("value")) if r.get("setting") else ""})
+    return out
 
 
 def screen_items(folder, p):
@@ -479,6 +804,8 @@ def screen_items(folder, p):
         if "start" not in c or "end" not in c:
             continue
         w, an = (c.get("trigger_word") or "").strip(), c.get("anim") or {}
+        if str(c.get("override") or "").startswith("media"):   # dropped from the Media panel
+            names.setdefault(c.get("src"), f"your {'clip' if an.get('type') == 'video_card' else 'picture'} {Path(str(c.get('src'))).name}")
         what = (names.get(c.get("src")) or ("the motion clip" if an.get("type") == "video_card" else f"the {an['type']} animation" if an.get("type") else None)
                 or names.get(w.lower()) or (f"the {c['format']}" if c.get("format") in ("logo", "browser", "post") else "the picture"))
         box = c.get("box") if isinstance(c.get("box"), list) and len(c["box"]) == 4 else [0, 0, 100, 50] if c.get("layout") == "split" else [0, 0, 100, 100]
@@ -735,8 +1062,11 @@ def note_tags(plan, transcript, stage, t, te=None, on=None):
     return (words_at(transcript, t, te if te is not None else t) if not chunks else ""), card
 
 
-TEXT_STYLES = ("plain", "outline", "box")   # TikTok's and Instagram's own: white, white with a black edge, black on white
+TEXT_STYLES = ("plain", "outline", "box", "block")   # TikTok's and Instagram's own: white, white with a black edge, black on
+# white (each line its own box); block: one box that hugs the whole text
 TEXT_SIZE, TEXT_HOLD_S = 6.0, 3.0   # % of the frame's short side; seconds on screen when no range is marked
+TEXT_FONTS = ("TikTok Sans", "Inter", "Montserrat", "Poppins", "Bebas Neue", "Anton", "Playfair Display",
+              "Permanent Marker", "Lobster", "Roboto Mono")   # Google fonts Texts.tsx loads; TikTok Sans is the default
 
 
 def text_look(add):
@@ -748,6 +1078,16 @@ def text_look(add):
         raise ValueError("add_text takes style, x_pct and y_pct") from e
     if out["style"] not in TEXT_STYLES:
         raise ValueError("Text goes on the edit, in plain, outline or box.")
+    if add.get("font") and add["font"] != "TikTok Sans":   # only set when picked, so older rows keep their bake key
+        if add["font"] not in TEXT_FONTS:
+            raise ValueError(f"Pick one of the fonts: {', '.join(TEXT_FONTS)}.")
+        out["font"] = add["font"]
+    if add.get("color") and str(add["color"]).upper() != "#FFFFFF":
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(add["color"])):
+            raise ValueError("A colour is #RRGGBB.")
+        out["color"] = str(add["color"]).upper()
+    if add.get("width_pct") is not None and float(add["width_pct"]) < 84:   # the text's width brought in: it wraps sooner
+        out["width_pct"] = round(max(15.0, float(add["width_pct"])), 1)
     return out
 
 
@@ -760,21 +1100,56 @@ def put_texts(folder, notes):
         f = Path(folder) / "texts.json"
         old = load(f).get("items") or [] if f.exists() else []
         ids = {r["id"] for r in rows}
-        f.write_text(json.dumps({"items": [x for x in old if x.get("id") not in ids] + rows}, indent=1), encoding="utf-8")
+        save(f, {"items": [x for x in old if x.get("id") not in ids] + rows})
     return len(rows)
+
+
+def timeline_cuts(body):
+    """The Video row's {splits, gone} cleaned: splits sorted and unique, gone ranges merged, at most 200 of each.
+    ValueError when they are not numbers."""
+    splits = sorted({round(float(t), 2) for t in body.get("splits") or [] if float(t) > 0})[:200]
+    gone = []
+    for a, b in sorted([round(float(a), 2), round(float(b), 2)] for a, b in (body.get("gone") or [])[:200]):
+        if b - a < 0.05:
+            continue
+        if gone and a <= gone[-1][1]:
+            gone[-1][1] = max(gone[-1][1], b)
+        else:
+            gone.append([a, b])
+    return {"splits": splits, "gone": gone}
+
+
+def cuts_text(transcript, gone):
+    """The note for the timeline's cut pieces: each range on the edit's clock with the words said in it (a word is
+    in when its middle is, apply_edits' rule), for Claude to take out of spans.json and render again. "" for none."""
+    if not gone:
+        return ""
+    said = lambda a, b: said_in(transcript, a, b)
+    parts = [f'{fmt(a)}-{fmt(b)}' + (f' ("{said(a, b)}")' if said(a, b) else " (no words)") for a, b in gone]
+    return (f"Cut from the video on the timeline: {'; '.join(parts)}. Take these out of the cut (spans.json, the words "
+            f"quoted), then plan and render again. The page plays the draft without them already.")
+
+
+def said_in(transcript, a, b):
+    """The words said from a to b on the edit's clock (a word is in when its middle is, apply_edits' rule)."""
+    try:
+        words = [w for w in words_of(transcript) if "start" in w]
+    except (OSError, ValueError, TypeError):
+        words = []
+    return " ".join(w["text"].strip() for w in words if a - 1e-3 <= (w["start"] + w["end"]) / 2 <= b + 1e-3)
 
 
 def typed_labels(folder):
     """texts.json as plan.json's "label" texts (plan.py typed_texts does the same when Claude plans)."""
     f = Path(folder) / "texts.json"
-    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct")
+    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct")
     return [{"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}}
             for x in ((load(f).get("items") or []) if f.exists() else [])]
 
 
 def label_key(x):
     return (str(x.get("text")), x.get("style"), *(round(float(x.get(k) or 0), 2) for k in ("start", "end", "x_pct", "y_pct")),
-            round(float(x.get("size_pct") or TEXT_SIZE), 1))
+            round(float(x.get("size_pct") or TEXT_SIZE), 1), x.get("font"), x.get("color"), x.get("width_pct"))
 
 
 def baked_texts(folder, d):
@@ -792,29 +1167,209 @@ def baked_texts(folder, d):
 
 def cards_pending(folder, d):
     """The cards moved, resized or deleted on the page (overrides.json) that the video on the page does not show yet:
-    [{"key", "box"} or {"key", "deleted"}]. The page draws them at their new place until the bake puts them in."""
+    [{"key", "box"?, "start"?, "end"?} or {"key", "deleted"}]. The page draws them at their new place until the bake puts them in."""
     f = Path(folder) / "overrides.json"
     try:
         ov = (load(f).get("cards") or {}) if f.exists() else {}
     except (OSError, ValueError):
         return []
     shown = {c.get("key"): c for c in (data_of(Path(folder), d.get("data")).get("items") or {}).get("cards") or []}
-    return [{"key": k, **({"deleted": True} if o.get("deleted") else {"box": o["box"]})} for k, o in ov.items()
-            if k in shown and (o.get("deleted") or o.get("box") and [round(float(v), 1) for v in o["box"]] != shown[k]["box"])]
+    out = []
+    for k, o in ov.items():
+        c = shown.get(k)
+        if not c:
+            continue
+        p = {"deleted": True} if o.get("deleted") else {
+            **({"box": o["box"]} if o.get("box") and [round(float(v), 1) for v in o["box"]] != c["box"] else {}),
+            **{a: o[a] for a, b in (("start", "s"), ("end", "e")) if a in o and abs(float(o[a]) - c[b]) > 0.01}}
+        if p:
+            out.append({"key": k, **p})
+    return out
+
+
+MEDIA_ROOTS = ("media", "assets", "images")   # where the Media panel's files live (assets.py save_media, add, the plan's pictures)
+MEDIA_VIDEO_MAX_S = 10   # a dropped clip plays this long at most (shorter when the clip is)
+
+
+def media_src(folder, src):
+    """src ("media/a.png") as a file under one of this edit's MEDIA_ROOTS, else None."""
+    p = (Path(folder) / str(src or "")).resolve()
+    root = Path(folder).resolve()
+    return p if p.is_file() and assets.kind_of(p) and any(root / r in p.parents for r in MEDIA_ROOTS) else None
+
+
+def media_card(folder, src, start, dur, box, size):
+    """A picture or a clip dropped on the video, as a plan.json card (overrides.json added_cards, preview.py apply_overrides
+    appends it): a flat picture (format plain) for 3 s, or a video_card for the clip's length, capped."""
+    if assets.kind_of(src) == "video":
+        import library
+        n = float(library.meta(media_src(folder, src)).get("duration") or 3)
+        end = start + max(0.5, min(n, MEDIA_VIDEO_MAX_S))
+        look = {"anim": {"type": "video_card", "props": {"src": src, **({"size": size} if size else {})}}}
+    else:
+        end, look = start + 3, {"format": "plain", **({"size": size} if size else {})}
+    if dur:
+        end = min(end, dur)
+        start = max(0.0, min(start, end - 0.5))
+    return {"src": src, "start": round(start, 2), "end": round(end, 2), "box": box, "entrance": "pop", "trigger_word": "", **look}
+
+
+def cards_added(folder, d):
+    """The cards dropped on the video from the Media panel that the video on the page does not show yet, in screen_items'
+    shape with their moves applied, so the page draws them at once and they move, resize and delete like any card."""
+    f = Path(folder) / "overrides.json"
+    try:
+        ov = load(f) if f.exists() else {}
+    except (OSError, ValueError):
+        return []
+    shown = {c.get("key") for c in (data_of(Path(folder), d.get("data")).get("items") or {}).get("cards") or []}
+    out = []
+    for a in ov.get("added_cards") or []:
+        o = (ov.get("cards") or {}).get(a["key"]) or {}
+        if a["key"] in shown or o.get("deleted"):
+            continue
+        c = {**a, **{k: o[k] for k in ("box", "start", "end") if k in o}}
+        vid = assets.kind_of(c["src"]) == "video"
+        out.append({"s": c["start"], "e": c["end"], "box": c["box"], "key": a["key"], "added": True,
+                    "label": f"your {'clip' if vid else 'picture'} {Path(c['src']).name}",
+                    "pic": "/media-file/" + quote(c["src"]) + ("?thumb=1" if vid else ""), **({} if vid else {"src": c["src"]})})
+    return out
 
 
 def bake_ready(folder, d):
     """Why the typed texts cannot go into this draft by themselves now (None: they can). A patch render needs the
     edit's final render and the plan it was made from; while Claude has the round it plans them in itself."""
+    why = live_ready(folder, d)
+    return why if why == "not the edit" else "Claude has this draft" if d.get("sent") or busy(folder) and not listening(folder) \
+        else why   # waiting for notes: idle
+
+
+def live_ready(folder, d):
+    """Why the page cannot play this draft live from its plan (None: it can): the draft on the page must be the render
+    edit.py made from that plan, untouched since, so the composition drawn from the plan is that video (one finished by
+    hand, finish.sh overlays, has more in it than the plan says)."""
     plan = Path(d.get("plan") or "-")
     src = plan.with_name("render" + plan.stem[len("plan"):] + ".mp4")
     return ("not the edit" if d.get("stage") != "edit" or d.get("stills") or d.get("raw") else
-            "Claude has this draft" if d.get("sent") or busy(folder) and not listening(folder) else   # waiting for notes: idle
             "no plan" if not plan.is_file() or not plan.stem.startswith("plan") else
             "no render to patch" if not src.is_file() or not src.with_suffix(".plan.json").is_file() else
             "the render was finished by hand" if not render_stamped(src) else
             "the draft is not the render" if not Path(d.get("video") or "-").is_file()
             or Path(d["video"]).stat().st_size != src.stat().st_size else None)
+
+
+LIVE_PLAN, LIVE_PROXY, LIVE_LOCK = {}, {}, threading.Lock()   # folder -> (files' key, plan); folder -> its proxy's thread
+
+
+def live_sound(x):
+    """A placed sound (sounds.json) as a cue the live player plays from this page's own routes: a dropped clip from
+    "in" for "dur" at "vol", a library sound as it is, both at "t" (plan.py placed_sounds levels and trims them into
+    .sfx/ for the render). Quoted as the page's encodeURIComponent quotes, so the page's own copy is the same cue."""
+    q = quote(str(x["sound"]), safe="!'()*")
+    if x.get("kind") == "clip":
+        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), "placed": x.get("id")}
+    d = sound_shape(sfx_mod().library_dir() / str(x["sound"]), cap=sfx_mod().MAX_OWN_S).get("d")
+    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), "placed": x.get("id")}
+
+
+def live_video(folder, plan, plan_f):
+    """The footage the live player plays, relative to the edit: the render's own copy (edit.py prepare_public: the cut
+    at output size, framed and graded as the render draws it, a keyframe every 15 frames so a seek is quick) while it
+    is that, else a copy made once the same way into .live/ (an editor's proxy: a 4K cut stutters in a browser), and
+    the cut itself while that is made. Renders never read .live/."""
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from edit import footage_filter
+    from plan import probe
+    rel, cut = plan["video"], folder / plan["video"]
+    if not cut.is_file():
+        return rel
+    k = (str(cut), cut.stat().st_mtime_ns)
+    if LIVE_PROXY.get(k) is None:
+        LIVE_PROXY[k] = probe(cut)   # once per cut: ffprobe on every poll would be slow
+    m = LIVE_PROXY[k]
+    vf = footage_filter(plan, m["width"], m["height"])
+    for c in (folder / f".render{plan_f.stem[len('plan'):]}" / rel, folder / ".live" / rel):
+        made = c.with_name(c.name + ".vf")
+        if c.is_file() and c.stat().st_mtime >= cut.stat().st_mtime and made.is_file() and made.read_text(encoding="utf-8") == vf:
+            return c.relative_to(folder).as_posix()
+    out = folder / ".live" / rel
+    with LIVE_LOCK:
+        if (LIVE_PROXY.get(str(out)) or threading.Thread()).is_alive():
+            return rel
+
+        def make():
+            out.parent.mkdir(parents=True, exist_ok=True)
+            tmp = out.with_name(out.stem + ".part" + out.suffix)
+            r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cut), "-filter_complex", vf, "-c:v", "libx264", "-crf", "23",
+                                "-preset", "veryfast", "-g", "15", "-keyint_min", "15", "-sc_threshold", "0", "-pix_fmt", "yuv420p",
+                                "-c:a", "copy", "-movflags", "+faststart", str(tmp)], capture_output=True)
+            if r.returncode == 0:
+                os.replace(tmp, out)
+                out.with_name(out.name + ".vf").write_text(vf, encoding="utf-8")
+            else:
+                tmp.unlink(missing_ok=True)
+        LIVE_PROXY[str(out)] = threading.Thread(target=make, daemon=True)
+        LIVE_PROXY[str(out)].start()
+    return rel
+
+
+def live_plan(folder, d):
+    """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
+    the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
+    smoothly (live_video), and each card's overrides.json key ("_key"). {"why": ...} when the page plays the MP4.
+    Made again only when one of its files changed: the page asks after every change it sees."""
+    why = live_ready(folder, d)
+    if why:
+        return {"why": why}
+    plan_f = Path(d["plan"])
+    p = load(plan_f)
+    cap = captions_info(folder, plan_f)
+    video = live_video(folder, p, plan_f)
+    key = (json.dumps(cap, sort_keys=True), video, *((f.stat().st_mtime_ns if f.exists() else 0) for f in
+           (plan_f, folder / "texts.json", folder / "overrides.json", folder / "sounds.json")))
+    hit = LIVE_PLAN.get(str(folder))
+    if hit and hit[0] == key:
+        return hit[1]
+    p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import apply_overrides
+    p = apply_overrides(p, folder, plan_f.name)
+    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x]
+    for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
+        if not c["src"].startswith("/") and "_d" not in c:
+            c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
+    st = p["captions"].setdefault("style", {})
+    n0 = st.get("words_per_caption")
+    st.update((cap["looks"].get(cap["look"]) or {}) if cap.get("look") and cap["look"] != st.get("style") else {}, **cap["mine"])
+    n = CAP_GROUPS.get(str(cap.get("words"))) or st.get("words_per_caption")
+    if n and n != n0:   # words at a time changed: re-paged as plan.py pages them
+        from plan import chunk_captions, mark_emph
+        words = [w for ch in p["captions"]["chunks"] for w in ch.get("words") or [] if "start" in w]
+        p["captions"]["chunks"] = mark_emph(chunk_captions(words, n, st.get("case", "sentence")))
+        st["words_per_caption"] = n
+    p["video"] = video
+    for c in p["cards"]:
+        c["_key"] = card_key(c)
+    LIVE_PLAN[str(folder)] = (key, p)
+    return p
+
+
+LIVE_JS = {"lock": threading.Lock()}
+
+
+def live_bundle(check=True):
+    """dist/live.js, the live player (preview/live.tsx), built with the renderer when its sources changed (preview.py
+    build_bundle); check=False: the one already built (its chunks). None when it cannot be built: the page plays the MP4."""
+    with LIVE_JS["lock"]:
+        if check or not LIVE_JS.get("js"):
+            try:
+                sys.path.insert(0, str(EDIT_PY.parent))
+                from preview import build_bundle
+                LIVE_JS["js"] = build_bundle().with_name("live.js")
+            except (Exception, SystemExit) as e:   # noqa: BLE001  no node, no renderer: say so in the server log
+                print(f"live player: not built ({e})", file=sys.stderr)
+                LIVE_JS["js"] = None
+        return LIVE_JS["js"]
 
 
 def render_stamped(src):
@@ -864,7 +1419,7 @@ def bake(folder, run=subprocess.run):
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import apply_overrides   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
     p = apply_overrides(p, folder, plan_f.name)
-    plan_f.write_text(json.dumps(p, indent=1), encoding="utf-8")
+    save(plan_f, p)
     r = run([sys.executable, str(EDIT_PY), "patch", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
     if r.returncode:
         b.update(state="failed", why=((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1])
@@ -881,7 +1436,7 @@ def bake(folder, run=subprocess.run):
         if old.get("changes") is not None:   # "Changed in this draft" stays the draft's, not the bake's
             new = data_of(folder, d["data"])
             new["changes"] = old["changes"]
-            (folder / "review" / d["data"]).write_text(json.dumps(new), encoding="utf-8")
+            save(folder / "review" / d["data"], new)
         d["baked"] = d.get("baked", 0) + 1
     update(rj, swap)
     with BAKE_LOCK:
@@ -1646,12 +2201,21 @@ def make_handler(folder, token):
                 d["sfx_removed"] = [float(k) for k, v in ((load(ovf).get("sfx") or {}) if ovf.exists() else {}).items()
                                     if isinstance(v, dict) and v.get("deleted")]
                 d["cap_words"] = ((load(ovf).get("words") or {}) if ovf.exists() else {})   # caption words retyped, for the next draft
+                d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})
+                d["cap_times"] = ((load(ovf).get("cap_times") or {}) if ovf.exists() else {})   # caption pages retimed, until baked   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
                 d["sounds_ui"] = sounds_info() if d.get("stage") == "edit" else None   # the Sounds panel
-                d["captions_ui"] = captions_info(folder) if d.get("stage") == "edit" else None   # the Captions panel
+                snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
+                d["captions_ui"] = captions_info(folder, snap_plan) if d.get("stage") == "edit" else None   # the Captions panel, its base the video shown
                 d["texts"] = (load(folder / "texts.json").get("items") or []) if (folder / "texts.json").exists() else []   # the Text tab
                 d["texts_baked"] = baked_texts(folder, d) if d.get("stage") == "edit" else []   # the rest the page draws live
                 d["cards_pending"] = cards_pending(folder, d) if d.get("stage") == "edit" else []   # moved, not in the video yet
+                d["cards_added"] = cards_added(folder, d) if d.get("stage") == "edit" else []   # dropped on, not in the video yet
+                try:   # the Media panel: uploads, what was added for Claude, and the pictures the draft already shows
+                    used = [c.get("src") or ((c.get("anim") or {}).get("props") or {}).get("src") for c in load(Path(d["plan"])).get("cards") or []]
+                except (KeyError, TypeError, OSError, ValueError):
+                    used = []
+                d["media"] = assets.media(folder, [u for u in used if isinstance(u, str)]) if d.get("stage") == "edit" else []
                 b = BAKE.get(str(folder)) or {}
                 d["bake"] = {"state": b.get("state"), "why": b.get("why")}   # putting the texts in the video
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
@@ -1692,6 +2256,17 @@ def make_handler(folder, token):
                 if making_edit(d):
                     d["making"] = {"style": making_style(folder), "steps": EDIT_STEPS}
                 return self.send(200, d)
+            if path == "/live/plan":   # the live player's plan (live_plan), or why the page plays the MP4
+                return self.send(200, live_plan(folder, load(rj)))
+            if path == "/live/live.js" or re.fullmatch(r"/live/chunks/[\w-]+\.js", path):   # the live player and its chunks
+                b = live_bundle(path == "/live/live.js")
+                f = b and b.parent / path[len("/live/"):]
+                return self.send(200, f.read_bytes(), "text/javascript") if f and f.is_file() else self.send(404, {})
+            if path.startswith("/live/media/"):   # a file the plan names, under this edit only
+                p = (folder / unquote(path[len("/live/media/"):])).resolve()
+                if not p.is_file() or not p.is_relative_to(folder.resolve()):
+                    return self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
             if path == "/video":
                 d = load(rj)
                 if q.get("k") == "raw":
@@ -1710,7 +2285,12 @@ def make_handler(folder, token):
                 p = folder / "review" / Path(r.get("data") or "-").name if r else None
                 if p and p.is_file() and (r["stage"], r["round"]) == (d["stage"], d["round"]) == ("cut", d["round"]):
                     upgrade_transcript(folder, p)
-                return self.send(200, p.read_bytes() if p and p.is_file() else {})
+                if not (p and p.is_file()):
+                    return self.send(200, {})
+                out = load(p)
+                if isinstance(out.get("rules"), list):   # the ids as each rule now: its words, where it lives, off or on
+                    out["rules"] = rules_used(out["rules"])
+                return self.send(200, out)
             if path == "/sound-preview":   # the Sounds panel's play button: one pick of one moment, at a fixed level
                 sfx = sfx_mod()
                 cue, pick = q.get("cue", ""), q.get("c", "default")
@@ -1726,11 +2306,31 @@ def make_handler(folder, token):
                     except (OSError, subprocess.CalledProcessError, ValueError):
                         return self.send(404, {})
                 return self.file(f, "audio/wav")
+            if path.startswith("/audio/"):   # a dropped audio file, played live on the page while the video plays
+                p = folder / "audio" / Path(unquote(path)).name
+                if not p.is_file():
+                    return self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "audio/mpeg")
+            if path == "/sound-file":   # a library sound as it is, for the same live playing
+                sfx = sfx_mod()
+                if q.get("name", "") not in sfx.own_sounds():
+                    return self.send(404, {})
+                p = sfx.library_dir() / q["name"]
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "audio/wav")
             if path.startswith("/card-img/"):   # a card's own picture, under this edit only: the move and resize preview
                 p = (folder / unquote(path[len("/card-img/"):])).resolve()
                 if folder.resolve() not in p.parents or p.suffix.lower() not in CARD_IMG or not p.is_file():
                     return self.send(404, {})
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "image/png")
+            if path.startswith("/media-file/"):   # the Media panel's files (media/, assets/, images/); ?thumb=1: a video's picture
+                p = media_src(folder, unquote(path[len("/media-file/"):]))
+                if not p:
+                    return self.send(404, {})
+                if assets.kind_of(p) == "video" and q.get("thumb") == "1":
+                    import library
+                    t = library.thumb(p)
+                    return self.file(t, "image/jpeg") if t else self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
             if path.startswith("/assets/"):   # an image or video the user added (assets.py); ?thumb=1: a video's picture
                 p = folder / "assets" / Path(unquote(path)).name
                 if not p.is_file():
@@ -1766,6 +2366,37 @@ def make_handler(folder, token):
                     self.close_connection = True   # the unread body must not be taken as the next request
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"items": items})
+            if urlsplit(self.path).path == "/media/upload":   # the Media panel: one video or image into <edit>/media/, streamed in
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    src = assets.save_media(folder, unquote(q.get("name", [""])[0]), self.rfile, int(self.headers.get("Content-Length") or 0))
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "src": src, "media": assets.media(folder)})
+            if urlsplit(self.path).path == "/sound/library/upload":   # the Sounds panel: a file into the sound library
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    name = library_upload(unquote(q.get("name", [""])[0]), self.rfile, int(self.headers.get("Content-Length") or 0))
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "name": name, "sounds": sounds_info()})
+            if urlsplit(self.path).path == "/audio/upload":   # an audio file dropped on the timeline, streamed in
+                q = parse_qs(urlsplit(self.path).query)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                        raise ValueError("Audio goes on the edit, before it is approved.")
+                    dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
+                    x = save_audio(folder, unquote(q.get("name", [""])[0]), self.rfile, n, float(q.get("at", ["0"])[0]), dur)
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.timeline_note("sounds-timeline", "Sounds on the timeline", f"add {x['sound']} at {fmt(x['t'])} "
+                                          f"for {x['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"])
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:
@@ -1804,32 +2435,51 @@ def make_handler(folder, token):
                             return True
                     return False
                 return self.send(200, {}) if update(rj, kp) else self.send(409, {"error": "Claude has this note now."})
+            if path == "/rule/off":   # "Turn off" / "Turn on" on a rule a draft used: kept, stops applying (taste.set_off)
+                from ai_editor import taste
+                try:
+                    r = taste.set_off(int(body.get("id")), bool(body.get("off")))
+                except (TypeError, ValueError):
+                    r = None
+                return self.send(200, {"id": r["id"], "off": bool(r.get("off"))}) if r else self.send(404, {"error": "That rule is gone."})
             if path == "/undo":   # a receipt's Undo: the saved rule comes out of the style
                 try:
                     msg = undo_receipt(folder, int(body.get("id")))
                 except (TypeError, ValueError):
                     msg = None
                 return self.send(200, {"msg": msg}) if msg else self.send(409, {"error": "nothing to undo"})
-            if path == "/learn":   # the learn panel: the ticked rules, or Not now. `wait` hands them to Claude
+            if path == "/learn":   # the learn panel: the ticked rules and where each goes, or Not now. `wait` hands them on
                 def lc(d):
                     lr = d.get("learn") or {}
                     if lr.get("state") != "proposed":
                         return False
                     ids = sorted({i for i in body.get("chosen") or [] if isinstance(i, int) and 0 <= i < len(lr["rules"])})
                     lr.update(state="chosen" if ids and not body.get("skip") else "skipped", chosen=ids, handled=False)
-                    if to and lr["state"] == "chosen":
-                        lr["to"] = to
+                    if lr["state"] == "chosen":
+                        for i in ids:
+                            lr["rules"][i]["dest"] = dest[i]
                     return True
-                to, lr0 = None, load(rj).get("learn") or {}
-                if body.get("new") and not body.get("skip") and lr0.get("state") == "proposed":   # "New style from this video"
-                    try:
-                        to = new_style_from(folder, body["new"])
-                    except ValueError as e:
-                        return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
-                elif body.get("to") is not None:   # "Save to": one of the styles the approve listed
-                    to = next((dict(x) for x in lr0.get("styles") or [] if x["id"] == str(body["to"])), None)
-                    if to is None:
-                        return self.send(400, {"error": "pick a style from the list"})
+                lr0 = load(rj).get("learn") or {}
+                if lr0.get("state") != "proposed":
+                    return self.send(409, {"error": "nothing to choose"})
+                targets = {x["id"]: x for x in (lr0.get("styles") or []) + (lr0.get("skills") or [])}
+                here = next((x for x in lr0.get("styles") or [] if x.get("here")), None)
+                to = body.get("to")   # one id for every rule (the old Save to), or {"<rule index>": id}
+                per = to if isinstance(to, dict) else {}
+                dest, made = {}, None
+                for i in range(len(lr0.get("rules") or [])):
+                    k = str(per.get(str(i), to if isinstance(to, str) else "") or lr0["rules"][i].get("to") or "")
+                    if k == "new" and not body.get("skip"):   # "New style from this video": made once, for every rule that picked it
+                        if made is None:
+                            try:
+                                made = new_style_from(folder, body.get("new"))
+                            except ValueError as e:
+                                return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
+                        dest[i] = made
+                    elif k and k not in targets and (per.get(str(i)) or isinstance(to, str)):
+                        return self.send(400, {"error": "pick a style or a skill from the list"})
+                    else:
+                        dest[i] = dict(targets.get(k) or here or {"id": "", "name": lr0.get("style") or "My style", "here": True})
                 return self.send(200, {}) if update(rj, lc) else self.send(409, {"error": "nothing to choose"})
             if path == "/trials":   # the Trial reels tab: {"action": "make", versions, hooks} | "skip" | "ask" + text
                 # | "note" + text, "for" (t1.., or all), "t" (seconds on that version): feedback once they are made
@@ -1899,17 +2549,30 @@ def make_handler(folder, token):
                 last = d["events"][-1]["type"] if d["events"] else None
                 if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
                     return self.send(409, {"error": "Captions change on the edit, before it is approved."})
+                snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
+                was = captions_info(folder, snap_plan)
                 try:
-                    said = set_captions(folder, body.get("words"), body.get("look"))
+                    said = set_captions(folder, body.get("words"), body.get("look"), body)
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 if not said:
-                    return self.send(400, {"error": "captions takes words and/or look"})
+                    return self.send(400, {"error": "captions takes words, look, size, y, color or highlight"})
                 cur = captions_info(folder)   # one Captions note per round, saying where the choice is now
+                n_of = lambda w: CAP_GROUPS.get(w) or (int(w) if str(w or "").isdigit() else None)
+                for k, a, b in [("words_per_caption", n_of(was["words"]), n_of(cur["words"])), ("preset", was["look"], cur["look"])] + [
+                        (k, was["mine"].get(k, was["base"].get(k)), cur["mine"].get(k)) for k, *_ in CAP_STYLE.values()]:
+                    if b is not None and a != b:
+                        log_edit(folder, "captions." + k, "captions", a, b)
+                mine = cur["mine"]
                 now_said = [w for w in (("a sentence at a time" if cur["words"] == "sentence" else f"{cur['words']} word"
                                          f"{'' if cur['words'] == '1' else 's'} at a time") if cur["words"] else None,
-                                        f"the {cur['look']} look" if cur["look"] else None) if w]
-                text = f"Captions: {' and '.join(now_said or said)}, for this video (saved to its taste). Plan again so it shows."
+                                        f"the {cur['look']} look" if cur["look"] else None,
+                                        f"size {mine['size_pct']}" if "size_pct" in mine else None,
+                                        f"{mine['y_pct']}% down the frame" if "y_pct" in mine else None,
+                                        f"colour {mine['color']}" if "color" in mine else None,
+                                        f"highlight {mine['highlight_color']}" if "highlight_color" in mine else None) if w]
+                ws = now_said or said
+                text = f"Captions: {', '.join(ws[:-1]) + ' and ' + ws[-1] if len(ws) > 1 else ws[0]}, for this video (saved to its taste). Plan again so it shows."
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "captions" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
                 if old:
@@ -1938,8 +2601,10 @@ def make_handler(folder, token):
                     lib.mkdir(parents=True, exist_ok=True)
                     (lib / name).write_bytes(raw)
                     body = {"cue": cue, "choice": name}
+                was = sfx.choices().get(cue)
                 try:
                     sfx.choose(cue, str(body.get("choice") or ""))
+                    log_edit(folder, "sound.pick", cue, was, str(body.get("choice") or ""))
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
                 d = load(rj)
@@ -1960,6 +2625,35 @@ def make_handler(folder, token):
                     update(rj, put)
                     return self.send(200, {**old, "text": text, "ok": True, "sounds": info})
                 return self.comment({"t": 0.0, "text": text, "on": {"k": "sounds", "text": "all sounds"}})
+            if path == "/sound/library/remove":   # the Sounds panel's x: out of the library (kept in .removed)
+                try:
+                    library_remove(str(body.get("name") or ""))
+                except ValueError as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "sounds": sounds_info()})
+            if path == "/sfx/move":   # the Sounds row: a sound the user put there dragged, trimmed or turned up or down
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Sounds change on the edit, before it is approved."})
+                items = placed_raw(folder)
+                x = next((i for i in items if i.get("id") == body.get("placed")), None)
+                if not x:
+                    return self.send(404, {"error": "That sound is gone already."})
+                was = {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}
+                try:
+                    x["t"] = round(max(0.0, float(body.get("t", x["t"]))), 2)
+                    if x.get("kind") == "clip":
+                        x["in"] = round(max(0.0, float(body.get("in", x.get("in", 0)))), 2)
+                        x["dur"] = round(max(0.1, float(body.get("dur", x["dur"]))), 2)
+                        x["vol"] = round(min(2.0, max(0.0, float(body.get("vol", x.get("vol", 1))))), 2)
+                except (TypeError, ValueError):
+                    return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
+                save(folder / "sounds.json", {"items": items})
+                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}, Path(x["sound"]).stem)
+                line = f"add {Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
+                return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
+                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"])
             if path in ("/sfx/add", "/sfx/remove"):   # the timeline's Sounds row: put a library sound at a moment, or take one out
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -1974,23 +2668,32 @@ def make_handler(folder, token):
                         if name not in sfx.own_sounds():
                             raise ValueError
                         x = {"id": secrets.token_hex(4), "t": t, "sound": name}
-                        f.write_text(json.dumps({"items": items + [x]}, indent=1), encoding="utf-8")
-                        line = f"add {Path(name).stem} at {fmt(t)}"
+                        length = sound_shape(sfx.library_dir() / name, n=8).get("d") or 0
+                        if length > sfx.MAX_OWN_S + 0.05:   # a song from the library: a clip as long as it is
+                            (folder / "audio").mkdir(exist_ok=True)
+                            shutil.copy2(sfx.library_dir() / name, folder / "audio" / name)
+                            dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
+                            x.update(kind="clip", **{"in": 0.0}, dur=round(max(0.1, min(length, dur - t if dur > t else length)), 2), vol=1.0)
+                        save(f, {"items": items + [x]})
+                        log_edit(folder, "sfx.add", x["id"], None, {"sound": name, "t": t, "kind": x.get("kind")}, Path(name).stem)
+                        line, nk, nd = f"add {Path(name).stem} at {fmt(t)}", x["id"], False
                     elif body.get("placed"):
                         if not any(i["id"] == body["placed"] for i in items):
                             raise ValueError
-                        f.write_text(json.dumps({"items": [i for i in items if i["id"] != body["placed"]]}, indent=1), encoding="utf-8")
-                        line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
+                        save(f, {"items": [i for i in items if i["id"] != body["placed"]]})
+                        log_edit(folder, "sfx.remove", body["placed"], {"src": body.get("src"), "t": t}, None, sound_name(body.get("src") or ""))
+                        line, nk, nd = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}", body["placed"], True   # added this round: nothing left
                     else:   # one the plan put there: overrides.json takes it out, so a re-plan keeps it out
                         ov_f = folder / "overrides.json"
                         ov = load(ov_f) if ov_f.exists() else {}
                         ov.setdefault("sfx", {})[f"{t:.3f}"] = {"deleted": True}
-                        ov_f.write_text(json.dumps(ov, indent=1), encoding="utf-8")
-                        line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
+                        save(ov_f, ov)
+                        log_edit(folder, "sfx.remove", f"{t:.3f}", {"src": body.get("src"), "t": t}, None, sound_name(body.get("src") or ""))
+                        line, nk, nd = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}", f"draft@{t:.3f}", False
                 except (KeyError, TypeError, ValueError):
                     return self.send(400, {"error": "sfx/add takes t and a library sound; sfx/remove takes t and placed or src"})
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
-                                          "Plan again so they are in (sounds.json and overrides.json sfx).")
+                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=nk, drop=nd)
             if path == "/captions/text":   # the Captions panel's lines or the timeline: one caption line retyped, or deleted ("")
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -2005,10 +2708,36 @@ def make_handler(folder, token):
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
                 ov.setdefault("words", {}).update(words)
-                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                save(ovf, ov)
                 new = " ".join(w for w in words.values() if w)
+                log_edit(folder, "caption.retype", f"{t:.2f}", old, new)
                 line = f'"{old}" at {fmt(t)} now "{new}"' if new else f'"{old}" at {fmt(t)} taken out'
-                return self.timeline_note("caption-text", "Captions retyped", line, "Plan again so they show (overrides.json words).")
+                bake_soon(folder)   # into the video by itself; a note only while Claude has the round
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True})
+                return self.timeline_note("caption-text", "Captions retyped", line, "Plan again so they show (overrides.json words).", key=f"{t:.2f}")
+            if path == "/captions/time":   # the timeline's Captions row: a page made longer, shorter or moved. overrides.json
+                # cap_times, keyed by its first word's start so a new plan finds it; baked in by itself (bake_soon)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Captions change on the edit, before it is approved."})
+                try:
+                    key, a, b = f"{float(body['w']):.3f}", round(float(body["s"]), 3), round(float(body["e"]), 3)
+                    if a < 0 or b - a < 0.1:
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "captions/time takes w (its first word's start), s and e"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                log_edit(folder, "caption.time", key, (ov.get("cap_times") or {}).get(key), [a, b], str(body.get("text") or "")[:60])
+                ov.setdefault("cap_times", {})[key] = [a, b]
+                save(ovf, ov)
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True})
+                return self.timeline_note("caption-times", "Caption timing", f'"{str(body.get("text") or "")[:60]}" now {fmt(a)}-{fmt(b)}',
+                                          "Plan again so it shows (overrides.json cap_times).", key=key)
             if path == "/card/edit":   # the video page: a card moved, resized or deleted: overrides.json, baked in by itself
                 # (bake_soon); a note for Claude only while it has the round
                 d = load(rj)
@@ -2022,19 +2751,109 @@ def make_handler(folder, token):
                     if body.get("deleted"):
                         change, what = {"deleted": True}, "Remove"
                     else:
-                        box = [round(float(v), 1) for v in body["box"]]
-                        if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        change, what = {}, "Move or resize"
+                        if "box" in body:
+                            box = [round(float(v), 1) for v in body["box"]]
+                            if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                                raise ValueError
+                            change["box"] = box
+                        if "start" in body or "end" in body:   # the timeline's Images row: moved or trimmed in time
+                            s, e = round(float(body["start"]), 2), round(float(body["end"]), 2)
+                            if s < 0 or round(e - s, 2) < 0.2 or e > 36000:
+                                raise ValueError
+                            change.update(start=s, end=e)
+                            what = f"Retime ({fmt(s)}-{fmt(e)})" if "box" not in change else what
+                        if not change:
                             raise ValueError
-                        change, what = {"box": box}, "Move or resize"
                     t, te = float(body["t"]), float(body["t_end"])
                 except (KeyError, TypeError, ValueError):
-                    return self.send(400, {"error": "card/edit takes key, t, t_end and box [x, y, w, h] or deleted"})
+                    return self.send(400, {"error": "card/edit takes key, t, t_end and box [x, y, w, h], start and end, or deleted"})
+                was = card_was(folder, key, d.get("plan"))
                 card_override(folder, key, change)
+                if change.get("deleted"):
+                    log_edit(folder, "card.delete", key, was, None, label)
+                if "box" in change and change["box"] != was:
+                    log_edit(folder, "card.move", key, was, change["box"], label)
+                if "start" in change:
+                    log_edit(folder, "card.retime", key, None, [change["start"], change["end"]], label)
                 bake_soon(folder)
                 if not d.get("sent"):
                     return self.send(200, {"ok": True})
                 return self.comment({"t": t, "t_end": te, "text": f"{what} {label} as shown on the page: overrides.json has it "
                                      f"(card {key}). Plan again so it shows."})
+            if path == "/media/add":   # the Media panel: a picture or a clip dropped on the video becomes a card there
+                # (overrides.json added_cards, its key moves it like any card), baked in by itself (bake_soon)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Media goes on the edit, before it is approved."})
+                try:
+                    src = str(body["src"])
+                    if not media_src(folder, src):
+                        raise ValueError
+                    box = [round(float(v), 1) for v in body["box"]]
+                    if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        raise ValueError
+                    size = [int(v) for v in body.get("size") or []]
+                    if size and (len(size) != 2 or min(size) < 1):
+                        raise ValueError
+                    t = float(body["t"])
+                    if not 0 <= t <= 36000:
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "media/add takes src (a file in media/, assets/ or images/), t and box [x, y, w, h]"})
+                card = media_card(folder, src, t, float((data_of(folder, d.get("data")) or {}).get("duration") or 0), box, size)
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                added = ov.setdefault("added_cards", [])
+                n = 1 + max([int(m.group(1)) for a in added for m in [re.match(r"media(\d+)@", a["key"])] if m] or [0])
+                key = f"media{n}@{card['start']:.3f}"
+                added.append({"key": key, **card})
+                save(ovf, ov)
+                log_edit(folder, "card.add", key, None, {"src": src, "box": box}, Path(src).name)
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
+                return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
+                                     f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
+            if path == "/timeline/cut":   # the timeline's Video row: {splits: [t], gone: [[a, b]]} on the edit's clock.
+                # The page skips the gone pieces at once; one note tells Claude the words to cut from the next draft
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "The video is cut on the edit, before it is approved."})
+                try:
+                    cuts = timeline_cuts(body)
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "timeline/cut takes splits [t] and gone [[start, end]]"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                was = [list(g) for g in (ov.get("cuts") or {}).get("gone") or []]
+                ov["cuts"] = cuts
+                save(ovf, ov)
+                for g in cuts["gone"]:   # each new piece with the words said in it ("" for a pause)
+                    if g not in was:
+                        log_edit(folder, "cut.piece", f"{g[0]:.2f}", None, g, said_in(d.get("transcript"), *g))
+                for g in was:
+                    if g not in cuts["gone"]:
+                        log_edit(folder, "cut.restore", f"{g[0]:.2f}", g, None)
+                old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
+                            and c["round"] >= d["round"] and editable(d, c)), None)
+                text = cuts_text(d.get("transcript"), cuts["gone"])
+                if old:
+                    def put(x):
+                        if text:
+                            for c in x["comments"]:
+                                if c["id"] == old["id"]:
+                                    c.update(text=text, t=cuts["gone"][0][0], t_end=cuts["gone"][-1][1], edited=now())
+                        else:   # every piece put back: nothing to tell Claude
+                            x["comments"] = [c for c in x["comments"] if c["id"] != old["id"]]
+                    update(rj, put)
+                    return self.send(200, {"ok": True, "cuts": cuts})
+                if not text:
+                    return self.send(200, {"ok": True, "cuts": cuts})
+                return self.comment({"t": cuts["gone"][0][0], "t_end": cuts["gone"][-1][1], "text": text,
+                                     "on": {"k": "cuts", "text": "cuts on the timeline"}})
             if path in ("/text/add", "/text/delete", "/text/edit"):   # the Text tool: texts.json changes on the spot and
                 # the page draws it at once; bake_soon puts it in the video with no Claude. Only while Claude has the
                 # round does a note tell it as well (it plans texts.json in itself)
@@ -2051,26 +2870,29 @@ def make_handler(folder, token):
                 tell = lambda text, r=x: self.comment({"t": r["start"], "t_end": r["end"], "text": text}) if d.get("sent") else \
                     self.send(200, {"ok": True, "id": r["id"]})
                 if path == "/text/delete":
-                    f.write_text(json.dumps({"items": [i for i in items if i is not x]}, indent=1), encoding="utf-8")
+                    save(f, {"items": [i for i in items if i is not x]})
+                    log_edit(folder, "text.delete", x["id"], x, None, x["text"])
                     bake_soon(folder)
                     return tell(f'Remove the on-screen text "{x["text"]}".')
                 text = str(body.get("text") or x["text"]).strip()[:120]
                 if not text:
                     return self.send(400, {"error": "Type the text first."})
                 try:
-                    new = {**x, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct") if k in body}})}
+                    new = {k: v for k, v in x.items() if k not in ("font", "color", "width_pct")}   # text_look sets them again when kept
+                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct") if k in body}})}
                     if body.get("start") is not None:
                         new["start"] = round(max(0.0, float(body["start"])), 2)
                         new["end"] = round(max(new["start"] + 0.1, float(body.get("end") or new["start"] + TEXT_HOLD_S)), 2)
                 except (ValueError, TypeError) as e:
                     return self.send(400, {"error": str(e) or "no time"})
-                f.write_text(json.dumps({"items": [new if i is x else i for i in items] + ([new] if path == "/text/add" else [])},
-                                        indent=1), encoding="utf-8")
+                save(f, {"items": [new if i is x else i for i in items] + ([new] if path == "/text/add" else [])})
+                log_edit(folder, path[1:].replace("/", "."), new["id"], None if path == "/text/add" else x, new, text)
                 bake_soon(folder)
                 if path == "/text/add":
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)
                 what = [w for w, k in (("words", "text"), ("look", "style"), ("place", "x_pct"), ("place", "y_pct"),
-                                       ("size", "size_pct"), ("time", "start")) if new.get(k) != x.get(k)]
+                                       ("size", "size_pct"), ("font", "font"), ("colour", "color"), ("width", "width_pct"), ("time", "start"),
+                                       ("time", "end")) if new.get(k) != x.get(k)]
                 return tell(f'Change the on-screen text "{x["text"]}" ({", ".join(dict.fromkeys(what)) or "no change"}): '
                             f'texts.json has it now as "{text}". Plan again so it shows.', new)
             if path == "/delete":
@@ -2098,6 +2920,9 @@ def make_handler(folder, token):
                     return self.send(409, {"error": err}) if err else self.send(200, {})
                 style = style_label(folder) if body["type"] == "approve" else None
                 choices = style_choices(folder) if body["type"] == "approve" else None
+                skills = skill_choices() if body["type"] == "approve" else None
+                d0 = load(rj)   # the hands-on edits of the session, summed up for the learn card (edit_patterns)
+                pats = edit_patterns(edit_events(folder), edit_ctx(folder, d0)) if body["type"] == "approve" else []
 
                 def ev(d):
                     if d.get("sent") and d["events"] and d["events"][-1]["type"] == "edits":
@@ -2107,7 +2932,8 @@ def make_handler(folder, token):
                     d["sent"] = True
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
-                        d["learn"] = {"state": "reading" if session_notes(d) else "none", "style": style, "styles": choices}
+                        d["learn"] = {"state": "reading" if session_notes(d) or pats else "none", "style": style, "styles": choices,
+                                      "skills": skills, "edits": pats}
                     elif body["type"] == "approve" and d["stage"] == "cut":
                         prepared_steps(folder, d)
                     return True
@@ -2124,22 +2950,35 @@ def make_handler(folder, token):
                 return self.send(200, {"shown": show_claude(folder)})
             self.send(404, {})
 
-        def timeline_note(self, k, title, line, tail):
-            """One note per round for the timeline's changes of a kind, a line added for each change."""
+        def timeline_note(self, k, title, line, tail, key=None, drop=False):
+            """One note per round for the timeline's changes of a kind, one line per thing changed (key): a later
+            change replaces its line, and drop takes it out (a sound added then removed leaves nothing)."""
             d = load(rj)
             old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == k and c["stage"] == d["stage"]
                         and c["round"] >= d["round"] and editable(d, c)), None)
-            lines = ((old or {}).get("lines") or []) + [line]
+            lines = list((old or {}).get("lines") or [])
+            keys = list((old or {}).get("keys") or [None] * len(lines))
+            i = keys.index(key) if key is not None and key in keys else None
+            if i is not None and drop:
+                del lines[i], keys[i]
+            elif i is not None:
+                lines[i] = line
+            else:
+                lines.append(line)
+                keys.append(key)
             text = f"{title}: {'; '.join(lines)}. {tail}"
             if old:
                 def put(x):
+                    if not lines:
+                        x["comments"] = [c for c in x["comments"] if c["id"] != old["id"]]
+                        return
                     for c in x["comments"]:
                         if c["id"] == old["id"]:
-                            c.update(text=text, lines=lines, edited=now())
+                            c.update(text=text, lines=lines, keys=keys, edited=now())
                 update(rj, put)
-                return self.send(200, {**old, "text": text, "lines": lines})
+                return self.send(200, {**old, "text": text, "lines": lines, "keys": keys, "deleted": not lines})
             # lines go in with the note: set after the reply, a change sent right after it read a note without them
-            self.comment({"t": 0.0, "text": text, "on": {"k": k, "text": title.lower()}, "lines": lines})
+            self.comment({"t": 0.0, "text": text, "on": {"k": k, "text": title.lower()}, "lines": lines, "keys": keys})
 
         def comment(self, body):
             text = str(body.get("text", "")).strip()
@@ -2187,6 +3026,7 @@ def make_handler(folder, token):
                 c["on"] = {"k": str(on.get("k") or ""), "text": str(on.get("text") or "")[:300]}
                 if isinstance(body.get("lines"), list):   # a timeline note's running lines, saved with it before the reply
                     c["lines"] = [str(x) for x in body["lines"]]
+                    c["keys"] = [None if x is None else str(x) for x in body.get("keys") or [None] * len(c["lines"])]
             update(rj, lambda d: d["comments"].append(c))
             return self.send(200, c)
 
@@ -3092,6 +3932,27 @@ def new_style_from(folder, name):
     return {"id": str(p.resolve()), "name": name, "rules": 0, "here": False, "mine": False, "new": True}
 
 
+def skill_choices():
+    """The learn panel's skills: every skill the user owns (skillrules.skill_dirs) that is not a saved style's own
+    skill, as {"id": "skill:<name>", "name", "skill", "path", "about"} (about: its description, for Claude to pick)."""
+    try:
+        from ai_editor import skillrules, styleskill
+        styles = {n for _, n in styleskill.saved()}
+        out, seen = [], set()
+        for d in skillrules.skill_dirs():
+            for md in sorted(Path(d).glob("*/SKILL.md")):
+                n = md.parent.name
+                if n in seen or n in styles or not skillrules.find_skill(n):
+                    continue
+                seen.add(n)
+                m = re.search(r"^description:\s*(.+)$", md.read_text(encoding="utf-8", errors="replace")[:4000], re.M)
+                out.append({"id": "skill:" + n, "name": n.replace("-", " ").capitalize(), "skill": n, "path": str(md),
+                            "about": (m.group(1).strip() if m else "")[:160]})
+        return out[:60]
+    except Exception:
+        return []
+
+
 def style_label(folder):
     """What the learn panel calls the style the edit used: its name on the home page, else My style."""
     try:
@@ -3120,17 +3981,25 @@ def disposition(name):
 def learn_prompt(folder, d):
     """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes."""
     if d["learn"]["state"] == "none":
-        return "LEARN: no notes this session, so nothing to learn. The page says so; say nothing about it."
+        return "LEARN: no notes or edits this session, so nothing to learn. The page says so; say nothing about it."
     st = d["learn"]["style"]
-    lines = [f"LEARN: the video is approved. Turn this session's notes and your replies (below) into at most 6 "
-             f"one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
+    lines = [f"LEARN: the video is approved. Turn this session's notes, your replies and the user's hands-on edits (below) "
+             f"into at most 8 one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
              f"first 5 s\". Leave out one-off fixes (a word cut at 0:12) and notes already saved as rules. Post them "
              f"([] when none is about the style); the page shows them with checkboxes:",
              f"  python3 {Path(__file__).resolve()} {folder} learn --propose "
              f"'[{{\"rule\": \"...\", \"section\": \"cut|captions|visuals|sound|layout\", \"set\": \"captions.size_pct=4.5\"}}]'",
              "  (or a path to a .json file holding that list). \"set\" only when a taste setting maps (the taste "
              "skill's table). Then run `wait` again: it returns with the rules the user ticked. The skill-improver "
-             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin)."]
+             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin).",
+             "Give every rule a \"to\": where it belongs, one id from the list below. A rule about this kind of video "
+             "goes to this video's style; a rule for every video to My style; a rule about what one of the user's skills "
+             "does (trial reels, a talking head, a thumbnail) to that skill. The page shows your pick; the user can change it."]
+    lr = d["learn"]
+    for x in lr.get("styles") or []:
+        lines.append(f"  to \"{x['id']}\": {x['name']}" + (" (this video's style, the default)" if x.get("here") else " (every video)" if x.get("mine") else ""))
+    for x in lr.get("skills") or []:
+        lines.append(f"  to \"{x['id']}\": the {x['skill']} skill" + (f": {x['about']}" if x.get("about") else ""))
     try:
         from ai_editor import skillrules
         tg = skillrules.target(folder)
@@ -3144,6 +4013,11 @@ def learn_prompt(folder, d):
                      )
         if tg["path"]:
             lines += ["  " + ln for ln in skillrules.learned(Path(tg["path"]).read_text(encoding="utf-8"))] or ["  (none yet)"]
+    if lr.get("edits"):   # edit_patterns: what the user did on the page, counted, not what they typed
+        lines.append("Hands-on edits the user made on the page (moved, resized, picked), summed up. Word each one that is "
+                     "about the style as one short rule, in its section; where a [set] is given, put it in the rule's \"set\" "
+                     "exactly, so the next draft changes:")
+        lines += [f"  - {x['line']} [{x['section']}]" + (f" [set {x['set']}]" if x.get("set") else "") for x in lr["edits"]]
     for c in sorted(session_notes(d), key=lambda c: (c["stage"] != "cut", c["round"], c["t"])):
         saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else ""
         keep = " [the user asked to keep this as a rule: propose it]" if c.get("keep") and not saved else ""
@@ -3158,12 +4032,11 @@ def learn_chosen(folder, d):
         print("LEARN: the user pressed Not now. Nothing is saved; say nothing more about it.")
         return "learn"
     rules = [lr["rules"][i] for i in lr["chosen"]]
-    to = lr.get("to")
-    if to and not to.get("here"):   # Save to: learn --done saves them there
-        lr = {**lr, "style": to["name"] + (f" (a new style, a copy of {lr['style']})" if to.get("new") else "")}
-    print(f"LEARN: the user ticked {len(rules)} rule{'s' if len(rules) != 1 else ''} for {lr['style']}:")
+    print(f"LEARN: the user ticked {len(rules)} rule{'s' if len(rules) != 1 else ''}, each with where it goes:")
     for r in rules:
-        print(f"  - [{r['section']}] {r['rule']}" + (f" ({r['set']})" if r.get("set") else ""))
+        to = (r.get("dest") or {}).get("name") or lr["style"]
+        print(f"  - [{r['section']}] {r['rule']}" + (f" ({r['set']})" if r.get("set") else "") + f" -> {to}"
+              + (" (a new style)" if (r.get("dest") or {}).get("new") else ""))
     print(f"Save them (styleskill.learn: the style's overrides, rules and skill) and tell the page:\n"
           f"  python3 {Path(__file__).resolve()} {folder} learn --done")
     return "learn"
@@ -3191,8 +4064,8 @@ def learn_propose(folder, raw):
         st = r.get("set") or None
         if st is not None and (not isinstance(st, str) or "=" not in st):
             sys.exit(f"\"set\" is key.path=value: {r}")
-        out.append({"rule": str(r["rule"]).strip().rstrip("."), "section": sec, "set": st,
-                    **{k: str(r[k]).strip() for k in ("why", "replace") if r.get(k)}})
+        out.append({"rule": str(r["rule"]).strip().rstrip("."), "section": sec, "set": st, "set_text": set_text(st),
+                    **{k: str(r[k]).strip() for k in ("why", "replace", "to") if r.get(k)}})
 
     def f(d):
         if not d.get("learn"):
@@ -3208,33 +4081,36 @@ def learn_done(folder, summary):
     lr = load(folder / "review.json").get("learn") or {}
     if lr.get("state") != "chosen":
         sys.exit("nothing ticked to save: run `wait` for the user's pick first")
-    sp = edit_style(folder)
-    style = shown_style(sp)
+    sp0 = edit_style(folder)
+    style0 = shown_style(sp0)
     from ai_editor import skillrules
     tg = skillrules.target(folder)
-    to = lr.get("to")
-    if to and not to.get("here"):   # Save to: another saved style, or a new one made from this video's style
-        sp = Path(to["id"]) if to["id"] else None
-        style, tg = to["name"], {"kind": "settings"}
-    saved = []   # (rule, status, kind, ref) for the receipts
-    if tg["kind"] == "skill":   # a skill style: its skill made the edit, so the rules go into its SKILL.md
-        if not tg["path"]:
-            sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
-        for r in (lr["rules"][i] for i in lr["chosen"]):
-            status, line = skillrules.add(tg["path"], r["rule"], r.get("why") or f"from the notes on {folder.name}",
+    saved, names = [], []   # (style label, rule, status, kind, ref) for the receipts; every place saved to
+    for r in (lr["rules"][i] for i in lr["chosen"]):
+        dest = r.get("dest") or {"here": True}
+        if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
+            md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], style0)
+            if not md:
+                sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
+            status, line = skillrules.add(md, r["rule"], r.get("why") or f"from the notes on {folder.name}",
                                           r.get("replace"), edit=str(folder))
-            saved.append((skillrules.rule_of(line), status, "skill", tg["path"]))
-            print(f"{status}: {line} ({tg['path']})")
-    for r in (lr["rules"][i] for i in lr["chosen"] if tg["kind"] == "settings"):
-        setting, _, raw = (r.get("set") or "").partition("=")
-        status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
-                                     edit=folder, source="review")
-        saved.append((x["rule"], status, "settings", x["id"]))
-        print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
-
+            saved.append((label, skillrules.rule_of(line), status, "skill", md))
+            print(f"{status}: {line} ({md})")
+        else:   # a style: its overrides, rules and skill (styleskill.learn)
+            sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
+            label = style0 if dest.get("here") else dest["name"]
+            setting, _, raw = (r.get("set") or "").partition("=")
+            status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
+                                         edit=folder, source="review")
+            saved.append((label, x["rule"], status, "settings", x["id"]))
+            print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
+        if saved[-1][0] not in names:
+            names.append(saved[-1][0])
+    style = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
     def done(d):
-        d["learn"].update(state="done", style=style, summary=summary or f"Saved to {style}. Next video uses it.",
-                          receipts=[receipt(d, style, *x, src="teach")["id"] for x in saved])
+        d["learn"].update(state="done", style=style, summary=summary or f"Saved to {style}. Next video uses "
+                          f"{'it' if len(saved) == 1 else 'them'}.",
+                          receipts=[receipt(d, *x, src="teach")["id"] for x in saved])
     update(folder / "review.json", done)
     print(f"saved to {style}")
 
@@ -3519,19 +4395,144 @@ def demo_bake(tmp):
         shutil.copy2(f / "plan.json", f / "render.plan.json")
         stamp()
         return subprocess.CompletedProcess(cmd, 0, "", "")
-    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20]}}}), encoding="utf-8")
+    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20], "start": 0.8, "end": 1.9}}}), encoding="utf-8")
     p = load(f / "plan.json")
     p["cards"] = [{"start": 0.5, "end": 1.5, "trigger_word": "repo", "box": [30, 60, 40, 20]}]
     (f / "plan.json").write_text(json.dumps(p), encoding="utf-8")
     assert bake(f, run=fake) is None and ran == [["patch", str(f), "--plan", "plan.json"]], ran
-    assert load(f / "plan.json")["cards"][0]["box"] == [5, 10, 40, 20], "the moved card is baked in"
+    c = load(f / "plan.json")["cards"][0]
+    assert (c["box"], c["start"], c["end"]) == ([5, 10, 40, 20], 0.8, 1.9), "the moved and retimed card is baked in"
     p = load(f / "plan.json")
     assert [x["kind"] for x in p["texts"]] == ["title", "label"] and p["texts"][1]["size_pct"] == 8, p["texts"]
     d = load(f / "review.json")
     assert d["baked"] == 1 and baked_texts(f, d) == ["t1"] and BAKE[str(f)]["state"] == "done", d
     assert filecmp.cmp(f / "render.mp4", d["video"], shallow=False), "the round's video is the patched render"
+    # a picture dropped from the Media panel: appended to the plan's cards once, however often it bakes
+    (f / "media").mkdir()
+    (f / "media" / "p.png").write_bytes(b"p")
+    ov = load(f / "overrides.json")
+    ov["added_cards"] = [{"key": "media1@0.200", **media_card(f, "media/p.png", 0.2, 2.0, [20, 30, 60, 30], [4, 2])}]
+    assert ov["added_cards"][0]["end"] == 2.0, "a picture stops at the end of the video"
+    (f / "overrides.json").write_text(json.dumps(ov), encoding="utf-8")
+    for _ in range(2):
+        assert bake(f, run=fake) is None
+    cs = load(f / "plan.json")["cards"]
+    assert [c.get("override") for c in cs] == ["media1@0.200", "repo@0.500"] and cs[0]["src"] == "media/p.png" and cs[0]["format"] == "plain", cs
+    assert cards_added(f, load(f / "review.json")) == [], "baked: the video shows it"
     update(f / "review.json", lambda d: d.update(sent=True))
-    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 1
+    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 3
+
+
+def demo_live(tmp):
+    """/live/plan: the plan the next bake makes (texts.json, overrides.json), with the placed sounds, this video's
+    caption style and footage the browser plays; /live/media serves files under the edit only."""
+    f = tmp / "live"
+    (f / "review" / "snap-edit1").mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=2", "-c:v", "libx264",
+                    "-pix_fmt", "yuv420p", str(f / "cut.mp4")], check=True)
+    shutil.copy2(f / "cut.mp4", f / "render.mp4")
+    plan = {"video": "cut.mp4", "fps": 30, "durationInFrames": 60, "width": 64, "height": 36,
+            "captions": {"style": {"y_pct": 70, "words_per_caption": 3}, "chunks": [{"text": "one two", "start": 0.0, "end": 1.0, "words": [
+                {"text": "one", "start": 0.0, "end": 0.5}, {"text": "two", "start": 0.5, "end": 1.0}]}]},
+            "texts": [{"kind": "title", "text": "T", "start": 0, "end": 1}],
+            "cards": [{"start": 0.5, "end": 1.5, "trigger_word": "repo", "box": [30, 60, 40, 20]}],
+            "sfx": [{"t": 0.4, "src": ".sfx/pop.wav", "event": 0.5}, {"t": 1.0, "src": ".sfx/clip-old.wav", "placed": "old"}]}
+    for x in (f / "plan.json", f / "render.plan.json", f / "review" / "snap-edit1" / "plan.json"):
+        x.write_text(json.dumps(plan), encoding="utf-8")
+    clone(f / "render.mp4", f / "review" / "v-edit1.mp4")
+    save(f / "review.json", {"stage": "edit", "round": 1, "sent": True, "stills": False, "events": [], "comments": [],
+                             "plan": str(f / "plan.json"), "snap": "snap-edit1", "video": str(f / "review" / "v-edit1.mp4")})
+    d = load(f / "review.json")
+    assert live_plan(f, d) == {"why": "the render was finished by hand"}, "a render finished by hand plays as the MP4"
+    (f / "render.stamp.json").write_text(json.dumps({"size": (f / "render.mp4").stat().st_size,
+                                                     "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
+    assert live_ready(f, d) is None and bake_ready(f, d) == "Claude has this draft", "live while Claude has it; only the bake waits"
+    (f / "texts.json").write_text(json.dumps({"items": [{"id": "t1", "text": "hi", "style": "box", "start": 0.5, "end": 1.5,
+                                                         "x_pct": 50, "y_pct": 30, "size_pct": 8, "color": "#FF3B30"}]}), encoding="utf-8")
+    (f / "overrides.json").write_text(json.dumps({"cards": {"repo@0.500": {"box": [5, 10, 40, 20], "start": 0.8, "end": 1.9}},
+                                                  "words": {"0.500": "TWO"}}), encoding="utf-8")
+    (f / "sounds.json").write_text(json.dumps({"items": [{"id": "a1", "t": 1.2, "sound": "song one.mp3", "kind": "clip", "in": 0.5,
+                                                          "dur": 0.8, "vol": 0.5}]}), encoding="utf-8")
+    lp = live_plan(f, d)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import apply_overrides
+    want = load(f / "plan.json")   # what bake() writes before its patch render
+    want["texts"] = [x for x in want["texts"] if x.get("kind") != "label"] + typed_labels(f)
+    want = apply_overrides(want, f, "plan.json")
+    assert lp["texts"] == want["texts"] and lp["texts"][1]["color"] == "#FF3B30", lp["texts"]
+    assert [{k: v for k, v in c.items() if k != "_key"} for c in lp["cards"]] == want["cards"] and lp["cards"][0]["_key"] == "repo@0.500"
+    assert lp["captions"]["chunks"] == want["captions"]["chunks"] and lp["captions"]["chunks"][0]["text"] == "one TWO"
+    assert [(c["src"], c.get("from"), c.get("dur"), c.get("vol")) for c in lp["sfx"]] == [
+        (".sfx/pop.wav", None, None, None), ("/audio/song%20one.mp3", 0.5, 0.8, 0.5)], lp["sfx"]   # the old placed copy is gone
+    assert live_plan(f, d) is lp, "unchanged files: the same plan, nothing made again"
+    from ai_editor import taste
+    rp = taste.rules_path()
+    keep = rp.read_bytes() if rp.exists() else None   # this demo's caption rules come out again after
+    set_captions(f, style={"y": 40})
+    assert live_plan(f, d)["captions"]["style"]["y_pct"] == 40, "this video's caption place"
+    set_captions(f, words="1")
+    assert [c["text"] for c in live_plan(f, d)["captions"]["chunks"]] == ["one", "TWO"], "one word at a time: paged again"
+    rp.write_bytes(keep) if keep is not None else rp.unlink()
+    th = LIVE_PROXY.get(str(f / ".live" / "cut.mp4"))   # no render copy: the cut plays while a proxy is made, then the proxy
+    assert th, "a proxy is being made"
+    th.join(60)
+    assert live_plan(f, d)["video"] == ".live/cut.mp4" and (f / ".live" / "cut.mp4.vf").is_file()
+    (tmp / "outside.txt").write_text("secret", encoding="utf-8")
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def code(p, **h):
+        try:
+            with urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}{p}?t=tok", headers=h)) as r:
+                return r.status
+        except urllib.error.HTTPError as e:
+            return e.code
+    assert code("/live/media/cut.mp4") == 200 and code("/live/media/.live/cut.mp4", Range="bytes=0-9") == 206
+    for bad in ("/live/media/../outside.txt", "/live/media/%2e%2e/outside.txt", "/live/media/" + quote(str(tmp / "outside.txt")),
+                "/live/media/review", "/live/media/nope.png"):
+        assert code(bad) == 404, bad
+    assert code("/live/plan") == 200
+    srv.shutdown()
+    srv.server_close()
+
+
+def demo_learn_edits(tmp):
+    """edit_patterns on fixed events: alike edits and changed look settings become lines, one-offs do not."""
+    E = lambda change, target, frm, to, what="": {"source": "review", "change": change, "target": target, "from": frm, "to": to, "what": what}
+    ev = [E("card.move", f"c{i}@1.000", [0, 40, 50, 30], [0, 28, 50, 30]) for i in range(4)]   # 4 cards up 12%
+    ev += [E("card.move", "c4@1.000", [0, 40, 50, 30], [2, 40, 50, 30]),   # one only nudged sideways
+           E("card.retime", "c0@1.000", None, [1, 3]),   # a one-off
+           E("captions.size_pct", "captions", 3.6, 4.0), E("captions.size_pct", "captions", 4.0, 4.3),
+           E("captions.color", "captions", None, "#FFD60A")]
+    ev += [E("text.add", f"t{i}", None, {"id": f"t{i}", "text": "x", "font": "Anton", "style": "outline"}) for i in range(3)]
+    ev += [E("cut.piece", f"{a:.2f}", None, [a, a + w], "") for a, w in ((1, 0.45), (5, 0.6), (9, 0.5), (12, 0.4))]
+    ev += [E("cut.piece", "20.00", None, [20, 22], "a whole line"), E("cut.piece", "30.00", None, [30, 30.5], ""),
+           E("cut.restore", "30.00", [30, 30.5], None),
+           E("sfx.move", "s1", {"t": 2, "vol": 1.0, "kind": "clip"}, {"t": 2, "vol": 0.6, "kind": "clip"}),
+           E("sfx.move", "s1", {"t": 2, "vol": 0.6, "kind": "clip"}, {"t": 2, "vol": 0.4, "kind": "clip"}),
+           E("caption.retype", "1.00", "helo", "hello")]
+    got = {x["line"]: x for x in edit_patterns(ev, {"cards": 5, "duration": 60})}
+    assert list(got) == ["moved 4 of 5 cards up by about 12% of the frame", "made captions 19% bigger (size 3.6 -> 4.3)",
+                         "changed the caption colour to #FFD60A", "picked Anton for 3 of 3 texts", "cut 4 pauses longer than 0.4 s",
+                         "turned the dropped song down to 40%"], list(got)
+    assert got["made captions 19% bigger (size 3.6 -> 4.3)"]["set"] == "captions.size_pct=4.3"
+    assert got["cut 4 pauses longer than 0.4 s"]["set"] == "cut.max_pause=0.12" and got["picked Anton for 3 of 3 texts"]["set"] is None
+    assert {x["section"] for x in got.values()} == {"visuals", "captions", "cut", "sound"}
+    # one of each is no pattern; two cards out of a 5-card minute set cards a minute
+    one = [E("card.move", "a@1.000", [0, 40, 50, 30], [0, 20, 50, 30]), E("text.add", "t", None, {"font": "Anton"}),
+           E("cut.piece", "1.00", None, [1, 1.5], ""), E("sfx.remove", "x", {}, None)]
+    assert edit_patterns(one) == [], edit_patterns(one)
+    two = edit_patterns([E("card.delete", "a@1", [0, 0, 1, 1], None), E("card.delete", "b@2", [0, 0, 1, 1], None)], {"cards": 5, "duration": 60})
+    assert two == [{"line": "took out 2 of 5 cards", "section": "visuals", "n": 2, "set": "cards.per_min=3.0"}], two
+    assert set_text("captions.size_pct=4.3") == "sets caption size to 4.3" and set_text("cut.max_pause=0.12") == "sets pause length to 0.12 s"
+    assert set_text(None) == "" and set_words("sfx", False) == "sound effects to off"
+    # log_edit appends a row the summariser reads back; preview.py's own rows stay out
+    f = tmp / "le"
+    f.mkdir()
+    save(f / "review.json", {"stage": "edit", "round": 2})
+    (f / "corrections.jsonl").write_text(json.dumps({"source": "preview", "change": "card.set", "from": None, "to": {}}) + "\n", encoding="utf-8")
+    log_edit(f, "captions.size_pct", "captions", 3.6, 4.3)
+    assert [(e["change"], e["stage"], e["round"], e["from"], e["to"]) for e in edit_events(f)] == [("captions.size_pct", "edit", 2, 3.6, 4.3)]
 
 
 def demo():
@@ -3541,7 +4542,9 @@ def demo():
     tmp = Path(tempfile.mkdtemp(prefix="review_demo_"))
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")   # start records the folder in the library index there
     demo_timings(tmp)
+    demo_learn_edits(tmp)
     demo_bake(tmp)
+    demo_live(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
@@ -3914,7 +4917,28 @@ def demo():
     assert row["id"] == nt["id"] and (row["text"], row["size_pct"], row["start"], row["end"]) == ("new one", 9.0, 3.0, 4.0), row
     st = json.loads(get("/state").read())
     assert st["bake"]["state"] in ("waiting", "working", "off") and st["texts_baked"] == [], st["bake"]
+    # a font and a colour (Texts.tsx draws them); a drag on the timeline sends only the times and keeps them
+    post("/text/edit", {"id": nt["id"], "font": "Anton", "color": "#ff3b30"})
+    post("/text/edit", {"id": nt["id"], "start": 5, "end": 7.5})
+    row = load(folder / "texts.json")["items"][-1]
+    assert (row["font"], row["color"], row["start"], row["end"]) == ("Anton", "#FF3B30", 5.0, 7.5), row
+    post("/text/edit", {"id": nt["id"], "font": "TikTok Sans", "color": "#FFFFFF"})   # back to the default: the keys go
+    assert not {"font", "color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    bad = urllib.request.Request(base + "/text/edit?t=" + tok, json.dumps({"id": nt["id"], "font": "Comic Sans"}).encode(), method="POST")
+    try:
+        urllib.request.urlopen(bad)
+        raise AssertionError("a font not in TEXT_FONTS saved")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
     post("/text/delete", {"id": nt["id"]})
+    # the timeline's Video row: split and cut pieces, merged, kept in overrides.json, one note that a put-back removes
+    assert timeline_cuts({"splits": [3, 1, 1, 0], "gone": [[2, 3], [1, 2], [5, 5.01]]}) == {"splits": [1, 3], "gone": [[1, 3]]}
+    r = post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]]})
+    note = [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
+    assert load(folder / "overrides.json")["cuts"] == {"splits": [1.0, 2.0], "gone": [[1.0, 2.0]]} and r["id"] and len(note) == 1 and "0:01.0-0:02.0" in note[0]["text"], note
+    assert json.loads(get("/state").read())["cuts"]["gone"] == [[1.0, 2.0]]
+    post("/timeline/cut", {"splits": [1, 2], "gone": []})
+    assert not [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
     # the Captions panel: words at a time and the look, saved for this video only, with a note each
     from ai_editor import taste as _taste
     cc1 = post("/captions", {"words": "sentence"})
@@ -3926,7 +4950,13 @@ def demo():
     assert cc1["text"].startswith("Captions: a sentence at a time, for this video"), cc1
     assert cc2["id"] == cc1["id"] and cc2["text"].startswith("Captions: a sentence at a time and the bold look"), cc2   # one note, kept current
     assert all(r["scope"] == f"video:{folder.name}" for r in _taste.load_rules() if r.get("setting", "").startswith("captions.")), "this video only"
-    for bad in ({"words": "7"}, {"look": "nope"}, {}):
+    cc3 = post("/captions", {"size": 5.55, "y": 62, "color": "#ffd60a", "highlight": "#FF3B30"})
+    cap = (_taste.load_json(folder, count=False) or {}).get("captions") or {}
+    assert (cap.get("size_pct"), cap.get("y_pct"), cap.get("color"), cap.get("highlight_color")) == (5.5, 62.0, "#FFD60A", "#FF3B30"), cap
+    cui = json.loads(get("/state").read())["captions_ui"]
+    assert cui["mine"] == {"size_pct": 5.5, "y_pct": 62, "color": "#FFD60A", "highlight_color": "#FF3B30"} and "base" in cui, cui
+    assert cc3["id"] == cc1["id"] and cc3["text"].startswith("Captions: a sentence at a time, the bold look, size 5.5, 62% down"), cc3
+    for bad in ({"words": "7"}, {"look": "nope"}, {}, {"size": 40}, {"y": "high"}, {"color": "red"}, {"highlight": "#12"}):
         try:
             post("/captions", bad)
             raise AssertionError(bad)
@@ -3968,8 +4998,8 @@ def demo():
         assert [x["sound"] for x in placed] == ["my ding.wav"] and placed[0]["t"] == 2.0, placed
         sr = post("/sfx/remove", {"t": 2.0, "placed": placed[0]["id"], "src": "my ding.wav"})
         sx = post("/sfx/remove", {"t": 3.5, "src": ".sfx/pop.wav"})
-        assert sr["id"] == sa["id"] == sx["id"] and sx["lines"] == ["add my ding at 0:02.0", "remove my ding at 0:02.0",
-                                                                      "remove pop at 0:03.5"], sx
+        # one line per sound, the net result: added then removed leaves nothing, the plan's pop stays removed
+        assert sr["id"] == sa["id"] == sx["id"] and sr["lines"] == [] and sx["lines"] == ["remove pop at 0:03.5"], (sr, sx)
         assert not json.loads(get("/state").read())["placed_sounds"] and json.loads(get("/state").read())["sfx_removed"] == [3.5]
         assert load(folder / "overrides.json")["sfx"]["3.500"] == {"deleted": True}
         for bad in ({"t": 1, "sound": "nope.wav"}, {"sound": "my ding.wav"}):
@@ -3978,8 +5008,23 @@ def demo():
                 raise AssertionError(bad)
             except urllib.error.HTTPError as e:
                 assert e.code == 400, bad
+        # an audio file dropped on the timeline: a clip as long as the file, then moved, trimmed and turned down
+        import wave
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1), w.setsampwidth(2), w.setframerate(8000), w.writeframes(b"\x10\x20" * 8000 * 2)
+        up = urllib.request.Request(base + "/audio/upload?name=my%20song.wav&at=1.5&t=" + tok, buf.getvalue(), method="POST")
+        urllib.request.urlopen(up).read()
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x.get("kind") == "clip")
+        assert (clip["sound"], clip["t"], clip["in"], clip["vol"]) == ("my song.wav", 1.5, 0.0, 1.0) and 0 < clip["dur"] <= 2.0, clip
+        assert (folder / "audio" / "my song.wav").is_file() and get("/audio/my%20song.wav").read()[:4] == b"RIFF"
+        post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip
+        sm = post("/sfx/remove", {"t": 3, "placed": clip["id"], "src": "my song.wav"})
+        assert sm["lines"] == ["remove pop at 0:03.5"], sm   # dropped, moved and removed: still one line
+        post("/delete", {"id": sa["id"]})   # the sounds note, so the next one starts clean
         (folder / "overrides.json").unlink()
-        post("/delete", {"id": sa["id"]})
         post("/delete", {"id": s1["id"]})
     finally:
         if keep_lib is None:
@@ -3992,15 +5037,22 @@ def demo():
     assert caption_words(["1.000"], "") == {"1.000": ""}
     k1 = post("/captions/text", {"s": 1.0, "w": [1.0, 1.3], "text": "hello world!", "old": "hello world"})
     k2 = post("/captions/text", {"s": 2.0, "w": [2.0], "text": "", "old": "later"})
-    assert k2["id"] == k1["id"] and k2["text"].startswith('Captions retyped: "hello world" at 0:01.0 now "hello world!"; "later" at 0:02.0 taken out.'), k2
+    assert k1 == k2 == {"ok": True} and not any("Captions retyped" in c["text"] for c in load(folder / "review.json")["comments"]), k2   # baked, no note
     assert json.loads(get("/state").read())["cap_words"] == {"1.000": "hello", "1.300": "world!", "2.000": ""}
+    post("/captions/time", {"w": 1.0, "s": 0.9, "e": 1.8, "text": "hello world"})   # a page dragged on the Captions row
+    assert json.loads(get("/state").read())["cap_times"] == {"1.000": [0.9, 1.8]} and load(folder / "overrides.json")["cap_times"]
+    for bad in ({"w": 1, "s": 2, "e": 2.05}, {"w": "x", "s": 0, "e": 1}, {"s": 0, "e": 1}):
+        try:
+            post("/captions/time", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
     try:
         post("/captions/text", {"s": 1.0, "w": [], "text": "x"})
         raise AssertionError("a line with no words")
     except urllib.error.HTTPError as e:
         assert e.code == 400
     (folder / "overrides.json").unlink()
-    post("/delete", {"id": k1["id"]})
     # a card on the video: moved or resized, then deleted, into overrides.json with no note (Claude does not have the
     # round): the page draws it moved until the bake; its picture is served
     trk_items = json.loads(get("/data?k=edit-1").read())["items"]["cards"]
@@ -4019,6 +5071,68 @@ def demo():
         except urllib.error.HTTPError as e:
             assert e.code == 400, bad
     assert cd == {"ok": True} and json.loads(get("/state").read())["cards_pending"] == [{"key": trk_items[0]["key"], "deleted": True}]
+    (folder / "overrides.json").unlink()
+    # the timeline's Images row: a card moved or trimmed in time keeps its box, shows as pending, and bad times are refused
+    k0, c0 = trk_items[0]["key"], trk_items[0]
+    post("/card/edit", {"key": k0, "t": 4, "t_end": 6.5, "box": [10, 12, 50, 30]})
+    ct = post("/card/edit", {"key": k0, "t": 4, "t_end": 6.5, "start": 4.004, "end": 6.5})
+    assert ct == {"ok": True} and load(folder / "overrides.json")["cards"][k0] == {"box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}
+    pend = json.loads(get("/state").read())["cards_pending"]
+    assert pend == [{"key": k0, "box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}], pend
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "box": c0["box"], "start": c0["s"], "end": c0["e"]})   # an undo: back where the video has it
+    assert json.loads(get("/state").read())["cards_pending"] == [], "back in place is not pending"
+    for bad in ({"start": -1, "end": 2}, {"start": 3, "end": 3.1}, {"start": 3}, {"start": "x", "end": 4}, {}):
+        try:
+            post("/card/edit", {"key": k0, "t": 1, "t_end": 2, **bad})
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
+    (folder / "overrides.json").unlink()
+    # the Media panel: a file streamed into media/ (not assets.json), dropped on the video as a card the page draws at
+    # once; moved and deleted by its key like any card
+    mup = lambda name, data: json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"{base}/media/upload?name={quote(name)}&t={tok}", data, method="POST")).read())
+    n_assets = len(json.loads(get("/state").read())["assets"])
+    mu = mup("my pic.png", base64.b64decode(png.split(",", 1)[1]))
+    st = json.loads(get("/state").read())
+    assert mu["src"] == "media/my pic.png" and st["media"][0] == {"src": "media/my pic.png", "kind": "image", "name": "my pic.png"}, st["media"]
+    assert len(st["assets"]) == n_assets and get("/media-file/media/my%20pic.png").headers["Content-Type"] == "image/png"
+    ma = post("/media/add", {"src": "media/my pic.png", "t": 1.0, "box": [20, 30, 60, 33.8], "size": [1, 1]})
+    assert ma["ok"] and ma["key"] == "media1@1.000" and (ma["start"], ma["end"]) == (1.0, 4.0), ma
+    added = load(folder / "overrides.json")["added_cards"]
+    assert added == [{"key": "media1@1.000", "src": "media/my pic.png", "start": 1.0, "end": 4.0, "box": [20.0, 30.0, 60.0, 33.8],
+                      "entrance": "pop", "trigger_word": "", "format": "plain", "size": [1, 1]}], added
+    ca = json.loads(get("/state").read())["cards_added"]
+    assert ca == [{"s": 1.0, "e": 4.0, "box": [20.0, 30.0, 60.0, 33.8], "key": "media1@1.000", "added": True, "label": "your picture my pic.png",
+                   "pic": "/media-file/media/my%20pic.png", "src": "media/my pic.png"}], ca
+    post("/card/edit", {"key": "media1@1.000", "t": 1, "t_end": 4, "box": [10, 20, 50, 28], "start": 2.0, "end": 5.0})
+    ca = json.loads(get("/state").read())["cards_added"]
+    assert (ca[0]["box"], ca[0]["s"], ca[0]["e"]) == ([10.0, 20.0, 50.0, 28.0], 2.0, 5.0) and json.loads(get("/state").read())["cards_pending"] == [], ca
+    assert post("/media/add", {"src": "media/my pic.png", "t": 0.5, "box": [20, 30, 60, 30]})["key"] == "media2@0.500", "keys never repeat"
+    with tempfile.TemporaryDirectory() as vt:   # a clip: a video_card as long as the clip
+        clip = Path(vt, "c.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=2:s=160x90:r=10", str(clip)], check=True)
+        mv = mup("c.mp4", clip.read_bytes())["src"]
+    assert get("/media-file/" + mv + "?thumb=1").headers["Content-Type"] == "image/jpeg"
+    vc = post("/media/add", {"src": mv, "t": 0.2, "box": [20, 30, 60, 20], "size": [160, 90]})
+    vcard = load(folder / "overrides.json")["added_cards"][-1]
+    assert vc["end"] == 2.2 and vcard["anim"] == {"type": "video_card", "props": {"src": "media/c.mp4", "size": [160, 90]}} and "format" not in vcard, vcard
+    assert json.loads(get("/state").read())["cards_added"][-1]["pic"].endswith("?thumb=1")
+    post("/card/edit", {"key": "media1@1.000", "t": 2, "t_end": 5, "deleted": True})
+    assert [c["key"] for c in json.loads(get("/state").read())["cards_added"]] == ["media2@0.500", vc["key"]], "deleted: gone from the page"
+    for bad in ({"src": "review.json", "t": 1, "box": [0, 0, 10, 10]}, {"src": "media/../review.json", "t": 1, "box": [0, 0, 10, 10]},
+                {"src": "media/my pic.png", "t": 1, "box": [0, 0, 1, 10]}, {"src": "media/my pic.png", "t": -1, "box": [0, 0, 10, 10]}):
+        try:
+            post("/media/add", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
+    for bad in ("/media-file/../review.json", "/media-file/review.json", "/media-file/media/none.png"):
+        try:
+            get(bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 404, bad
     (folder / "overrides.json").unlink()
     for bad in ("/card-img/../review.json", "/card-img/review.json"):
         try:
@@ -4063,6 +5177,21 @@ def demo():
     assert "LEARN: the video is approved" in out and "#1 the cut r1: cut the hello, please -> reply: cut it" in out, out
     lr0 = json.loads(get("/state").read())["learn"]
     assert {k: lr0[k] for k in ("state", "style")} == {"state": "reading", "style": "My style"}, lr0
+    # every hands-on edit above is a row in corrections.jsonl with its before and after; the caption look the user set
+    # comes back as rules with their setting, in the LEARN prompt too; one-off fixes (a word retyped) do not
+    ev = edit_events(folder)
+    kinds = {e["change"] for e in ev}
+    assert {"text.add", "text.edit", "text.delete", "cut.piece", "cut.restore", "captions.size_pct", "captions.preset", "sound.pick",
+            "sfx.add", "sfx.remove", "sfx.move", "caption.retype", "caption.time", "card.move", "card.delete", "card.retime",
+            "card.add"} <= kinds, kinds
+    assert all(e["source"] == "review" and e["stage"] == "edit" and "from" in e and "to" in e for e in ev), ev[:2]
+    mv = next(e for e in ev if e["change"] == "card.move")
+    assert mv["to"] == [10, 12.3, 50, 30] and isinstance(mv["from"], list) and mv["from"] != mv["to"], mv
+    pl0 = {x["set"]: x["line"] for x in lr0["edits"]}
+    assert pl0.get("captions.size_pct=5.5") == "set the caption size to 5.5" and pl0.get("captions.y_pct=62") == "put captions 62% down the frame", pl0
+    assert "captions.preset=bold" in pl0 and "captions.words_per_caption=12" in pl0 and "captions.highlight_color=#FF3B30" in pl0, pl0
+    assert not any("retyp" in x["line"] for x in lr0["edits"]), lr0["edits"]
+    assert "[set captions.preset=bold]" in out and "Hands-on edits the user made on the page" in out, out
     assert lr0["styles"][0]["here"] and lr0["styles"][0]["name"] == "My style", lr0["styles"]   # Save to: this video's style first
     try:
         post("/comment", {"t": 2, "text": "after approve"})
@@ -4131,22 +5260,50 @@ def demo():
         raise AssertionError("done before the user ticked")
     except SystemExit as e:
         assert "nothing ticked" in str(e)
-    for bad, code in (({"chosen": [0], "to": "/no/such/style.json"}, 400), ({"chosen": [0], "new": " "}, 409)):
+    for bad, code in (({"chosen": [0], "to": "/no/such/style.json"}, 400), ({"chosen": [0], "to": {"0": "new"}, "new": " "}, 409),
+                      ({"chosen": [0], "to": {"0": "skill:nope"}}, 400)):
         try:   # Save to takes only a listed style; a new style needs a name
             post("/learn", bad)
             raise AssertionError(bad)
         except urllib.error.HTTPError as e:
             assert e.code == code, (bad, e.code)
-    post("/learn", {"chosen": [0, 2, 9], "to": lr["styles"][0]["id"]})
+    # each rule its own place: rule 0 this video's style, rule 2 one of the user's skills (the page's per-rule pick)
+    tsk = tmp / "skills" / "trial-notes" / "SKILL.md"
+    tsk.parent.mkdir(parents=True)
+    tsk.write_text("---\nname: trial-notes\ndescription: trial reels of a posted reel\n---\n\n# Trial notes\n", encoding="utf-8")
+    assert any(x["id"] == "skill:trial-notes" and x["about"] == "trial reels of a posted reel" for x in skill_choices()), skill_choices()
+    update(folder / "review.json", lambda d: d["learn"].update(skills=skill_choices()))
+    assert 'to "skill:trial-notes": the trial-notes skill: trial reels of a posted reel' in learn_prompt(folder, load(folder / "review.json"))
+    post("/learn", {"chosen": [0, 2, 9], "to": {"0": lr["styles"][0]["id"], "2": "skill:trial-notes"}})
     out = waited()
-    assert out.startswith("LEARN: the user ticked 2 rules for My style:") and "Captions one size smaller (captions.size_pct=4)" in out, out
+    assert out.startswith("LEARN: the user ticked 2 rules, each with where it goes:") and "Captions one size smaller (captions.size_pct=4)" in out, out
+    assert "Keep the pauses short -> Trial notes" in out, out
     assert "Fewer zooms" not in out and "learn --done" in out, out
     with contextlib.redirect_stdout(io.StringIO()):
         learn(done="")
     lr = load(folder / "review.json")["learn"]
-    assert lr["state"] == "done" and lr["summary"] == "Saved to @alice. Next video uses it.", lr
+    assert lr["state"] == "done" and lr["summary"] == "Saved to @alice and Trial notes skill. Next video uses them.", lr
     sk = (tmp / "skills" / "edit-like-alice" / "SKILL.md").read_text(encoding="utf-8")
-    assert "- Keep the pauses short." in sk and "Fewer zooms" not in sk, sk
+    assert "Captions one size smaller" in sk and "Keep the pauses short" not in sk and "Fewer zooms" not in sk, sk
+    # the next draft records the rules it used; the page lists them and turns one off (kept, its setting out) and on
+    small = next(r for r in taste.load_rules() if r["rule"] == "Captions one size smaller")
+    taste.record(folder, "plan.py", [small["id"], 99999])
+    rn = round_data(folder, vid, "edit", 7, None)
+    assert load(folder / "review" / rn)["rules"] == [small["id"], 99999]
+    used = rules_used([small["id"], 99999])   # a rule gone since drops out
+    assert used == [{"id": small["id"], "rule": "Captions one size smaller", "where": "@alice", "off": False,
+                     "did": "caption size to 4"}], used
+    assert post("/rule/off", {"id": small["id"], "off": True}) == {"id": small["id"], "off": True}
+    assert "size_pct" not in (json.loads((sp.parent / "style.overrides.json").read_text(encoding="utf-8")).get("captions") or {})
+    assert rules_used([small["id"]])[0]["off"] and "Captions one size smaller" not in (tmp / "skills" / "edit-like-alice" / "SKILL.md").read_text(encoding="utf-8")
+    assert post("/rule/off", {"id": small["id"], "off": False})["off"] is False
+    assert json.loads((sp.parent / "style.overrides.json").read_text(encoding="utf-8"))["captions"]["size_pct"] == 4
+    try:
+        post("/rule/off", {"id": 99999, "off": True})
+        raise AssertionError("a rule that is gone")
+    except urllib.error.HTTPError as e:
+        assert e.code == 404
+    assert "Keep the pauses short" in tsk.read_text(encoding="utf-8"), tsk.read_text(encoding="utf-8")
     old_lib = os.environ.get("AI_EDITOR_LIBRARY")
     os.environ["AI_EDITOR_LIBRARY"] = str(tmp / "lib")   # New style from this video: a named copy of @alice
     try:
@@ -4273,10 +5430,12 @@ def demo():
         raise AssertionError("undo twice")
     except urllib.error.HTTPError as e:
         assert e.code == 409
-    tr_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Keep the pauses short")
-    assert tr_["kind"] == "settings" and tr_["style"] == "@alice", tr_
-    post("/undo", {"id": tr_["id"]})
-    assert not any(r["rule"] == "Keep the pauses short" for r in taste.load_rules())
+    tr_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Captions one size smaller")
+    assert tr_["kind"] == "settings" and tr_["style"] == "@alice" and tr_["status"] == "updated", tr_   # it was there: no Undo
+    ts_ = next(x for x in d["receipts"] if x["from"] == "teach" and x["rule"] == "Keep the pauses short")
+    assert ts_["kind"] == "skill" and ts_["style"] == "Trial notes skill", ts_
+    post("/undo", {"id": ts_["id"]})   # a rule a save added to a skill comes out of that skill
+    assert "Keep the pauses short" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
     if old_skills is None:
         os.environ.pop("AI_EDITOR_SKILLS", None)
     else:
@@ -4435,7 +5594,7 @@ def demo():
     o = io.StringIO()
     with contextlib.redirect_stdout(o):
         cmd_wait(rf, poll=0.01)
-    assert "LEARN: no notes this session" in o.getvalue(), o.getvalue()
+    assert "LEARN: no notes or edits this session" in o.getvalue(), o.getvalue()
     # the transcript editor: Apply turns restore/cut word ranges into spans.json, keeps spans.prev.json, and `wait`
     # exits with the EDITS line. Restoring part of a span splits it; a cut inside a word takes the whole word
     ef = tmp / "edits" / "tx"

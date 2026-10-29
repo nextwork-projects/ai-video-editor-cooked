@@ -4,6 +4,8 @@ editor's "Anything to add?". Stdlib only, stored on this computer only.
 
     <edit>/assets/asset-img1.png ...   the images (png, jpeg, gif, webp; under 15 MB each)
     <edit>/assets/asset-vid1.mp4 ...   the videos (mp4, mov, m4v, webm; under 2 GB each)
+    <edit>/media/<name> ...            the editor's Media panel uploads (save_media): dragged onto the video by the user,
+                                       not listed in assets.json, so Claude is not asked to place them
     <edit>/assets.json                 {"items": [{"kind": "image", "src": "assets/asset-img1.png", "name": "chart.png", "say": ""},
                                                   {"kind": "video", "src": "assets/asset-vid1.mov", "name": "demo.mov", "say": ""},
                                                   {"kind": "link", "url": "https://x.com/...", "site": "x", "say": "the launch"}]}
@@ -139,6 +141,13 @@ def save_stream(edit, name, stream, n, say=""):
     if not 0 < n <= (askhook.MAX_IMAGE if kind == "image" else MAX_VIDEO):
         raise ValueError(f"{name} is over {'15 MB' if kind == 'image' else '2 GB'}.")
     out = _slot(edit, kind, Path(name).suffix.lower())
+    _stream_to(out, stream, n)
+    items.append({"kind": kind, "src": f"assets/{out.name}", "name": name, "say": _say({"say": say})})
+    return _save(edit, items)
+
+
+def _stream_to(out, stream, n):
+    """n bytes of stream into out, by way of a .part file: a stopped upload leaves nothing behind."""
     tmp = out.with_name(out.name + ".part")
     left = n
     with open(tmp, "wb") as f:
@@ -152,8 +161,36 @@ def save_stream(edit, name, stream, n, say=""):
         tmp.unlink(missing_ok=True)
         raise ValueError("The upload stopped part way. Add it again.")
     os.replace(tmp, out)
-    items.append({"kind": kind, "src": f"assets/{out.name}", "name": name, "say": _say({"say": say})})
-    return _save(edit, items)
+
+
+def save_media(edit, name, stream, n):
+    """The editor's Media panel: one file into <edit>/media/ under its own name (-2, -3 when taken). Not in assets.json:
+    Claude is not asked to place it, the user drags it onto the video. Its src ("media/<name>")."""
+    name = re.sub(r"[^\w.\- ]+", "", Path(str(name or "")).name).strip()[:120]
+    kind = kind_of(name)
+    if not kind or name.startswith("."):
+        raise ValueError("Add a video (.mp4, .mov, .m4v, .webm) or an image (.png, .jpg, .gif, .webp).")
+    if not 0 < n <= (askhook.MAX_IMAGE if kind == "image" else MAX_VIDEO):
+        raise ValueError(f"{name} is over {'15 MB' if kind == 'image' else '2 GB'}.")
+    folder = Path(edit) / "media"
+    folder.mkdir(parents=True, exist_ok=True)
+    out, k = folder / name, 2
+    while out.exists():
+        out, k = folder / f"{Path(name).stem}-{k}{Path(name).suffix}", k + 1
+    _stream_to(out, stream, n)
+    return f"media/{out.name}"
+
+
+def media(edit, used=()):
+    """The Media panel's files: media/ (newest first), the files in assets.json, then `used` (the srcs the plan's cards
+    show). [{"src", "kind", "name"}], each file once."""
+    edit, out = Path(edit), {}
+    ms = sorted((p for p in (edit / "media").glob("*") if p.is_file() and kind_of(p)), key=lambda p: -p.stat().st_mtime)
+    for src, name in [(f"media/{p.name}", p.name) for p in ms] + [(x["src"], x.get("name") or "") for x in load(edit) if x.get("src")] \
+            + [(u, "") for u in used]:
+        if src not in out and kind_of(src) and (edit / src).is_file():
+            out[src] = {"src": src, "kind": kind_of(src), "name": name or Path(src).name}
+    return list(out.values())
 
 
 def remove(edit, i):
@@ -218,6 +255,19 @@ def demo():
         raise AssertionError("past MAX_ITEMS")
     except ValueError as err:
         assert "50 at most" in str(err)
+    # the Media panel: files into media/ under their own names, not asked of Claude (assets.json untouched)
+    n = len(load(e))
+    assert save_media(e, "../My pic.png", io.BytesIO(b"p" * 4), 4) == "media/My pic.png"
+    assert save_media(e, "My pic.png", io.BytesIO(b"q" * 4), 4) == "media/My pic-2.png" and len(load(e)) == n
+    for bad in (".png", "x.html"):
+        try:
+            save_media(e, bad, io.BytesIO(b"z"), 1)
+            raise AssertionError(bad)
+        except ValueError:
+            pass
+    ms = media(e, ["media/My pic.png", "images/gone.png"])
+    assert [m["src"] for m in ms][:2] == ["media/My pic-2.png", "media/My pic.png"] or [m["src"] for m in ms][:2] == ["media/My pic.png", "media/My pic-2.png"], ms
+    assert len([m for m in ms if m["src"].startswith("media/")]) == 2 and not any(m["src"] == "images/gone.png" for m in ms), ms
     for _ in range(len(load(e))):
         remove(e, 0)
     assert load(e) == [] and not (e / "assets.json").exists() and remove(e, 5) == []

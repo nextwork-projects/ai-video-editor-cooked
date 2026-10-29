@@ -13,6 +13,8 @@
     python3 taste.py show [--edit edits/NAME]   taste.md + taste.json; with --edit, also that video's own
                                   rules, and the word rules count as applied to it
     python3 taste.py forget <id>  remove a rule (and its setting and its taste.md line)
+    python3 taste.py off <id> | on <id>   turn a rule off (kept, stops applying: its setting and taste.md line
+                                  come out) or back on
     python3 taste.py rule <section> "<rule>"      a word rule into taste.md only (older form of add)
     python3 taste.py set <key.path> <value>       set a setting in taste.json (value parsed as JSON if it can be)
     python3 taste.py unset <key.path>
@@ -32,7 +34,9 @@ Files in ~/.ai-video-editor/ (AI_EDITOR_HOME overrides; outside the plugin, so u
                "sfx": false, "layout": {"mode": "split"}}
   rules.json  the same rules with their history: [{"id", "section", "rule", "setting", "value", "scope"
               ("all" | "video:<name>" | "style:<slug>", with "style": its style.json), "corrections": [{"edit", "at", "rule", "value"}], "applied",
-              "applied_in": [edit names], "since_fix", "regressions": [{"edit", "at"}]}]
+              "applied_in": [edit names], "since_fix", "regressions": [{"edit", "at"}], "off": true when turned off}]
+  <edit>/rules-applied.json  which rules the edit's last runs handed over, per caller: {"plan.py": [ids], "show": [ids]}
+              (review.py puts them on the round: "This draft used N of your rules")
   suggestions.jsonl  corrections the user said would help everyone: {"at", "what", "rule", "owner", "example"}
 
 How a rule is applied: plan.py, build_timeline.py and retakes.py call load_json() (their only hook). It returns
@@ -240,6 +244,7 @@ def add(section, rule, setting=None, value=None, scope="all", edit=None, source=
         if setting:
             r.update(setting=setting, value=value)
     r["corrections"].append({"edit": edit, "at": now(), "rule": rule, "value": value})
+    r.pop("off", None)   # said again: it applies again
     if source:
         r["from"] = source
     r["since_fix"] = 0
@@ -286,6 +291,64 @@ def mark_applied(rules, which, edit):
                 r["applied_in"] = (r["applied_in"] + [edit])[-KEEP_EDITS:]
 
 
+APPLIED = "rules-applied.json"
+
+
+def record(edit, caller, ids):
+    """<edit>/rules-applied.json: the rule ids this caller handed over on its last run (a re-run replaces its list),
+    so the review page can say which rules a draft used. Best effort: a read-only folder records nothing."""
+    if not edit or not Path(edit).is_dir():
+        return
+    f = Path(edit) / APPLIED
+    if not ids and not f.exists():   # nothing handed over: no file in an edit that has none (retakes' scratch dirs)
+        return
+    try:
+        d = json.loads(f.read_text(encoding="utf-8")) if f.exists() else {}
+        d[caller] = sorted(set(ids))
+        f.write_text(json.dumps(d), encoding="utf-8")
+    except (OSError, ValueError):
+        pass
+
+
+def applied_ids(edit):
+    """Every rule id the edit's callers handed over last (rules-applied.json), in id order."""
+    try:
+        d = json.loads((Path(edit) / APPLIED).read_text(encoding="utf-8"))
+        return sorted({i for v in d.values() if isinstance(v, list) for i in v if isinstance(i, int)})
+    except (OSError, ValueError, AttributeError):
+        return []
+
+
+def set_off(rule_id, off):
+    """Turn a rule off (kept in rules.json, never deleted: its setting leaves taste.json or the style's overrides and
+    its taste.md line goes, so no script or skill applies it) or back on (both come back). Returns the rule or None."""
+    from ai_editor import styleskill
+    rules = load_rules()
+    r = next((x for x in rules if x["id"] == rule_id), None)
+    if r is None:
+        return None
+    if bool(r.get("off")) == bool(off):
+        return r
+    if off:
+        r["off"] = True
+    else:
+        r.pop("off", None)
+    save_rules(rules)
+    if r["scope"] == "all":
+        if off:
+            drop_rule(r["section"], r["rule"])
+        else:
+            add_rule(r["section"], r["rule"])
+        if r.get("setting"):
+            save_json(unset_key(read_json(), r["setting"]) if off else set_key(read_json(), r["setting"], r["value"]))
+        styleskill.write()
+    elif r["scope"].startswith("style:") and r.get("style"):
+        if r.get("setting"):
+            styleskill.set_override(r["style"], r["setting"], r.get("value"), drop=bool(off))
+        styleskill.write(r["style"])
+    return r   # a "video:" rule: load_json and show skip it while off
+
+
 def guess_edit(argv):
     """The edit folder a script was pointed at: an argument that is (or sits in) a folder holding
     the cut's files. plan.py gets edits/NAME/words.json, build_timeline.py gets edits/NAME."""
@@ -327,7 +390,7 @@ def load_json(edit_dir=None, count=True, style=None):
         return data
     name = edit.resolve().name if edit else None
     rules = load_rules()
-    mine = [r for r in rules if r.get("setting") and r["scope"] in ("all", f"video:{name}", sc)]
+    mine = [r for r in rules if r.get("setting") and not r.get("off") and r["scope"] in ("all", f"video:{name}", sc)]
     for r in mine:
         if r["scope"].startswith("video:"):
             data = set_key(data, r["setting"], r["value"])
@@ -337,6 +400,8 @@ def load_json(edit_dir=None, count=True, style=None):
         ids = {r["id"] for r in mine if acts(r["setting"])}
         mark_applied(rules, lambda r: r["id"] in ids, name)
         save_rules(rules)
+        if Path(sys.argv[0]).name in CALLERS:   # the scripts that build a draft; a test or a page read records nothing
+            record(edit, Path(sys.argv[0]).name, ids)
     return data
 
 
@@ -349,15 +414,17 @@ def show(edit=None):
     name = edit_name(edit)
     if name and (rules_path().exists() or md_path().exists()):
         rules = load_rules()
-        own = [r for r in rules if r["scope"] == f"video:{name}"]
+        own = [r for r in rules if r["scope"] == f"video:{name}" and not r.get("off")]
         if own:
             out.append(f"## This video only ({name})\n" + "\n".join(f"- {r['rule']}" for r in own))
         sc, over = style_scope(Path(edit))
-        st = [r for r in rules if sc and r["scope"] == sc]
+        st = [r for r in rules if sc and r["scope"] == sc and not r.get("off")]
         if st:
             out.append(f"## This style (@{sc[6:]})\n" + "\n".join(f"- {r['rule']}" for r in st) + "\n" + json.dumps(over))
-        mark_applied(rules, lambda r: not r.get("setting") and r["scope"] in ("all", f"video:{name}", sc), name)
+        word = lambda r: not r.get("setting") and not r.get("off") and r["scope"] in ("all", f"video:{name}", sc)
+        mark_applied(rules, word, name)
         save_rules(rules)
+        record(Path(edit), "show", [r["id"] for r in rules if word(r)])
     return "\n".join(out)
 
 
@@ -533,6 +600,17 @@ def demo():
         # forget takes the setting and the bullet with it
         forget(next(x for x in load_rules() if x.get("setting") == "cut.max_pause")["id"])
         assert "max_pause" not in read_json().get("cut", {}) and load_md()["Cut"] == []
+        # what each caller handed over is recorded on the edit; turning a rule off takes it out of taste.json and
+        # taste.md (kept in rules.json), so the next run neither uses nor records it; on puts both back
+        sys.argv = ["plan.py", "s.json", str(ed / "words.json")]
+        load_json()
+        cap = next(x for x in load_rules() if x.get("setting") == "captions.size_pct")
+        assert cap["id"] in json.loads((ed / APPLIED).read_text(encoding="utf-8"))["plan.py"] and cap["id"] in applied_ids(ed)
+        assert set_off(cap["id"], True)["off"] and "size_pct" not in read_json().get("captions", {})
+        assert "Captions bigger again" not in load_md()["Captions"] and load_json()["captions"] == {}
+        assert cap["id"] not in applied_ids(ed) and next(x for x in load_rules() if x["id"] == cap["id"])["off"]
+        assert set_off(cap["id"], False) and read_json()["captions"]["size_pct"] == 7 and "Captions bigger again" in load_md()["Captions"]
+        assert "off" not in next(x for x in load_rules() if x["id"] == cap["id"]) and set_off(999, True) is None
         # a suggestion for everyone carries the rule, never the user's files, names or links
         r = suggest(f"zoom snapped on {Path.home()}/Movies/take 3.mov for @someone", "Zooms ease over at least 0.5 s",
                     "style-edit quality.py", "jane@example.org saw it on https://example.com/x, IMG.MOV")
@@ -618,6 +696,10 @@ def main():
     elif cmd == "forget" and len(a) == 2:
         r = forget(int(a[1]))
         print(f"forgot #{a[1]}: {r['rule']}" if r else f"no rule #{a[1]}")
+        sys.exit(0 if r else 1)
+    elif cmd in ("off", "on") and len(a) == 2:
+        r = set_off(int(a[1]), cmd == "off")
+        print(f"turned {cmd} #{a[1]}: {r['rule']}" if r else f"no rule #{a[1]}")
         sys.exit(0 if r else 1)
     elif cmd == "rule" and len(a) == 3:
         what, _ = add_rule(a[1], a[2])

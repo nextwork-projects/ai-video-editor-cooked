@@ -92,6 +92,14 @@ def apply_overrides(plan, edit_dir, plan_name=None):
         for c in cues:
             if c.get("override") == key or (not c.get("override") and abs(c.get("event", c["t"]) - float(key)) < 0.05):
                 c.update(override=key, gain_db=db, src=gained(edit_dir, c["src"], db))
+    have = {c.get("override") for c in plan["cards"]}
+    for a in ov.get("added_cards") or []:   # the video page's Media panel: a picture or a clip dropped on the video
+        o = (ov.get("cards") or {}).get(a["key"]) or {}
+        if a["key"] not in have and not o.get("deleted"):   # once: a second apply finds it by its override
+            card = {k: v for k, v in a.items() if k != "key"}
+            card.update({k: v for k, v in o.items() if k in ("box", "start", "end")}, override=a["key"])   # moved before it was baked
+            plan["cards"].append(card)
+            plan["cards"].sort(key=lambda c: c["start"])
     for key, o in (ov.get("cards") or {}).items():
         word, at = key.rsplit("@", 1)
         tagged = [c for c in plan["cards"] if c.get("override") == key]
@@ -117,6 +125,11 @@ def apply_overrides(plan, edit_dir, plan_name=None):
     gone = [float(k) for k, o in (ov.get("zooms") or {}).items() if (o or {}).get("deleted")]   # "no zoom here" (plan.py beat zoom@T --drop)
     if gone:
         plan["zooms"] = [z for z in plan.get("zooms") or [] if not any(abs(z["start"] - t) < ZOOM_MATCH_S for t in gone)]
+    times = ov.get("cap_times") or {}   # a caption page dragged on the timeline: keyed by its first word's start
+    for ch in (plan.get("captions") or {}).get("chunks") or [] if times else []:
+        k = f"{ch['words'][0]['start']:.3f}" if ch.get("words") and "start" in ch["words"][0] else None
+        if k in times:
+            ch["start"], ch["end"] = (round(float(v), 3) for v in times[k])
     words = ov.get("words") or {}
     if words:
         for ch in plan["captions"]["chunks"]:
@@ -285,6 +298,10 @@ def handler(sess, bundle, stop, token):
                 return self.body((PAGE / "index.html").read_bytes(), "text/html; charset=utf-8", cookie=True)
             if p == "/app.js":
                 return self.body(bundle.read_bytes(), "text/javascript")
+            if p.startswith("/chunks/") and re.fullmatch(r"/chunks/[\w-]+\.js", p):   # build.mjs splitting: the shared code and each font
+                f = bundle.parent / p[1:]
+                if f.is_file():
+                    return self.body(f.read_bytes(), "text/javascript")
             if p == "/api/state":
                 return self.body(sess.state())
             if p.startswith("/media/"):
@@ -313,20 +330,29 @@ def handler(sess, bundle, stop, token):
     return H
 
 
+BUNDLE_SRC = ("app.tsx", "live.tsx", "Sfx.tsx", "build.mjs")
+
+
 def build_bundle():
-    """Bundle preview/app.tsx with the renderer's own esbuild and node_modules (~/.ai-video-editor/remotion),
-    against the same src/ the render uses."""
+    """Bundle preview/app.tsx (this page) and preview/live.tsx (the review page's live player) with the renderer's
+    own esbuild and node_modules (~/.ai-video-editor/remotion), against the same src/ the render uses. Built again
+    only when a source is newer than the bundles. Returns dist/app.js; dist/live.js sits beside it."""
     sys.path.insert(0, str(HERE))
-    from edit import REMOTION, sync_renderer
+    from edit import REMOTION, SRC, sync_renderer
     sync_renderer()
     if not (REMOTION / "node_modules" / "@remotion" / "player").exists():
         sys.exit(f"ERROR: @remotion/player missing in {REMOTION}/node_modules. Run the setup skill's remotion step again.")
     dst = REMOTION / "preview"
+    out = [dst / "dist" / "app.js", dst / "dist" / "live.js"]
+    newest = max(p.stat().st_mtime for p in [*(PAGE / f for f in BUNDLE_SRC), *(SRC / "src").rglob("*")] if p.is_file())
+    if all(o.exists() and o.stat().st_mtime > newest for o in out):
+        return out[0]
     dst.mkdir(exist_ok=True)
-    for f in ("app.tsx", "Sfx.tsx", "build.mjs"):
+    shutil.rmtree(dst / "dist", ignore_errors=True)   # chunk names carry a hash: the old ones would pile up
+    for f in BUNDLE_SRC:
         shutil.copy2(PAGE / f, dst / f)
     subprocess.run(["node", str(dst / "build.mjs")], cwd=REMOTION, check=True)
-    return dst / "dist" / "app.js"
+    return out[0]
 
 
 def make_server(sess, bundle, port):
@@ -405,6 +431,26 @@ def demo():
     zs = apply_overrides({**base(), "zooms": [{"start": 0.0, "end": 3.6}, {"start": 7.3, "end": 10.9}]}, dz)["zooms"]
     assert zs == [{"start": 0.0, "end": 3.6}], zs
     shutil.rmtree(dz)
+    dc = Path(tempfile.mkdtemp())   # a caption page dragged on the timeline: found by its first word, applied once
+    (dc / "overrides.json").write_text(json.dumps({"cap_times": {"1.000": [1.3, 2.4]}}), encoding="utf-8")
+    ch = apply_overrides(base(), dc)["captions"]["chunks"]
+    assert (ch[0]["start"], ch[1]["start"], ch[1]["end"]) == (0, 1.3, 2.4), ch
+    assert apply_overrides(apply_overrides(base(), dc), dc)["captions"]["chunks"] == ch
+    shutil.rmtree(dc)
+    dm = Path(tempfile.mkdtemp())   # the Media panel: a dropped picture joins the cards once, moved, then deleted
+    add = {"key": "media1@2.000", "src": "media/p.png", "start": 2.0, "end": 5.0, "box": [20, 30, 60, 20], "format": "plain", "entrance": "pop"}
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add]}), encoding="utf-8")
+    got = apply_overrides(base(), dm)
+    assert [c.get("override") for c in got["cards"]] == [None, "media1@2.000", None] and got["cards"][1]["src"] == "media/p.png", got["cards"]
+    assert apply_overrides(json.loads(json.dumps(got)), dm) == got, "a dropped card is added once"
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add], "cards": {"media1@2.000": {"box": [10, 40, 50, 20], "start": 6.0, "end": 8.0}}}), encoding="utf-8")
+    moved = apply_overrides(base(), dm)
+    m = next(c for c in moved["cards"] if c.get("override") == "media1@2.000")
+    assert m["box"] == [10, 40, 50, 20] and m["start"] == 6.0 and [q["event"] for q in moved["sfx"]] == [0.6, 5.1], moved
+    assert apply_overrides(json.loads(json.dumps(moved)), dm) == moved
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add], "cards": {"media1@2.000": {"deleted": True}}}), encoding="utf-8")
+    assert len(apply_overrides(base(), dm)["cards"]) == 2 and len(apply_overrides(json.loads(json.dumps(got)), dm)["cards"]) == 2, "deleted: gone, baked or not"
+    shutil.rmtree(dm)
     s = Session(d, "plan.json")
     (d / "plan.json").write_text(json.dumps(base()), encoding="utf-8")
     s.change({"kind": "word", "key": "0.400", "from": "is", "to": "was", "action": "fix", "text": "caption 'is' -> 'was'"})
@@ -442,6 +488,18 @@ def demo():
     srv.shutdown()
     srv.server_close()
     shutil.rmtree(d)
+    # the bundles: both pages from one build, and a second call with nothing changed builds nothing
+    assert all((PAGE / f).is_file() for f in BUNDLE_SRC) and all(f in (PAGE / "build.mjs").read_text(encoding="utf-8") for f in ("app.tsx", "live.tsx"))
+    sys.path.insert(0, str(HERE))
+    from edit import REMOTION, SRC
+    lock = "package-lock.json"
+    if (REMOTION / "node_modules" / "@remotion" / "player").exists() and (REMOTION / lock).read_bytes() == (SRC / lock).read_bytes():
+        js = build_bundle()
+        live, at = js.with_name("live.js"), js.with_name("live.js").stat().st_mtime_ns
+        assert "CookedLive" in live.read_text(encoding="utf-8") and any((js.parent / "chunks").glob("*.js")), "the live player and its chunks"
+        assert build_bundle() == js and live.stat().st_mtime_ns == at, "unchanged sources: not built again"
+    else:
+        print("note: no installed renderer here, the bundle build was not checked")
     print("demo ok")
 
 
