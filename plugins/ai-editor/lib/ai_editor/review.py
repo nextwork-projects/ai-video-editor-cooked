@@ -599,6 +599,8 @@ def screen_items(folder, p):
         if "start" not in c or "end" not in c:
             continue
         w, an = (c.get("trigger_word") or "").strip(), c.get("anim") or {}
+        if str(c.get("override") or "").startswith("media"):   # dropped from the Media panel
+            names.setdefault(c.get("src"), f"your {'clip' if an.get('type') == 'video_card' else 'picture'} {Path(str(c.get('src'))).name}")
         what = (names.get(c.get("src")) or ("the motion clip" if an.get("type") == "video_card" else f"the {an['type']} animation" if an.get("type") else None)
                 or names.get(w.lower()) or (f"the {c['format']}" if c.get("format") in ("logo", "browser", "post") else "the picture"))
         box = c.get("box") if isinstance(c.get("box"), list) and len(c["box"]) == 4 else [0, 0, 100, 50] if c.get("layout") == "split" else [0, 0, 100, 100]
@@ -972,6 +974,55 @@ def cards_pending(folder, d):
             **{a: o[a] for a, b in (("start", "s"), ("end", "e")) if a in o and abs(float(o[a]) - c[b]) > 0.01}}
         if p:
             out.append({"key": k, **p})
+    return out
+
+
+MEDIA_ROOTS = ("media", "assets", "images")   # where the Media panel's files live (assets.py save_media, add, the plan's pictures)
+MEDIA_VIDEO_MAX_S = 10   # a dropped clip plays this long at most (shorter when the clip is)
+
+
+def media_src(folder, src):
+    """src ("media/a.png") as a file under one of this edit's MEDIA_ROOTS, else None."""
+    p = (Path(folder) / str(src or "")).resolve()
+    root = Path(folder).resolve()
+    return p if p.is_file() and assets.kind_of(p) and any(root / r in p.parents for r in MEDIA_ROOTS) else None
+
+
+def media_card(folder, src, start, dur, box, size):
+    """A picture or a clip dropped on the video, as a plan.json card (overrides.json added_cards, preview.py apply_overrides
+    appends it): a flat picture (format plain) for 3 s, or a video_card for the clip's length, capped."""
+    if assets.kind_of(src) == "video":
+        import library
+        n = float(library.meta(media_src(folder, src)).get("duration") or 3)
+        end = start + max(0.5, min(n, MEDIA_VIDEO_MAX_S))
+        look = {"anim": {"type": "video_card", "props": {"src": src, **({"size": size} if size else {})}}}
+    else:
+        end, look = start + 3, {"format": "plain", **({"size": size} if size else {})}
+    if dur:
+        end = min(end, dur)
+        start = max(0.0, min(start, end - 0.5))
+    return {"src": src, "start": round(start, 2), "end": round(end, 2), "box": box, "entrance": "pop", "trigger_word": "", **look}
+
+
+def cards_added(folder, d):
+    """The cards dropped on the video from the Media panel that the video on the page does not show yet, in screen_items'
+    shape with their moves applied, so the page draws them at once and they move, resize and delete like any card."""
+    f = Path(folder) / "overrides.json"
+    try:
+        ov = load(f) if f.exists() else {}
+    except (OSError, ValueError):
+        return []
+    shown = {c.get("key") for c in (data_of(Path(folder), d.get("data")).get("items") or {}).get("cards") or []}
+    out = []
+    for a in ov.get("added_cards") or []:
+        o = (ov.get("cards") or {}).get(a["key"]) or {}
+        if a["key"] in shown or o.get("deleted"):
+            continue
+        c = {**a, **{k: o[k] for k in ("box", "start", "end") if k in o}}
+        vid = assets.kind_of(c["src"]) == "video"
+        out.append({"s": c["start"], "e": c["end"], "box": c["box"], "key": a["key"], "added": True,
+                    "label": f"your {'clip' if vid else 'picture'} {Path(c['src']).name}",
+                    "pic": "/media-file/" + quote(c["src"]) + ("?thumb=1" if vid else ""), **({} if vid else {"src": c["src"]})})
     return out
 
 
@@ -1826,6 +1877,12 @@ def make_handler(folder, token):
                 d["texts"] = (load(folder / "texts.json").get("items") or []) if (folder / "texts.json").exists() else []   # the Text tab
                 d["texts_baked"] = baked_texts(folder, d) if d.get("stage") == "edit" else []   # the rest the page draws live
                 d["cards_pending"] = cards_pending(folder, d) if d.get("stage") == "edit" else []   # moved, not in the video yet
+                d["cards_added"] = cards_added(folder, d) if d.get("stage") == "edit" else []   # dropped on, not in the video yet
+                try:   # the Media panel: uploads, what was added for Claude, and the pictures the draft already shows
+                    used = [c.get("src") or ((c.get("anim") or {}).get("props") or {}).get("src") for c in load(Path(d["plan"])).get("cards") or []]
+                except (KeyError, TypeError, OSError, ValueError):
+                    used = []
+                d["media"] = assets.media(folder, [u for u in used if isinstance(u, str)]) if d.get("stage") == "edit" else []
                 b = BAKE.get(str(folder)) or {}
                 d["bake"] = {"state": b.get("state"), "why": b.get("why")}   # putting the texts in the video
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
@@ -1916,6 +1973,15 @@ def make_handler(folder, token):
                 if folder.resolve() not in p.parents or p.suffix.lower() not in CARD_IMG or not p.is_file():
                     return self.send(404, {})
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "image/png")
+            if path.startswith("/media-file/"):   # the Media panel's files (media/, assets/, images/); ?thumb=1: a video's picture
+                p = media_src(folder, unquote(path[len("/media-file/"):]))
+                if not p:
+                    return self.send(404, {})
+                if assets.kind_of(p) == "video" and q.get("thumb") == "1":
+                    import library
+                    t = library.thumb(p)
+                    return self.file(t, "image/jpeg") if t else self.send(404, {})
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
             if path.startswith("/assets/"):   # an image or video the user added (assets.py); ?thumb=1: a video's picture
                 p = folder / "assets" / Path(unquote(path)).name
                 if not p.is_file():
@@ -1951,6 +2017,14 @@ def make_handler(folder, token):
                     self.close_connection = True   # the unread body must not be taken as the next request
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"items": items})
+            if urlsplit(self.path).path == "/media/upload":   # the Media panel: one video or image into <edit>/media/, streamed in
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    src = assets.save_media(folder, unquote(q.get("name", [""])[0]), self.rfile, int(self.headers.get("Content-Length") or 0))
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "src": src, "media": assets.media(folder)})
             if urlsplit(self.path).path == "/sound/library/upload":   # the Sounds panel: a file into the sound library
                 q = parse_qs(urlsplit(self.path).query)
                 try:
@@ -2292,6 +2366,40 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True})
                 return self.comment({"t": t, "t_end": te, "text": f"{what} {label} as shown on the page: overrides.json has it "
                                      f"(card {key}). Plan again so it shows."})
+            if path == "/media/add":   # the Media panel: a picture or a clip dropped on the video becomes a card there
+                # (overrides.json added_cards, its key moves it like any card), baked in by itself (bake_soon)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Media goes on the edit, before it is approved."})
+                try:
+                    src = str(body["src"])
+                    if not media_src(folder, src):
+                        raise ValueError
+                    box = [round(float(v), 1) for v in body["box"]]
+                    if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        raise ValueError
+                    size = [int(v) for v in body.get("size") or []]
+                    if size and (len(size) != 2 or min(size) < 1):
+                        raise ValueError
+                    t = float(body["t"])
+                    if not 0 <= t <= 36000:
+                        raise ValueError
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "media/add takes src (a file in media/, assets/ or images/), t and box [x, y, w, h]"})
+                card = media_card(folder, src, t, float((data_of(folder, d.get("data")) or {}).get("duration") or 0), box, size)
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                added = ov.setdefault("added_cards", [])
+                n = 1 + max([int(m.group(1)) for a in added for m in [re.match(r"media(\d+)@", a["key"])] if m] or [0])
+                key = f"media{n}@{card['start']:.3f}"
+                added.append({"key": key, **card})
+                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
+                return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
+                                     f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
             if path == "/timeline/cut":   # the timeline's Video row: {splits: [t], gone: [[a, b]]} on the edit's clock.
                 # The page skips the gone pieces at once; one note tells Claude the words to cut from the next draft
                 d = load(rj)
@@ -3821,8 +3929,20 @@ def demo_bake(tmp):
     d = load(f / "review.json")
     assert d["baked"] == 1 and baked_texts(f, d) == ["t1"] and BAKE[str(f)]["state"] == "done", d
     assert filecmp.cmp(f / "render.mp4", d["video"], shallow=False), "the round's video is the patched render"
+    # a picture dropped from the Media panel: appended to the plan's cards once, however often it bakes
+    (f / "media").mkdir()
+    (f / "media" / "p.png").write_bytes(b"p")
+    ov = load(f / "overrides.json")
+    ov["added_cards"] = [{"key": "media1@0.200", **media_card(f, "media/p.png", 0.2, 2.0, [20, 30, 60, 30], [4, 2])}]
+    assert ov["added_cards"][0]["end"] == 2.0, "a picture stops at the end of the video"
+    (f / "overrides.json").write_text(json.dumps(ov), encoding="utf-8")
+    for _ in range(2):
+        assert bake(f, run=fake) is None
+    cs = load(f / "plan.json")["cards"]
+    assert [c.get("override") for c in cs] == ["media1@0.200", "repo@0.500"] and cs[0]["src"] == "media/p.png" and cs[0]["format"] == "plain", cs
+    assert cards_added(f, load(f / "review.json")) == [], "baked: the video shows it"
     update(f / "review.json", lambda d: d.update(sent=True))
-    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 1
+    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 3
 
 
 def demo():
@@ -4367,6 +4487,52 @@ def demo():
             raise AssertionError(bad)
         except urllib.error.HTTPError as e:
             assert e.code == 400, bad
+    (folder / "overrides.json").unlink()
+    # the Media panel: a file streamed into media/ (not assets.json), dropped on the video as a card the page draws at
+    # once; moved and deleted by its key like any card
+    mup = lambda name, data: json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"{base}/media/upload?name={quote(name)}&t={tok}", data, method="POST")).read())
+    n_assets = len(json.loads(get("/state").read())["assets"])
+    mu = mup("my pic.png", base64.b64decode(png.split(",", 1)[1]))
+    st = json.loads(get("/state").read())
+    assert mu["src"] == "media/my pic.png" and st["media"][0] == {"src": "media/my pic.png", "kind": "image", "name": "my pic.png"}, st["media"]
+    assert len(st["assets"]) == n_assets and get("/media-file/media/my%20pic.png").headers["Content-Type"] == "image/png"
+    ma = post("/media/add", {"src": "media/my pic.png", "t": 1.0, "box": [20, 30, 60, 33.8], "size": [1, 1]})
+    assert ma["ok"] and ma["key"] == "media1@1.000" and (ma["start"], ma["end"]) == (1.0, 4.0), ma
+    added = load(folder / "overrides.json")["added_cards"]
+    assert added == [{"key": "media1@1.000", "src": "media/my pic.png", "start": 1.0, "end": 4.0, "box": [20.0, 30.0, 60.0, 33.8],
+                      "entrance": "pop", "trigger_word": "", "format": "plain", "size": [1, 1]}], added
+    ca = json.loads(get("/state").read())["cards_added"]
+    assert ca == [{"s": 1.0, "e": 4.0, "box": [20.0, 30.0, 60.0, 33.8], "key": "media1@1.000", "added": True, "label": "your picture my pic.png",
+                   "pic": "/media-file/media/my%20pic.png", "src": "media/my pic.png"}], ca
+    post("/card/edit", {"key": "media1@1.000", "t": 1, "t_end": 4, "box": [10, 20, 50, 28], "start": 2.0, "end": 5.0})
+    ca = json.loads(get("/state").read())["cards_added"]
+    assert (ca[0]["box"], ca[0]["s"], ca[0]["e"]) == ([10.0, 20.0, 50.0, 28.0], 2.0, 5.0) and json.loads(get("/state").read())["cards_pending"] == [], ca
+    assert post("/media/add", {"src": "media/my pic.png", "t": 0.5, "box": [20, 30, 60, 30]})["key"] == "media2@0.500", "keys never repeat"
+    with tempfile.TemporaryDirectory() as vt:   # a clip: a video_card as long as the clip
+        clip = Path(vt, "c.mp4")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=d=2:s=160x90:r=10", str(clip)], check=True)
+        mv = mup("c.mp4", clip.read_bytes())["src"]
+    assert get("/media-file/" + mv + "?thumb=1").headers["Content-Type"] == "image/jpeg"
+    vc = post("/media/add", {"src": mv, "t": 0.2, "box": [20, 30, 60, 20], "size": [160, 90]})
+    vcard = load(folder / "overrides.json")["added_cards"][-1]
+    assert vc["end"] == 2.2 and vcard["anim"] == {"type": "video_card", "props": {"src": "media/c.mp4", "size": [160, 90]}} and "format" not in vcard, vcard
+    assert json.loads(get("/state").read())["cards_added"][-1]["pic"].endswith("?thumb=1")
+    post("/card/edit", {"key": "media1@1.000", "t": 2, "t_end": 5, "deleted": True})
+    assert [c["key"] for c in json.loads(get("/state").read())["cards_added"]] == ["media2@0.500", vc["key"]], "deleted: gone from the page"
+    for bad in ({"src": "review.json", "t": 1, "box": [0, 0, 10, 10]}, {"src": "media/../review.json", "t": 1, "box": [0, 0, 10, 10]},
+                {"src": "media/my pic.png", "t": 1, "box": [0, 0, 1, 10]}, {"src": "media/my pic.png", "t": -1, "box": [0, 0, 10, 10]}):
+        try:
+            post("/media/add", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
+    for bad in ("/media-file/../review.json", "/media-file/review.json", "/media-file/media/none.png"):
+        try:
+            get(bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 404, bad
     (folder / "overrides.json").unlink()
     for bad in ("/card-img/../review.json", "/card-img/review.json"):
         try:

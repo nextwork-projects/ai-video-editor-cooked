@@ -92,6 +92,14 @@ def apply_overrides(plan, edit_dir, plan_name=None):
         for c in cues:
             if c.get("override") == key or (not c.get("override") and abs(c.get("event", c["t"]) - float(key)) < 0.05):
                 c.update(override=key, gain_db=db, src=gained(edit_dir, c["src"], db))
+    have = {c.get("override") for c in plan["cards"]}
+    for a in ov.get("added_cards") or []:   # the video page's Media panel: a picture or a clip dropped on the video
+        o = (ov.get("cards") or {}).get(a["key"]) or {}
+        if a["key"] not in have and not o.get("deleted"):   # once: a second apply finds it by its override
+            card = {k: v for k, v in a.items() if k != "key"}
+            card.update({k: v for k, v in o.items() if k in ("box", "start", "end")}, override=a["key"])   # moved before it was baked
+            plan["cards"].append(card)
+            plan["cards"].sort(key=lambda c: c["start"])
     for key, o in (ov.get("cards") or {}).items():
         word, at = key.rsplit("@", 1)
         tagged = [c for c in plan["cards"] if c.get("override") == key]
@@ -405,6 +413,20 @@ def demo():
     zs = apply_overrides({**base(), "zooms": [{"start": 0.0, "end": 3.6}, {"start": 7.3, "end": 10.9}]}, dz)["zooms"]
     assert zs == [{"start": 0.0, "end": 3.6}], zs
     shutil.rmtree(dz)
+    dm = Path(tempfile.mkdtemp())   # the Media panel: a dropped picture joins the cards once, moved, then deleted
+    add = {"key": "media1@2.000", "src": "media/p.png", "start": 2.0, "end": 5.0, "box": [20, 30, 60, 20], "format": "plain", "entrance": "pop"}
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add]}), encoding="utf-8")
+    got = apply_overrides(base(), dm)
+    assert [c.get("override") for c in got["cards"]] == [None, "media1@2.000", None] and got["cards"][1]["src"] == "media/p.png", got["cards"]
+    assert apply_overrides(json.loads(json.dumps(got)), dm) == got, "a dropped card is added once"
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add], "cards": {"media1@2.000": {"box": [10, 40, 50, 20], "start": 6.0, "end": 8.0}}}), encoding="utf-8")
+    moved = apply_overrides(base(), dm)
+    m = next(c for c in moved["cards"] if c.get("override") == "media1@2.000")
+    assert m["box"] == [10, 40, 50, 20] and m["start"] == 6.0 and [q["event"] for q in moved["sfx"]] == [0.6, 5.1], moved
+    assert apply_overrides(json.loads(json.dumps(moved)), dm) == moved
+    (dm / "overrides.json").write_text(json.dumps({"added_cards": [add], "cards": {"media1@2.000": {"deleted": True}}}), encoding="utf-8")
+    assert len(apply_overrides(base(), dm)["cards"]) == 2 and len(apply_overrides(json.loads(json.dumps(got)), dm)["cards"]) == 2, "deleted: gone, baked or not"
+    shutil.rmtree(dm)
     s = Session(d, "plan.json")
     (d / "plan.json").write_text(json.dumps(base()), encoding="utf-8")
     s.change({"kind": "word", "key": "0.400", "from": "is", "to": "was", "action": "fix", "text": "caption 'is' -> 'was'"})
