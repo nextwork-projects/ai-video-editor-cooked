@@ -3,6 +3,7 @@
 What changed for every user, newest first.
 
 ## Unreleased
+- On the edit, select words in the transcript and press Delete to cut them: they strike through, the Video row and playback skip them at once, and Claude gets the words in one note. Delete on struck words puts them back, Cmd+Z undoes. The transcript also folds to its header with the arrow in its corner, kept in this browser.
 - Text is edited on the video, like CapCut: click a text to type straight into it, drag it to move it, drag any corner to size it, and drag a side to bring its width in (it wraps sooner). Enter saves, Esc cancels. The panel shows the same text, size and width.
 - Text takes a font (10 Google fonts, TikTok Sans by default) and a colour: 24 colours, a colour wheel for any colour, or a hex code. On a box the colour is the box, and its words turn black or white to read.
 - Block: a new look with one box that hugs the whole text. Box keeps a box on each line.
