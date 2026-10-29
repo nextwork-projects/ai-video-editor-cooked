@@ -32,9 +32,8 @@ Copy this checklist and tick it off:
 
 - Review-page notes and your replies: `edits/<name>/review.json` (`comments`). After the final approve, `wait`'s
   `LEARN:` block already lists them.
-- Hands-on edits and preview fixes: `edits/<name>/corrections.jsonl`, one row per change with `from` and `to`
-  (the review page's rows have `"source": "review"`). After the final approve, `LEARN:` sums them up already:
-  "moved 4 of 5 cards up by about 12% of the frame [visuals]". Word each as a rule; keep a `[set ...]` as its `set`.
+- Hands-on edits: `edits/<name>/corrections.jsonl` (`from`, `to`). `LEARN:` sums them up already ("moved 4 of 5
+  cards up by about 12% of the frame [visuals]"): word each as a rule, keep a `[set ...]` as its `set`.
 - Corrections the user typed in this chat about this video.
 
 ## 2. Keep only notes for every future video
@@ -96,8 +95,7 @@ python3 "$R" edits/<name> learn --done      # after `wait` prints the ticked rul
 ```
 
 `why` and `replace` are optional; `set` (a taste setting) only for a settings style. `to` says where each rule
-goes, one id from the list the LEARN prompt prints (this video's style, My style, another style, or one of the
-user's skills as `skill:<name>`): the page shows it pre-picked and the user can change it. `--done` writes a skill
+goes: one id from the LEARN prompt's list (a style, or a skill as `skill:<name>`), shown pre-picked on the page. `--done` writes a skill
 style's rules into its SKILL.md and a settings style's through `styleskill.learn`. A round's
 `learn --scope this-style` does the same for a skill style (the note is the reason).
 
