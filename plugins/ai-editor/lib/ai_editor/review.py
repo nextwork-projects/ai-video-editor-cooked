@@ -320,7 +320,7 @@ def round_data(folder, video, stage, rnd, plan, prev=None):
         if old.get("duration") and dur and abs(old["duration"] - dur) >= 0.1:
             d["changes"].append({"t": None, "text": f"{abs(old['duration'] - dur):.1f} s {'shorter' if dur < old['duration'] else 'longer'}"})
     name = f"data-{stage}{rnd}.json"
-    (folder / "review" / name).write_text(json.dumps(d), encoding="utf-8")
+    save(folder / "review" / name, d)
     return name
 
 
@@ -519,7 +519,7 @@ def save_audio(folder, name, stream, n, t, dur_of):
     x = {"id": secrets.token_hex(4), "t": t, "sound": out.name, "kind": "clip", "in": 0.0,
          "dur": round(max(0.1, min(length, dur_of - t if dur_of else length)), 2), "vol": 1.0}
     f = Path(folder) / "sounds.json"
-    f.write_text(json.dumps({"items": placed_raw(folder) + [x]}, indent=1), encoding="utf-8")
+    save(f, {"items": placed_raw(folder) + [x]})
     return x
 
 
@@ -572,7 +572,7 @@ def card_override(folder, key, change):
     ov = load(f) if f.exists() else {}
     cards = ov.setdefault("cards", {})
     cards[key] = {**(cards.get(key) or {}), **change}
-    f.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+    save(f, ov)
     return cards[key]
 
 
@@ -895,7 +895,7 @@ def put_texts(folder, notes):
         f = Path(folder) / "texts.json"
         old = load(f).get("items") or [] if f.exists() else []
         ids = {r["id"] for r in rows}
-        f.write_text(json.dumps({"items": [x for x in old if x.get("id") not in ids] + rows}, indent=1), encoding="utf-8")
+        save(f, {"items": [x for x in old if x.get("id") not in ids] + rows})
     return len(rows)
 
 
@@ -1087,7 +1087,7 @@ def bake(folder, run=subprocess.run):
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import apply_overrides   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
     p = apply_overrides(p, folder, plan_f.name)
-    plan_f.write_text(json.dumps(p, indent=1), encoding="utf-8")
+    save(plan_f, p)
     r = run([sys.executable, str(EDIT_PY), "patch", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
     if r.returncode:
         b.update(state="failed", why=((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1])
@@ -1104,7 +1104,7 @@ def bake(folder, run=subprocess.run):
         if old.get("changes") is not None:   # "Changed in this draft" stays the draft's, not the bake's
             new = data_of(folder, d["data"])
             new["changes"] = old["changes"]
-            (folder / "review" / d["data"]).write_text(json.dumps(new), encoding="utf-8")
+            save(folder / "review" / d["data"], new)
         d["baked"] = d.get("baked", 0) + 1
     update(rj, swap)
     with BAKE_LOCK:
@@ -2272,7 +2272,7 @@ def make_handler(folder, token):
                         x["vol"] = round(min(2.0, max(0.0, float(body.get("vol", x.get("vol", 1))))), 2)
                 except (TypeError, ValueError):
                     return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
-                (folder / "sounds.json").write_text(json.dumps({"items": items}, indent=1), encoding="utf-8")
+                save(folder / "sounds.json", {"items": items})
                 line = f"{Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
                                           "Plan again so they are in (sounds.json and overrides.json sfx).")
@@ -2296,18 +2296,18 @@ def make_handler(folder, token):
                             shutil.copy2(sfx.library_dir() / name, folder / "audio" / name)
                             dur = float((data_of(folder, d.get("data")) or {}).get("duration") or 0)
                             x.update(kind="clip", **{"in": 0.0}, dur=round(max(0.1, min(length, dur - t if dur > t else length)), 2), vol=1.0)
-                        f.write_text(json.dumps({"items": items + [x]}, indent=1), encoding="utf-8")
+                        save(f, {"items": items + [x]})
                         line = f"add {Path(name).stem} at {fmt(t)}"
                     elif body.get("placed"):
                         if not any(i["id"] == body["placed"] for i in items):
                             raise ValueError
-                        f.write_text(json.dumps({"items": [i for i in items if i["id"] != body["placed"]]}, indent=1), encoding="utf-8")
+                        save(f, {"items": [i for i in items if i["id"] != body["placed"]]})
                         line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
                     else:   # one the plan put there: overrides.json takes it out, so a re-plan keeps it out
                         ov_f = folder / "overrides.json"
                         ov = load(ov_f) if ov_f.exists() else {}
                         ov.setdefault("sfx", {})[f"{t:.3f}"] = {"deleted": True}
-                        ov_f.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                        save(ov_f, ov)
                         line = f"remove {sound_name(body.get('src') or '')} at {fmt(t)}"
                 except (KeyError, TypeError, ValueError):
                     return self.send(400, {"error": "sfx/add takes t and a library sound; sfx/remove takes t and placed or src"})
@@ -2327,7 +2327,7 @@ def make_handler(folder, token):
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
                 ov.setdefault("words", {}).update(words)
-                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                save(ovf, ov)
                 new = " ".join(w for w in words.values() if w)
                 line = f'"{old}" at {fmt(t)} now "{new}"' if new else f'"{old}" at {fmt(t)} taken out'
                 return self.timeline_note("caption-text", "Captions retyped", line, "Plan again so they show (overrides.json words).")
@@ -2346,7 +2346,7 @@ def make_handler(folder, token):
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
                 ov.setdefault("cap_times", {})[key] = [a, b]
-                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                save(ovf, ov)
                 bake_soon(folder)
                 if not d.get("sent"):
                     return self.send(200, {"ok": True})
@@ -2416,7 +2416,7 @@ def make_handler(folder, token):
                 n = 1 + max([int(m.group(1)) for a in added for m in [re.match(r"media(\d+)@", a["key"])] if m] or [0])
                 key = f"media{n}@{card['start']:.3f}"
                 added.append({"key": key, **card})
-                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                save(ovf, ov)
                 bake_soon(folder)
                 if not d.get("sent"):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
@@ -2435,7 +2435,7 @@ def make_handler(folder, token):
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
                 ov["cuts"] = cuts
-                ovf.write_text(json.dumps(ov, indent=1), encoding="utf-8")
+                save(ovf, ov)
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
                 text = cuts_text(d.get("transcript"), cuts["gone"])
@@ -2469,7 +2469,7 @@ def make_handler(folder, token):
                 tell = lambda text, r=x: self.comment({"t": r["start"], "t_end": r["end"], "text": text}) if d.get("sent") else \
                     self.send(200, {"ok": True, "id": r["id"]})
                 if path == "/text/delete":
-                    f.write_text(json.dumps({"items": [i for i in items if i is not x]}, indent=1), encoding="utf-8")
+                    save(f, {"items": [i for i in items if i is not x]})
                     bake_soon(folder)
                     return tell(f'Remove the on-screen text "{x["text"]}".')
                 text = str(body.get("text") or x["text"]).strip()[:120]
@@ -2483,8 +2483,7 @@ def make_handler(folder, token):
                         new["end"] = round(max(new["start"] + 0.1, float(body.get("end") or new["start"] + TEXT_HOLD_S)), 2)
                 except (ValueError, TypeError) as e:
                     return self.send(400, {"error": str(e) or "no time"})
-                f.write_text(json.dumps({"items": [new if i is x else i for i in items] + ([new] if path == "/text/add" else [])},
-                                        indent=1), encoding="utf-8")
+                save(f, {"items": [new if i is x else i for i in items] + ([new] if path == "/text/add" else [])})
                 bake_soon(folder)
                 if path == "/text/add":
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)

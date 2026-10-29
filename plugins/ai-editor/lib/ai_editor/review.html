@@ -2130,7 +2130,7 @@ document.addEventListener('pointerdown',e=>{const on=sel=>e.target.closest(sel);
   if((vsel!=null||ssel)&&!on('.eitem.vid,.eitem.snd,#sndpick,#tside,.vsp,#vsplit')){vsel=null;ssel=null;$('sndpick').hidden=true;$('edtracks')._h=null;renderEdTracks()}
   if(tx&&tx.edit&&on('#p1 .player')&&!on('#tprev')){if(tword())saveText();else setText(null)}},true);
 v.addEventListener('timeupdate',()=>{const t=v.currentTime;
-  if(csel&&(t<csel.x.s-.05||t>=csel.x.e+.05)){csel=null;drawCard()}
+  if(csel){const q=(S.cards_pending||[]).find(p=>p.key===csel.x.key)||{},a=q.start??csel.x.s,b=q.end??csel.x.e;if(t<a-.05||t>=b+.05){csel=null;drawCard()}}   // its time as moved, not as baked
   if(tx&&tx.edit&&!v.paused&&(t<tx.start-.05||t>=tx.end+.05)&&!$('tedit').contains(document.activeElement)&&document.activeElement!==$('tword')){if(tword())saveText();else setText(null)}});
 // the draft's cards, then the ones dropped on from the Media panel that it does not show yet (review.py cards_added)
 const cardsAll=()=>[...(((data().items||{}).cards)||[]),...((S&&S.cards_added)||[])];
