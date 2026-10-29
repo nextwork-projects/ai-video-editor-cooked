@@ -195,6 +195,12 @@ body.withTx #tx{display:flex}
 .txhead{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:14px 16px 12px;border-bottom:1px solid var(--line);flex-shrink:0}
 .txhead b{font-size:14px;line-height:18px;font-weight:600;color:var(--strong);flex-shrink:0}
 .txhead span{font-size:13px;line-height:16px;color:var(--muted);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* folded: the card is just its header and the player takes the room (kept in this browser) */
+.txhead #txmeta{flex:1}#txfold{align-self:center;flex-shrink:0;width:32px;height:32px;margin:-8px -8px -8px 0;border-radius:8px;display:grid;place-items:center;color:var(--muted)}#txfold:hover{color:var(--ink);background:var(--hover)}
+#txfold svg{width:16px;height:16px;transition:transform .15s}body.txfold #txfold svg{transform:rotate(180deg)}
+body.txfold #txlines,body.txfold #txtools,body.txfold #txbar,body.txfold #rsztx{display:none!important}body.txfold .txhead{border-bottom:0}
+body.withTx.txfold:not(.vertical) #pair{flex:1 1 auto}body.withTx.txfold:not(.vertical) #tx{flex:0 0 auto;min-height:0}
+body.withTx.vertical.txfold #tx{flex:0 0 240px;align-self:flex-start}body.withTx.vertical.txfold .pl{width:min(calc(100cqw - 260px),calc(100cqh * var(--arw) / var(--arh)))}
 #txlines{flex:1;min-height:0;overflow:auto;display:flex;flex-direction:column;gap:2px;padding:10px 8px 40vh;scrollbar-width:thin;user-select:none;-webkit-user-select:none}
 .ln{display:flex;gap:8px;padding:6px 8px;border-radius:8px}
 .ln .lt{width:40px;flex-shrink:0;font-size:12px;line-height:24px;color:var(--quiet)}
@@ -792,7 +798,7 @@ body.making #making{display:flex}
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
-  <div id="tx"><div class="txhead"><b>Transcript</b><span id="txmeta"></span></div><div id="txlines"></div><div class="txtools" id="txtools"></div><div id="txbar" role="toolbar" aria-label="change the selected words"></div></div>
+  <div id="tx"><div class="txhead"><b>Transcript</b><span id="txmeta"></span><button id="txfold" title="Hide transcript" aria-label="hide transcript" aria-expanded="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 15 6-6 6 6"/></svg></button></div><div id="txlines"></div><div class="txtools" id="txtools"></div><div id="txbar" role="toolbar" aria-label="change the selected words"></div></div>
  </div>
  </div>
  <div class="transport">
@@ -1212,9 +1218,21 @@ async function setCuts(c){S.cuts=c;$('edtracks')._h=null;renderEdTracks();
   const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');$('edtracks')._h=null;await load()}   // ok, or the note it made
 function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.splits.some(x=>Math.abs(x-t)<.1))return;
   setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)});toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
-function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
+function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();EDH.push(c);
   const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
   setCuts({...c,gone});toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
+// the transcript cuts on the edit too: Delete puts the words' time (first word's start to the last one's end, edit
+// clock) in the Video row's gone ranges, so the row, the skip and Claude's note follow; Delete on struck words puts them back
+const edTxOk=()=>!!S&&!!view&&view.stage==='edit'&&noteOk()&&!cmp;
+let EDH=[];   // the cuts before each change, for Cmd+Z
+const wEnd=k=>W[k].t+Math.max(.05,W[k].e-W[k].s);
+const edGone=k=>{const w=W[k];if(w.nt||w.t==null)return false;const m=(w.t+wEnd(k))/2;return cuts().gone.some(([a,b])=>m>=a-.005&&m<=b+.005)};
+function edTxOp(op){const ks=[];for(let k=txSel.a;k<=txSel.b;k++)if(!W[k].nt&&W[k].t!=null)ks.push(k);if(!ks.length)return;
+  if(!op)op=ks.every(edGone)?'restore':'cut';const r2=x=>Math.round(x*100)/100,a=r2(W[ks[0]].t),b=r2(wEnd(ks[ks.length-1])),c=cuts(),T=D();
+  const gone=op==='cut'?[...c.gone,[a,b]]:c.gone.flatMap(([x,y])=>y<=a||x>=b?[[x,y]]:[...(a>x?[[x,a]]:[]),...(b<y?[[b,y]]:[])]);
+  const splits=[...new Set([...c.splits,...[a,b].filter(t=>t>.05&&t<T-.05&&!c.splits.some(x=>Math.abs(x-t)<.01))])].sort((x,y)=>x-y);   // the row shows it as its own piece
+  EDH.push(c);txSel=null;hideBar();setCuts({...c,splits,gone});renderTx();renderTools();toast(op==='cut'?'Cut. It plays without those words now.':'Words put back.')}
+function edUndo(){if(!EDH.length)return;setCuts(EDH.pop());renderTx();renderTools()}
 function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp)return;const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(g)v.currentTime=g[1]}
 // drag a text on the Text row to move it in time, or drag its edge to trim it; it saves on release (texts.json)
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.txt');if(!it||it.dataset.ef||e.button||e.target.closest('[data-ex]'))return;
@@ -1740,7 +1758,7 @@ function flagHtml(id,label,note,inner){
     (txEditable()?`<div class="fa"><button data-acc="${id}" title="Keep it cut" aria-label="keep it cut">${IC.ok}</button><button data-dis="${id}" title="Bring it back" aria-label="bring it back">${IC.no}</button></div>`:'')+`</div>`;
 }
 function wordHtml(k){const w=W[k];
-  const c=w.nt?'tw nt':'tw'+(cutNow(k)?' cut':'')+(changed(k)?' chg':'')+(txSel&&txSel.a<=k&&k<=txSel.b?' sel':'');
+  const c=w.nt?'tw nt':'tw'+(cutNow(k)||view.stage==='edit'&&edGone(k)?' cut':'')+(changed(k)?' chg':'')+(txSel&&txSel.a<=k&&k<=txSel.b?' sel':'');
   return `<span class="${c}" data-k="${k}"${w.nt?' title="No timing in the transcript: it cannot be changed here"':''}>${esc(w.w)}</span>`;
 }
 function chipHtml(k){const w=W[k];if(w.pz==null)return '';
@@ -1761,7 +1779,8 @@ function txHtml(tx){
 const txSeen=()=>{try{return localStorage.getItem('txseen')==='1'}catch(e){return false}};
 function renderTools(){
   const ed=txEditable(),p=pending(),n=nChanges();let h;
-  if(view.stage==='edit')h=isCur()&&p==='approve'?'<p>Approved. Words are read only now.</p>':'<p>Read only on the edit. To change a word, leave a note.</p>';
+  if(edTxOk())h=EDH.length?'<button class="pbtn" data-undo title="Cmd+Z">Undo</button>':'<p>Select words and press Delete to cut them.</p>';
+  else if(view.stage==='edit')h=isCur()&&p==='approve'?'<p>Approved. Words are read only now.</p>':'<p>Read only on the edit. To change a word, leave a note.</p>';
   else if(!isCur())h='<p>An older draft, read only.</p>';
   else if(p==='send')h='<p>Claude is working on this draft. Words can change again in the next draft.</p>';
   else if(p==='approve')h='<p>The cut is approved. Words are read only now.</p>';
@@ -1780,7 +1799,7 @@ function renderTx(){
   document.body.classList.toggle('withTx',show);
   if(!show){txSig='';hideBar();return}
   renderTools();
-  const sig=txFor+'|'+txVer+'|'+txEditable();
+  const sig=txFor+'|'+txVer+'|'+txEditable()+'|'+(view.stage==='edit'?edTxOk()+JSON.stringify(cuts().gone):'');
   if(sig===txSig)return;txSig=sig;txCur=-1;txNow=-1;txPast=-1;
   const tx=src[0],box=$('txlines'),top=box.scrollTop;
   $('txmeta').textContent=`Struck words were cut · ${plural(tx.cuts,'cut')} in the video · ${fmt(tx.source_s)} to ${fmt((DATA[src[1]]||{}).duration||D())}`;
@@ -1823,8 +1842,8 @@ function seekWord(k){const w=W[k];if(!w||w.nt)return;
 }
 function hideBar(){$('txbar').classList.remove('open')}
 function showBar(){
-  const a=txSel&&W.slice(txSel.a,txSel.b+1).map((w,i)=>w.nt?null:cutNow(txSel.a+i)).filter(x=>x!==null);
-  if(!a||!a.length)return hideBar();const ed=txEditable();
+  const eo=edTxOk(),a=txSel&&W.slice(txSel.a,txSel.b+1).map((w,i)=>w.nt||eo&&w.t==null?null:eo?edGone(txSel.a+i):cutNow(txSel.a+i)).filter(x=>x!==null);
+  if(!a||!a.length)return hideBar();const ed=txEditable()||eo;
   const bar=$('txbar'),parts=[];
   if(ed&&a.includes(true))parts.push(`<button data-op="restore">${IC.restore}<span>Restore</span></button>`);
   parts.push(`<button data-copy>${IC.copy}<span>Copy</span></button>`);
@@ -1843,8 +1862,8 @@ function showBar(){
 }
 function paintSel(){document.querySelectorAll('#txlines .tw').forEach(el=>{const k=+el.dataset.k;el.classList.toggle('sel',!!txSel&&txSel.a<=k&&k<=txSel.b)})}
 const wordAt=e=>{const el=document.elementFromPoint(e.clientX,e.clientY);const w=el&&el.closest&&el.closest('#txlines .tw:not(.nt)');return w?+w.dataset.k:null};
-function txOp(op){if(!txSel||!txEditable()||!W.slice(txSel.a,txSel.b+1).some((w,i)=>!w.nt&&cutNow(txSel.a+i)!==(op==='cut')))return;const e={op,a:txSel.a,b:txSel.b};PEND.push(e);HIST.push({pend:e});txSel=null;hideBar();txChanged()}
-function txUndo(){
+function txOp(op){if(txSel&&edTxOk())return edTxOp(op);if(!txSel||!txEditable()||!W.slice(txSel.a,txSel.b+1).some((w,i)=>!w.nt&&cutNow(txSel.a+i)!==(op==='cut')))return;const e={op,a:txSel.a,b:txSel.b};PEND.push(e);HIST.push({pend:e});txSel=null;hideBar();txChanged()}
+function txUndo(){if(edTxOk())return edUndo();
   while(HIST.length){const h=HIST.pop();if(h.pend){const i=PEND.indexOf(h.pend);if(i>=0){PEND.splice(i,1);break}}else if(ACK.delete(h.ack)){saveAck();break}}
   txChanged();
 }
@@ -2351,6 +2370,8 @@ $('approve').onclick=approve;$('mapprove').onclick=approve;
 document.addEventListener('keydown',e=>{
   const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&txEditable()&&HIST.length){e.preventDefault();return txUndo()}
+  if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&edTxOk()&&EDH.length){e.preventDefault();return edUndo()}
+  if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&edTxOk()){e.preventDefault();return edTxOp()}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&txSel&&txEditable()){e.preventDefault();return txOp('cut')}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&ssel&&placed(ssel)){e.preventDefault();$('sndpick').hidden=true;return delSnd(placed(ssel))}
   if(!typing&&(e.key==='Backspace'||e.key==='Delete')&&vsel!=null&&view.stage==='edit'){e.preventDefault();return cutPiece(vsel)}
@@ -2384,6 +2405,9 @@ document.querySelectorAll('.themebtn').forEach(b=>b.onclick=e=>{e.stopPropagatio
 OS.addEventListener('change',themeIcon);themeIcon();
 load();setInterval(load,3000);
 
+// the transcript folds to its header; the player takes the room. Kept in this browser
+{const set=x=>{document.body.classList.toggle('txfold',x);const b=$('txfold');b.title=x?'Show transcript':'Hide transcript';b.setAttribute('aria-label',b.title.toLowerCase());b.setAttribute('aria-expanded',String(!x));if(x){txSel=null;hideBar()}try{localStorage.setItem('rsz:txfold',x?'1':'')}catch(e){}dispatchEvent(new Event('resize'))};
+  let f=false;try{f=localStorage.getItem('rsz:txfold')==='1'}catch(e){}set(f);$('txfold').onclick=()=>set(!document.body.classList.contains('txfold'))}
 // drag handles (.rsz): sizes as CSS variables on <html>, kept in this browser; double-click puts one back
 (()=>{const R=document.documentElement.style,K='rsz:';
   const load=()=>{for(const k of ['--sidew','--txsplit','--plw']){try{const v=localStorage.getItem(K+k);if(v)R.setProperty(k,v)}catch(e){}}};load();
