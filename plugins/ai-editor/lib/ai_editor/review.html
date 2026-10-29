@@ -526,7 +526,7 @@ body.tside #tside{display:flex}
 .cpline b{font-weight:inherit}.cpline.hit{outline:0}.cpline.hit b{color:transparent!important;-webkit-text-stroke:0!important;text-shadow:none!important;background:none!important}.cpline.hit b span{color:transparent!important}
 .cpline.hit:hover{outline:1px dashed rgba(255,255,255,.8)}
 .cpline small{position:absolute;left:50%;top:100%;margin-top:10px;transform:translateX(-50%);font:600 11px/14px system-ui,-apple-system,sans-serif;color:#FFFFFF;background:rgba(12,10,9,.7);padding:2px 6px;border-radius:5px;-webkit-text-stroke:0;text-shadow:none}
-.cpwas{position:absolute;pointer-events:none;background:rgba(12,10,9,.55);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);border-radius:6px}
+.cpwas{position:absolute;pointer-events:none;background:rgba(12,10,9,.12);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-radius:10px;-webkit-mask:radial-gradient(closest-side,#000 70%,transparent);mask:radial-gradient(closest-side,#000 70%,transparent)}   /* hides the old line, barely tints the picture */
 .cstyle{display:flex;flex-direction:column;gap:10px}#cbody .tf>span{width:58px}
 .cword{height:36px;width:100%;border:1px solid var(--line2);border-radius:8px;background:var(--panel);padding:0 10px;font:inherit;font-size:14px;color:var(--strong);outline:none}.cword:focus{border-color:var(--ink)}
 #tbody{flex:1;min-height:0;overflow:auto;padding:4px 16px 16px;display:flex;flex-direction:column;gap:14px}
@@ -1214,7 +1214,9 @@ const NOTE_ICON='<svg width="10" height="10" viewBox="0 0 12 12"><path d="M5 1.5
 function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';
   return `<svg class="wv" viewBox="0 0 ${n} 20" preserveAspectRatio="none" aria-hidden="true">${peaks.map((v,i)=>`<rect x="${i+.15}" y="${(10-Math.max(.6,v*9)).toFixed(2)}" width=".7" height="${(Math.max(.6,v*9)*2).toFixed(2)}" fill="rgba(255,255,255,.55)"/>`).join('')}</svg>`}
 // a caption line as it will read: its words with the retyped ones (overrides.json words) in place
-function capText(c){const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};
+// a caption line as it will read: being typed (capTyping, by its start) wins, then the retyped words (overrides.json words)
+const capTyping={};
+function capText(c){if(c&&capTyping[c.s]!=null)return {text:capTyping[c.s],edited:true};const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};
   const orig=c.text.split(/\s+/);return {text:c.w.map((k,i)=>k in cw?cw[k]:orig[i]||'').filter(Boolean).join(' '),edited:true}}
 function renderEdTracks(){const E=$('edtracks'),T=D();
   const on=!!(S&&view&&view.stage==='edit'&&noteOk()&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);
@@ -2345,9 +2347,9 @@ let capFocus=null,capSel=null;   // capFocus: the line to put the cursor in (its
 let capLive={},capDrag=false;   // a size, place or colour being dragged or slid: drawn at once, saved when let go
 const CAPCOLS=['#FFFFFF','#000000','#FFD60A','#FF9500','#FF3B30','#34C759','#0A84FF','#BF5AF2'];   // the few caption colours; the wheel has the rest
 function openCapLine(c){if(tool!=='captions')openTool('captions');capFocus=c?c.s:null;if(c){capSel=c.s;v.currentTime=c.s+.02;v.pause()}$('cbody')._s=null;renderCapPanel()}
-async function saveCapLine(c,text){if(!c)return;const old=capText(c).text;if(text.trim()===old.trim())return;
-  const r=await post('/captions/text',{s:c.s,w:c.w,text,old:c.text});if(!r.id)return toast(r.error||'That did not save.');
-  toast(text.trim()?'Caption changed. Submit feedback and the next draft has it.':'Caption taken out. Submit feedback and the next draft drops it.');
+async function saveCapLine(c,text,quiet){if(!c)return;const live=capTyping[c.s];delete capTyping[c.s];const old=capText(c).text;if(live==null&&text.trim()===old.trim())return;
+  const r=await post('/captions/text',{s:c.s,w:c.w,text,old:c.text});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
+  if(!quiet)toast(text.trim()?'Caption changed.':'Caption taken out.');
   const row=$('cbody').querySelector(`.cline[data-cs="${c.s}"]`);if(row){row.classList.add('ed');if(!text.trim())row.querySelector('input').value=''}
   $('cbody')._s=null;$('edtracks')._h=null;await load()}
 // the caption style the next draft gets: the draft's own (its plan), the look picked if the draft does not have it yet,
@@ -2358,14 +2360,14 @@ function capChanged(){const b=((S&&S.captions_ui)||{}).base||{},a=capLook();retu
 async function saveCapStyle(body){const r=await post('/captions',body);if(!r.id){capLive={};drawCapPrev();return toast(r.error||'That did not save.')}
   $('cbody')._s=null;await load();capLive={};drawCapPrev()}
 function capLinesHtml(){const cs=(data().items||{}).captions||[];if(!cs.length)return '';
-  return `<div><div class="tcap" style="margin-bottom:8px"><span>All lines</span><span>Enter saves</span></div><div class="clines">${cs.map((c,i)=>{const ct=capText(c);
+  return `<div><div class="tcap" style="margin-bottom:8px"><span>All lines</span><span>Saves as you type</span></div><div class="clines">${cs.map((c,i)=>{const ct=capText(c);
     return `<div class="cline${ct.edited?' ed':''}" data-cs="${c.s}"><button class="clt" data-cseek="${i}">${fmtx(c.s)}</button><input data-ci="${i}" value="${esc(ct.text)}" placeholder="(taken out)" aria-label="caption at ${fmtx(c.s)}"><button class="cx" data-cdel="${i}" title="Take this caption out">×</button></div>`}).join('')}</div></div>`}
 const capCols=(k,cur)=>`<div class="tcols">${CAPCOLS.map(c=>`<button data-cc="${k}" data-col="${c}" style="background:${c}" title="${c}" aria-label="${k} ${c}"${c===cur?' class="on"':''}></button>`).join('')}</div>
   <div class="tcustom"><label title="Any colour"><input type="color" data-cpick="${k}" value="${cur.toLowerCase()}" aria-label="any ${k} colour"><span></span></label><input data-chex="${k}" value="${cur}" maxlength="7" aria-label="${k} as hex" spellcheck="false"></div>`;
 function renderCapPanel(){const b=$('cbody'),c=(S&&S.captions_ui)||{looks:{}},cs=(data().items||{}).captions||[],sig=JSON.stringify(c)+JSON.stringify(S&&S.cap_words)+cs.length+'|'+capSel;
   if(b._s===sig&&capFocus===null)return;if(b.contains(document.activeElement)&&document.activeElement.tagName==='INPUT'&&capFocus===null)return;b._s=sig;
   const a=capLook(),si=cs.findIndex(x=>x.s===capSel),sel=cs[si],sz=+(a.size_pct||6).toFixed(1),y=Math.round(a.y_pct||70);
-  b.innerHTML=(sel?`<div><div class="tcap" style="margin-bottom:8px"><span>This caption at ${fmtx(sel.s)}</span><span>Enter saves</span></div><input class="cword" data-ci="${si}" value="${esc(capText(sel).text)}" placeholder="(taken out)" aria-label="this caption"></div>`:'')
+  b.innerHTML=(sel?`<div><div class="tcap" style="margin-bottom:8px"><span>This caption at ${fmtx(sel.s)}</span><span>Saves as you type</span></div><input class="cword" data-ci="${si}" value="${esc(capText(sel).text)}" placeholder="(taken out)" aria-label="this caption"></div>`:'')
     +`<div><div class="tcap" style="margin-bottom:8px"><span>Look</span></div><div class="clooks">${Object.entries(c.looks||{}).map(([k,l])=>`<button class="clook${(c.look||(c.base||{}).style)===k?' on':''}" data-cl="${esc(k)}">${capTile(k,l)}${esc(k[0].toUpperCase()+k.slice(1))}</button>`).join('')}</div></div>
     <div class="cstyle"><div class="tf"><span>Size</span><div class="tfv"><input type="range" id="csize" min="2" max="12" step="0.1" value="${sz}" aria-label="caption size"><output id="csizen" class="num">${sz}</output></div></div>
     <div class="tf"><span>Position</span><div class="tfv"><input type="range" id="cy" min="15" max="85" step="1" value="${y}" aria-label="caption position, top to bottom"><output id="cyn" class="num">${y}%</output></div></div>
@@ -2377,8 +2379,11 @@ function renderCapPanel(){const b=$('cbody'),c=(S&&S.captions_ui)||{looks:{}},cs
 $('cbody').addEventListener('keydown',e=>{const k=e.target.dataset&&e.target.dataset.chex;
   if(k){e.stopPropagation();if(e.key==='Enter'&&/^#[0-9a-f]{6}$/i.test(e.target.value))saveCapStyle({[k]:e.target.value.toUpperCase()});return}
   const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;e.stopPropagation();
-  if(e.key==='Enter'){e.preventDefault();saveCapLine(((data().items||{}).captions||[])[+i],e.target.value);const row=e.target.closest('.cline'),nx=row&&row.nextElementSibling;if(nx)nx.querySelector('input').focus()}
-  if(e.key==='Escape'){e.target.value=capText(((data().items||{}).captions||[])[+i]).text;e.target.blur()}});
+  if(e.key==='Enter'){e.preventDefault();clearTimeout(e.target._sv);saveCapLine(((data().items||{}).captions||[])[+i],e.target.value,true);const row=e.target.closest('.cline'),nx=row&&row.nextElementSibling;if(nx)nx.querySelector('input').focus()}
+  if(e.key==='Escape'){const c=((data().items||{}).captions||[])[+i];clearTimeout(e.target._sv);delete capTyping[c.s];e.target.value=capText(c).text;e.target.blur();drawCapPrev()}});
+$('cbody').addEventListener('input',e=>{const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;const c=((data().items||{}).captions||[])[+i];if(!c)return;
+  capTyping[c.s]=e.target.value;drawCapPrev();$('edtracks')._h=null;renderEdTracks();clearTimeout(e.target._sv);
+  e.target._sv=setTimeout(()=>{if(capTyping[c.s]!=null)saveCapLine(c,capTyping[c.s],true)},600)});
 $('cbody').addEventListener('focusin',e=>{const i=e.target.dataset&&e.target.dataset.ci;if(i===undefined)return;const c=((data().items||{}).captions||[])[+i];if(c){v.currentTime=c.s+.02;v.pause()}});
 // sliders and the colour wheel draw as they move and save on let go; a swatch saves on click
 $('cbody').addEventListener('input',e=>{const t=e.target;
@@ -2403,7 +2408,7 @@ function drawCapPrev(){if(capDrag)return;const L=$('cplayer'),it=data().items||{
   if(!c){const was=moved&&(it.captions||[]).some(x=>x.s<=t&&t<x.e);   // a page moved away from here: hide the old one
     const hh=was?`<div class="cpwas" style="left:${(100-it.cap.w)/2}%;top:${it.cap.y-it.cap.h/2}%;width:${it.cap.w}%;height:${it.cap.h}%"></div>`:'';
     if(L._s!==hh){L._s=hh;L.innerHTML=hh}return}
-  const a=capLook(),ch=capChanged()||moved,W=L.offsetWidth,H=L.offsetHeight,fs=Math.max(W,H)*(a.size_pct||6)/100,cw=a.width_pct||86;
+  const a=capLook(),ch=capChanged()||moved||capTyping[c.s]!=null,W=L.offsetWidth,H=L.offsetHeight,fs=Math.max(W,H)*(a.size_pct||6)/100,cw=a.width_pct||86;
   const ws=capText(c).text.split(/\s+/).filter(Boolean),n=(c.w||[]).filter(s=>+s<=t).length-1,hi=a.highlight_color||a.color||'#FFFFFF';
   const cs=x=>a.case==='upper'?x.toUpperCase():a.case==='lower'?x.toLowerCase():x;
   const st=`top:${a.y_pct||70}%;font-size:${fs}px;max-width:none;font-family:'${esc(a.font_match||'TikTok Sans')}',system-ui,sans-serif;font-weight:${a.weight||800};color:${a.color||'#FFFFFF'};`

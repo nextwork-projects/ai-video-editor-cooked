@@ -2330,6 +2330,9 @@ def make_handler(folder, token):
                 save(ovf, ov)
                 new = " ".join(w for w in words.values() if w)
                 line = f'"{old}" at {fmt(t)} now "{new}"' if new else f'"{old}" at {fmt(t)} taken out'
+                bake_soon(folder)   # into the video by itself; a note only while Claude has the round
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True})
                 return self.timeline_note("caption-text", "Captions retyped", line, "Plan again so they show (overrides.json words).")
             if path == "/captions/time":   # the timeline's Captions row: a page made longer, shorter or moved. overrides.json
                 # cap_times, keyed by its first word's start so a new plan finds it; baked in by itself (bake_soon)
@@ -4465,7 +4468,7 @@ def demo():
     assert caption_words(["1.000"], "") == {"1.000": ""}
     k1 = post("/captions/text", {"s": 1.0, "w": [1.0, 1.3], "text": "hello world!", "old": "hello world"})
     k2 = post("/captions/text", {"s": 2.0, "w": [2.0], "text": "", "old": "later"})
-    assert k2["id"] == k1["id"] and k2["text"].startswith('Captions retyped: "hello world" at 0:01.0 now "hello world!"; "later" at 0:02.0 taken out.'), k2
+    assert k1 == k2 == {"ok": True} and not any("Captions retyped" in c["text"] for c in load(folder / "review.json")["comments"]), k2   # baked, no note
     assert json.loads(get("/state").read())["cap_words"] == {"1.000": "hello", "1.300": "world!", "2.000": ""}
     post("/captions/time", {"w": 1.0, "s": 0.9, "e": 1.8, "text": "hello world"})   # a page dragged on the Captions row
     assert json.loads(get("/state").read())["cap_times"] == {"1.000": [0.9, 1.8]} and load(folder / "overrides.json")["cap_times"]
@@ -4481,7 +4484,6 @@ def demo():
     except urllib.error.HTTPError as e:
         assert e.code == 400
     (folder / "overrides.json").unlink()
-    post("/delete", {"id": k1["id"]})
     # a card on the video: moved or resized, then deleted, into overrides.json with no note (Claude does not have the
     # round): the page draws it moved until the bake; its picture is served
     trk_items = json.loads(get("/data?k=edit-1").read())["items"]["cards"]
