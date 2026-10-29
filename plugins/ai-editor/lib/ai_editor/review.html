@@ -351,6 +351,9 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 /* the panel: notes and Claude's work, the composer and the two buttons at its foot */
 aside{width:var(--sidew,320px);flex-shrink:0;background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;overflow:hidden}
 .phead{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:16px 16px 12px;flex-shrink:0;gap:8px}
+#pmeta{flex-basis:100%;text-align:right}.pclose{width:28px;height:28px;border-radius:8px;font-size:18px;line-height:1;color:var(--muted)}.pclose:hover{color:var(--ink);background:var(--line)}
+.popen{display:none;height:34px;padding:0 12px;border-radius:9px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink)}
+body.asidex aside{display:none}body.asidex .popen{display:inline-flex;align-items:center;gap:6px}
 .phead>span{color:var(--muted);font-size:13px;line-height:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #ptabs{flex-shrink:0}#pmeta{flex:1 0 auto;max-width:100%;text-align:right}   /* no room beside the tabs: its own line, never "3 not..." */
 .mhead2{display:none}
@@ -821,7 +824,7 @@ body.making #making{display:flex}
  <div class="brand"><button id="homebtn" class="homebtn" title="Back to your videos"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Your videos</button><span class="sl">/</span><span id="name"></span><span id="homemsg" class="homemsg" hidden></span></div>
  <div class="seg" id="stages"><button id="st1" data-go="cut"></button><svg class="chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="st2" data-go="edit"></button></div>
  <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
- <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="mapprove"></button>
+ <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="popen" class="popen" title="Open the notes">Notes <small id="ncount2"></small></button><button id="mapprove"></button>
 </header>
 <section id="how" aria-label="how this works"><ol>
  <li><b>1. Watch and note</b>Pause where something is off and leave a note. It is pinned to that moment, with the frame. On the edit, click a card, caption or zoom on the video, or select words in the transcript, and the note starts with what it is. Paste or drop an image to show what you mean.</li>
@@ -872,7 +875,7 @@ body.making #making{display:flex}
 </div>
 <div class="rsz" id="rszside" role="separator" aria-orientation="vertical" aria-label="drag to resize the notes panel" title="drag to resize"></div>
 <aside>
- <div class="phead"><div class="seg" id="ptabs"><button data-tab="notes">Notes <small id="ncount"></small></button><button data-tab="rounds">Drafts</button><button data-tab="trials" hidden>Trial reels</button></div><span id="pmeta"></span></div>
+ <div class="phead"><div class="seg" id="ptabs"><button data-tab="notes">Notes <small id="ncount"></small></button><button data-tab="rounds">Drafts</button><button data-tab="trials" hidden>Trial reels</button></div><button id="pclose" class="pclose" title="Close the notes" aria-label="close the notes">×</button><span id="pmeta"></span></div>
  <div class="mhead2"><div><b>Notes</b><span id="mcount"></span></div><button id="msend"></button></div>
  <div id="list"></div>
  <div class="pfoot">
@@ -981,6 +984,10 @@ $('railupd').onclick=async()=>{const u=(S&&S.update)||{};
     finally{checking=false;renderRail()}
     const v=S.update||{};if(!v.newer&&v.latest)toast('Up to date. You have '+(v.installed||v.latest)+'.');return}
   updating=true;renderRail();setTimeout(()=>{updating=false;if(S)renderRail()},15000);try{const r=await fetch('/update',{method:'POST',body:'{}'});if(!r.ok){updating=false;alert('The window is not open, so it cannot update. Open cooked. and press Update in Settings.')}}catch(e){updating=false}renderRail()};
+// the notes panel closes like CapCut's side panels: × hides it, Notes in the top bar brings it back, remembered
+let asidex=false;try{asidex=localStorage.getItem('review-asidex')==='1'}catch(e){}
+const setAside=x=>{asidex=x;document.body.classList.toggle('asidex',x);try{localStorage.setItem('review-asidex',x?'1':'0')}catch(e){}};setAside(asidex);
+$('pclose').onclick=()=>setAside(true);$('popen').onclick=()=>setAside(false);
 let railx=false;try{railx=localStorage.getItem('review-railx')==='1'}catch(e){}
 document.body.classList.toggle('railx',railx);
 // the Claude control: Show Claude brings its Terminal tab to the front; Start Claude carries on in the Claude that worked
@@ -1204,7 +1211,7 @@ function render(){
   document.body.classList.toggle('intro',!!S.intro&&isCur()&&!introOff&&!mk);
   renderMaking();
   $('msend').textContent=sb.querySelector('span').textContent;$('msend').disabled=sb.disabled;
-  $('ncount').textContent=noteCount();
+  $('ncount').textContent=$('ncount2').textContent=noteCount();
   $('mcount').textContent=mine?mine+(p?'':', not sent'):'';
   if(S.trials&&S.trials.v!==trOpened){trOpened=S.trials.v;if(S.trials.state==='proposed')tab='trials'}   // a new plan: open the tab on it
   if(!S.trials&&tab==='trials')tab='notes';
@@ -2212,7 +2219,7 @@ function renderHits(){
 let noteOn=null;   // what the user clicked to start this note: the note is tagged with it, not with whatever else is on screen
 function startNote(text,a,b,on){
   if(!noteOk())return;noteOn=on||null;v.pause();if(a!=null){inT=a;outT=b??null;if(Math.abs(v.currentTime-a)>.05&&(v.currentTime<a||b==null||v.currentTime>b))v.currentTime=a}
-  ta.value=text;grow();renderBar();boxTime();ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
+  setAside(false);ta.value=text;grow();renderBar();boxTime();ta.focus();ta.setSelectionRange(ta.value.length,ta.value.length);
 }
 $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if(!b)return;e.stopPropagation();const u=HITS[+b.dataset.hit];
   if(u&&u.k==='texts'&&u.x.kind==='label'){const m=(S.texts||[]).find(x=>Math.abs(x.start-u.x.s)<.05&&x.text===u.x.text);if(m)return editText(m.id,false)}   /* your own text: click to change it */
@@ -2315,7 +2322,7 @@ function boxTime(){const[a,b]=noteSpan();$('boxat').textContent=b!==null?fmtx(a)
   $('savebtn').classList.toggle('ready',!!(ta.value.trim()||pics.length)&&!ta.disabled)}
 ['timeupdate','seeking','seeked','play','pause','loadedmetadata'].forEach(e=>v.addEventListener(e,boxTime));
 $('clock').onclick=()=>{if(inT!==null){inT=outT=null;renderBar()}boxTime()};
-function openBox(){if(ta.disabled)return;v.pause();ta.focus()}
+function openBox(){if(ta.disabled)return;setAside(false);v.pause();ta.focus()}   // a note opens the panel again
 function closeBox(){noteOn=null;pics=[];showPics();ta.value='';grow();ta.blur();inT=outT=null;if(S)renderBar();boxTime()}
 const grow=()=>{ta.style.height='auto';ta.style.height=ta.scrollHeight+'px'};
 ta.addEventListener('input',()=>{grow();boxTime()});
