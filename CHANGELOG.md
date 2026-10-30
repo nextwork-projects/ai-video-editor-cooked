@@ -2,6 +2,12 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.31, creator-teardown 2.7.31 (2026-10-30)
+- The chat icon sits at the far right of the top bar and stays there: it opens and closes the panel.
+- The timeline stays on an approved draft and on trial reels, to look and scrub. A trial reel shows its ruler, playhead and video bar.
+- The version list is the app's own menu, with bigger rows that are easier to click.
+- A trial reel no longer jumps at the main draft's cuts, and its transcript no longer offers to cut words.
+
 ## ai-editor 2.7.30, creator-teardown 2.7.30 (2026-10-30)
 - The playhead drags again on the edit page: from its handle, the ruler or any empty part of a row. The video follows.
 - A zoomed-in timeline scrolls and follows the playhead again.
