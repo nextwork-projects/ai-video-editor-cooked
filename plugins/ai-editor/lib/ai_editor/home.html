@@ -2574,7 +2574,7 @@ function stUpdate(){
   const line=u.checking?'Checking...':u.newer?'A new version is out':u.offline?'Could not reach GitHub':u.latest?'Up to date'+(when?' · '+when:''):'';
   return `<div class="scd"><div class="hd"><b>Updates</b><span class="ss">${ok?OKTICK:''}${line}</span></div>
     <div class="kvs"><div><span>Installed</span><b>${esc(u.installed||'?')}</b></div><div><span>Latest</span><b>${esc(u.latest||'?')}</b></div></div>
-    ${u.dev?'':'<div class="t2" style="white-space:normal">Turn on auto-updates: type <b>/plugin</b>, open Marketplaces, pick nextwork, choose Enable auto-update.</div>'}
+    ${u.dev||u.fork?'':`<label class="srow" style="cursor:pointer"><div><div>Install new versions by themselves</div><div class="t2" style="white-space:normal">While nothing is being made. Open pages refresh on their own.</div></div><input type="checkbox" class="st-check" ${S.auto_update!==false?'checked':''} onchange="setAutoUpd(this.checked)"></label>`}
     ${u.newer&&(u.notes||[]).length?`<div><div class="t2">What changed</div>${u.notes.map(n=>`<div class="dash">${esc(n)}</div>`).join('')}</div>`:''}
     ${u.fork?'<div class="t2" style="white-space:normal">Your own copy (a fork): ask Claude Code to update my editor.</div>':''}
     <div class="lks">${u.newer&&!u.fork?`<button class="b1 s" ${busy?'disabled':''} onclick="stDoUpdate()">${busy?'Updating...':'Update'}</button>`:`<button class="b2 s" ${u.checking?'disabled':''} onclick="stCheckUpd()">Check now</button>`}<a href="https://github.com/nextwork-projects/ai-video-editor-cooked/blob/main/CHANGELOG.md" target="_blank" rel="noopener">Full changelog</a></div>
@@ -2593,10 +2593,11 @@ async function sbUpd(){const u=S.update||{};if(u.newer&&!u.fork)return stDoUpdat
 function updCard(){
   const u=S.update||{},j=latest('update'),busy=j&&j.state==='taken',done=j&&j.state==='done'&&Date.now()/1000-(j.finished||0)<300;
   if(busy)return `<div class="sb-upd"><div><b>${SPIN}Updating cooked.</b><span>${esc(((j.steps||[]).at(-1)||{}).text||'Starting')}</span></div></div>`;
-  if(done)return `<div class="sb-upd"><div><b>Updated${(j.result||{}).version?' to '+esc(j.result.version):''}</b><span>Type /reload-plugins in Claude Code to load it.</span></div></div>`;
+  if(done)return `<div class="sb-upd"><div><b>Updated${(j.result||{}).version?' to '+esc(j.result.version):''}</b><span>${(S.just_updated||{}).notes&&S.just_updated.notes[0]?esc(S.just_updated.notes[0])+' ':''}Type /reload-plugins in Claude Code to load it.</span></div></div>`;
   if(!u.newer||u.fork)return '';
   return `<div class="sb-upd"><div><b>New version ${esc(u.latest)}</b><span>${esc((u.notes||[])[0]||'A new version of cooked. is out.')}</span></div><button class="sb-updb" onclick="stDoUpdate()">Update now</button></div>`;
 }
+async function setAutoUpd(on){await post('/update/auto',{on});await load()}
 async function stDoUpdate(){const r=await post('/job',{type:'update'});if(!r._ok)toast(r.error||'That did not start.');await load()}
 // Check now: the check runs on the server; the card follows it until it is done (GitHub can take a few seconds)
 async function stCheckUpd(){await post('/update/check',{});for(let i=0;i<20;i++){await load();render();if(!(S.update||{}).checking)break;await new Promise(r=>setTimeout(r,500))}}

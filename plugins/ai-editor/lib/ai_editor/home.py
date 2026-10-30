@@ -1255,6 +1255,25 @@ def update_info():
             "checking": _UPD["busy"], "checked": _UPD["at"] or None, "offline": bool(_UPD.get("offline")), "dev": dev, "fork": fork}
 
 
+def auto_update(d, u, start=None):
+    """A new version installs itself while this window or a video page is open: never for a checkout or a fork, not after
+    Settings turned it off, and only while nothing is being made (no job running, no video's Claude working). One try per
+    version: a failure leaves the Update button. True when it started."""
+    if d.get("auto_update") is False or not u.get("newer") or u.get("dev") or u.get("fork") or d.get("auto_tried") == u["latest"]:
+        return False
+    if time.time() - _UPD.get("auto_at", 0) < 60:   # the library's videos are read at most once a minute, not on every poll
+        return False
+    _UPD["auto_at"] = time.time()
+    if any(j.get("state") in ("queued", "taken") for j in d.get("jobs") or []):
+        return False
+    import review
+    if any(review.claude_state(Path(e["dir"]))["state"] == "working" for e in library.entries()):
+        return False
+    update(lambda x: x.__setitem__("auto_tried", u["latest"]))
+    (start or start_modal)("update")
+    return True
+
+
 def trash(p):
     """To the Trash (Finder, Recycle Bin, gio). True when the file is gone from where it was."""
     r = subprocess.run(library.trash_cmd(p), capture_output=True, timeout=60)
@@ -1612,7 +1631,10 @@ def run_home(kind, jid):
     except OSError as e:
         err = f"Could not start the setup step: {e}"
     finish(err)
-    if kind == "update" and not err:
+    if kind == "update" and not err:   # What's new for the pages once they are back: the notes are in memory only until the restart
+        job = next((j for j in read()["jobs"] if j["id"] == jid), {})
+        update(lambda d: d.__setitem__("just_updated", {"version": job.get("result", {}).get("version"), "notes": list(_UPD.get("notes") or []),
+                                                        "at": time.time()}))
         restart_on(next((j["result"].get("path") for j in read()["jobs"] if j["id"] == jid), None))
 
 
@@ -2061,6 +2083,7 @@ def make_handler(token):
                 d["busy"] = bz and {"id": bz["id"], "name": job_name(bz)}
                 d["profile"] = (home().parent / "profile.json").exists()   # set up before: a returning user
                 d["update"] = {**update_info(), "claude": d.get("claude_v")}   # the version the last Claude command ran
+                auto_update(d, d["update"])
                 d["getting_started"] = getting_started(d)
                 import launcher   # a Claude of its own per video only where a terminal window can be opened
                 d["new_claude"] = bool(launcher.terminal(d["root"], ["claude"], platform.system()))
@@ -2543,6 +2566,9 @@ def make_handler(token):
             if path == "/broll/add":   # Connect a folder: a Drive folder picked in the browser, or a path typed in
                 err = broll.add(body.get("name"), body.get("folder"))
                 return self.send(400 if err else 200, {"ok": not err, "msg": err})
+            if path == "/update/auto":   # Settings: new versions install themselves, or wait for the Update button
+                update(lambda d: d.__setitem__("auto_update", body.get("on") is not False))
+                return self.send(200, {})
             if path == "/scanhome":   # the one-time opt-in: recent clips from Movies, Desktop and Downloads
                 update(lambda d: d.__setitem__("scan_home", body.get("on") is True))
                 return self.send(200, {})
@@ -3099,6 +3125,7 @@ def may_refresh(plugin, home_dir=None, env=None):
 
 # ---------------------------------------------------------------- demo
 def demo():
+    real_auto, globals()["auto_update"] = auto_update, lambda *a, **k: False   # the faked new version below must not install for real
     import contextlib
     import io
     import shutil
@@ -4387,6 +4414,28 @@ def demo():
     u = get("/state")["update"]
     assert u["newer"] and u["latest"] == "99.0.0" and u["installed"] == json.loads(PLUGIN_JSON.read_text(encoding="utf-8"))["version"], u
     assert u["notes"] == ["Dark mode in the window"] and vtuple("2.10.0") > vtuple("2.9.1")
+    # a new version installs itself: only while nothing is being made, one try per version, never a checkout, a fork or switched off
+    fresh, tried = {"newer": True, "latest": "99.0.0", "dev": False, "fork": False}, []
+
+    def try_auto(d, u=fresh):
+        _UPD.pop("auto_at", None)
+        return real_auto(d, u, start=tried.append)
+    update(lambda d: d.pop("auto_tried", None))
+    assert not any([try_auto({"auto_update": False}), try_auto({}, {**fresh, "dev": True}), try_auto({}, {**fresh, "fork": True}),
+                    try_auto({}, {**fresh, "newer": False}), try_auto({"jobs": [{"state": "taken"}]}), try_auto({"auto_tried": "99.0.0"})]) and not tried
+    import review as rv
+    keep = library.entries, rv.claude_state
+    library.entries, rv.claude_state = (lambda: [{"dir": "x"}]), (lambda f: {"state": "working"})
+    assert not try_auto({}) and not tried, "a video's Claude is working"
+    library.entries, rv.claude_state = keep[0], (lambda f: {"state": "open"})
+    assert try_auto({}) and tried == ["update"] and read()["auto_tried"] == "99.0.0"
+    assert not real_auto({}, fresh, start=tried.append) and tried == ["update"], "the library is read once a minute at most"
+    rv.claude_state = keep[1]
+    update(lambda d: d.pop("auto_tried", None))
+    post("/update/auto", {"on": False})
+    assert get("/state")["auto_update"] is False
+    post("/update/auto", {"on": True})
+    assert get("/state")["auto_update"] is True
     # Update runs in the window itself (no Claude): a fork is refused (the update skill merges it with the user); any
     # other install runs update.py window, shows its steps, keeps the new version and restarts from its folder
     real_info = update_info
@@ -4417,6 +4466,7 @@ def demo():
         assert j["state"] == "done" and j["owner"] == "home" and j["result"] == {"version": "99.0.0", "path": (tmp / "v99").as_posix()}, j
         assert [s["text"] for s in j["steps"]] == ["Getting the list of new versions", "Updating ai-editor"] and restarted == [(tmp / "v99").as_posix()]
         assert not any(x["type"] == "update" and x["state"] == "queued" for x in read()["jobs"]), "nothing queued for Claude"
+        assert read()["just_updated"]["version"] == "99.0.0" and read()["just_updated"]["notes"] == ["Dark mode in the window"], "What's new survives the restart"
     finally:
         globals().update(UPDATE=real_update, restart_on=real_restart)
         update(lambda d: d.__setitem__("jobs", [j for j in d["jobs"] if j["type"] != "update"]))

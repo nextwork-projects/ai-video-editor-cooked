@@ -1402,6 +1402,12 @@ def bake_soon(folder):
 
 
 def bake(folder, run=subprocess.run):
+    """bake_now, with no restart under it (an update moving this server onto a new version waits, live.py)."""
+    with live.busy():
+        return bake_now(folder, run)
+
+
+def bake_now(folder, run=subprocess.run):
     """The texts in texts.json into the draft the page shows, with no Claude: plan.json's label texts swapped for
     them, `edit.py patch` re-renders those seconds into render.mp4, and the round's video and snapshot take it."""
     folder, rj = Path(folder), Path(folder) / "review.json"
@@ -1567,6 +1573,15 @@ def themed(html):
     return html if t == "system" else html.replace(b"<html", f'<html data-theme="{t}"'.encode(), 1)
 
 
+def just_for_me(just):
+    """What's new, once this server runs that version: a page still on the old one reloads first, then shows it."""
+    try:
+        mine = json.loads((Path(__file__).resolve().parents[2] / ".claude-plugin" / "plugin.json").read_text(encoding="utf-8"))["version"]
+    except (OSError, ValueError, KeyError):
+        return None
+    return just if isinstance(just, dict) and just.get("version") == mine else None
+
+
 def home_url():
     """The home page's address (home.py keeps one fixed address in $AI_EDITOR_HOME/home/.server) when it
     answers, else None. Checked at most every 10 s."""
@@ -1585,7 +1600,7 @@ def home_url():
         err = j.get("error") if j and j.get("state") == "failed" and time.time() - float(j.get("finished") or 0) < 300 else None
         # always there, so the rail's Updates item can say Check for updates, Checking... or Update to <version>
         upd = {"latest": u.get("latest"), "installed": u.get("installed"), "busy": busy, "error": err,
-               "newer": bool(u.get("newer") and not u.get("fork")), "checking": bool(u.get("checking"))}
+               "newer": bool(u.get("newer") and not u.get("fork")), "checking": bool(u.get("checking")), "just": just_for_me(st.get("just_updated"))}
     except (OSError, ValueError, AttributeError):
         url = None
     _HOME.update(at=time.time(), url=url, update=upd)
