@@ -270,7 +270,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 
 /* the edit, tidied (body.edcalm, calm()): edit tools only on the rail, transcript left, video big, one control row, one timeline */
 #railtx{display:none}body.edcalm #railtx{display:flex}
-body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd,body.edcalm #railtog{display:none}
+body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd:not(.rupd),body.edcalm #railtog{display:none}
 body.edcalm .rtile{cursor:pointer}
 body.edcalm.staged #stagebar,body.edcalm #back,body.edcalm #fwd{display:none}
 body.edcalm .transport #cmprow{display:flex;margin-right:4px}body.edcalm.canCompare .transport #cmprow .hint{display:none}
@@ -987,12 +987,16 @@ function renderRail(){
   // Updates: always in the rail. Update to <version> when one is out (the window installs it), else Check for updates
   const u=S.update||{},ub=$('railupd'),inst=u.newer||u.busy||u.error||updating;
   if(u.busy)updWas=true;if(updWas&&!u.busy)updating=updWas=false;   // the update ended (done: this page restarts on it)
+  whatsNew(u.just);
   ub.classList.toggle('rupd',!!inst);ub.disabled=!!u.busy||updating||checking||!!u.checking;
   $('railupdt').textContent=u.busy||updating?'Updating':u.error?'Try again':u.newer?'Update to '+(u.latest||'new'):checking||u.checking?'Checking...':'Check for updates';
   ub.title=u.busy||updating?'Installing the new version. This page restarts on it.':u.error||(u.newer?'Install cooked. '+(u.latest||''):'Ask GitHub for a new version'+(u.installed?'. You have '+u.installed:''));
   const n=S.home?S.jobs||0:0;$('railjobs').hidden=!n;$('jobn').textContent=n;$('railjobs').title=n?'Making '+plural(n,'video'):'';
 }
 let updating=false,updWas=false,checking=false;
+// just updated: What's new once per version, in this browser, within a day of the install
+function whatsNew(j){if(!j||!j.version||Date.now()/1000-(j.at||0)>86400)return;try{if(localStorage.getItem('review-seen-update')===j.version)return;localStorage.setItem('review-seen-update',j.version)}catch(e){return}
+  toast('Updated to '+j.version+'.'+((j.notes||[])[0]?' '+j.notes[0]:''),9000)}
 // the window closed: the rail still shows, and a click starts the window's page (POST /home) and goes there
 document.querySelector('.rail').addEventListener('click',async e=>{const a=e.target.closest('[data-home]');if(!a||(S&&S.home))return;e.preventDefault();
   if(a.dataset.busy)return;a.dataset.busy='1';toast('Opening your videos...');
@@ -1038,7 +1042,7 @@ async function load(force){const sent=performance.now();
   // the edit round arrived while the page showed "Making the preview": the bar fills green, then the page switches
   if(S&&!landing&&makingEdit()&&d.stage==='edit'&&key(d)!==key(S)){landing=d.stills?3:1;renderMaking();renderList();setTimeout(()=>{landing=2;load(true)},1100);return}   // 3: the stills, the same green bar
   // live reload: the page or the server changed; never while a note is being typed
-  if(d.page){const t=document.activeElement;if(PV&&d.page!==PV&&!(t&&/^(INPUT|TEXTAREA)$/.test(t.tagName)&&t.value)){location.reload();return}PV=PV||d.page}
+  if(d.page){const t=document.activeElement;if(PV&&d.page!==PV&&!(t&&(t.isContentEditable||/^(INPUT|TEXTAREA)$/.test(t.tagName)&&t.value))){location.reload();return}PV=PV||d.page}
   if(S&&sent<editAt)for(const k of LOCAL)if(k in S)d[k]=S[k];
   S=d;plainState(S);
   if((d.theme==='light'||d.theme==='dark')&&document.documentElement.dataset.theme!==d.theme&&Date.now()-themeAt>3000){document.documentElement.dataset.theme=d.theme;themeIcon()}   // one theme with the window
@@ -1077,7 +1081,7 @@ $('dl').addEventListener('click',async e=>{
     toast('The video did not download. Try again.')}finally{delete a.dataset.busy}
 });
 const sessBtn=()=>'';   // Copy session moved into the Claude control (Show Claude / Start Claude)
-function toast(t){const e=$('toast');e.innerHTML=TICK+esc(t);e.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('show'),3500)}
+function toast(t,ms){const e=$('toast');e.innerHTML=TICK+esc(t);e.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('show'),ms||3500)}
 function cmpOptions(){   // what can play beside this round: its other versions, then earlier rounds of this stage
   const r=viewRound(),o=['',...(r.alts||[]).map(a=>a.name)].filter(x=>x!==alt).map(x=>({k:key(view),alt:x,label:lab(x)}));
   (S.rounds||[]).filter(x=>x.stage===view.stage&&x.round!==view.round).reverse().forEach(x=>o.push({k:key(x),alt:'',label:rn(x)}));

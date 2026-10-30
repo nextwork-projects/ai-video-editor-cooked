@@ -26,9 +26,9 @@ _lock = threading.Lock()
 
 
 def page_version(*pages):
-    """Changes when a page file or any Python file here changes."""
+    """Changes when a page file or any Python file here changes, or on another version's folder (a copy can keep the times)."""
     files = [Path(p) for p in pages] + sorted(HERE.glob("*.py"))
-    stamp = "|".join(f"{f.name}:{f.stat().st_mtime_ns}" for f in files if f.exists())
+    stamp = "|".join([str(HERE)] + [f"{f.name}:{f.stat().st_mtime_ns}" for f in files if f.exists()])
     return hashlib.sha1(stamp.encode()).hexdigest()[:12]
 
 

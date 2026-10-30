@@ -2,7 +2,10 @@
 
 What changed for every user, newest first.
 
-## Unreleased
+## ai-editor 2.7.29, creator-teardown 2.7.29 (2026-10-30)
+- New versions install themselves while the window or a video page is open and nothing is being made. Open pages refresh on their own and say what's new. Turn it off in Settings, under Updates.
+- On a trial reel (picked in the Version menu), the notes box works after the video is approved: "Note on t2 at this moment..." goes to that trial, and Claude answers on the Trial reels tab.
+- A new version shows Update on the edit page too, and a page never refreshes itself while you type on the video.
 - The edit page is tidied the way CapCut lays it out. The rail shows only the edit tools, with Transcript first (the logo goes home). The transcript is a panel on the left and the video sits big in the middle. One row holds play, time, speed, Watch/Compare, sound, safe zone, full screen and zoom. One timeline: the extra scrubber and its bar row are gone, and each row is named Video, Images, Text, Captions or Sounds with its one action as a small icon. Captions are calm grey until you pick one. The "This is the edit" line is gone. After you approve, the top button says Approved instead of offering Approve beside Undo approve.
 - Claude's timeline notes keep one line per thing: moving a sound again replaces its line, and a sound added then removed leaves nothing, so the note no longer grows with every change.
 - The notes panel closes: × beside its tabs hides it and the video gets the room, Notes in the top bar brings it back, and the page remembers. Writing a note opens it again.
