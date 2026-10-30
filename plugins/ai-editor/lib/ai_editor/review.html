@@ -275,7 +275,7 @@ body.edcalm .rtile{cursor:pointer}
 body.edcalm.staged #stagebar,body.edcalm #back,body.edcalm #fwd{display:none}
 body.edcalm .transport #cmprow{display:flex;margin-right:4px}body.edcalm.canCompare .transport #cmprow .hint{display:none}
 body.edcalm .transport .tzoom{height:32px;margin-left:8px}
-body.edcalm #tscroll{display:none}body.edcalm #edtracks{margin-top:0}
+body.edcalm #tscroll{visibility:hidden;height:0;padding:0;margin-top:0;margin-bottom:0}body.edcalm #edtracks{margin-top:0}   /* hidden, not gone: it still scrolls the rows (tscrollTo, setZoom) */
 body.edcalm.withTx.vertical #tx{order:-2;flex:0 0 360px}body.edcalm.withTx.vertical #rsztx{display:none}
 body.edcalm.withTx.vertical.txfold #tx{display:none}
 body.edcalm.withTx.vertical #pair{flex:1 1 auto}
@@ -337,7 +337,8 @@ body.edcalm #mute::before,body.edcalm #safebtn::before,body.edcalm #full::before
 .etrack{position:relative;height:30px;margin-top:6px;border-radius:6px;background:var(--rail);cursor:pointer}
 .eitem{position:absolute;top:3px;height:24px;border-radius:5px;border:1px solid var(--line2);display:flex;align-items:center;font-size:11px;line-height:14px;font-weight:600;cursor:pointer;min-width:10px}
 .eitem.txt{background:#4B3E91;border-color:#6E5FD0;color:#FFFFFF;padding:0 6px}.eitem.txt span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.eitem.cap{background:#3F3B36;border-color:#5C5750;color:#E7E5E4;padding:0 6px}.eitem.cap.sel{background:#7A5B12}.eitem.cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
+.eitem.cap{background:#3F3B36;border-color:#5C5750;color:#E7E5E4;padding:0 6px}.eitem.cap.sel{background:#7A5B12}
+.etrack.capw .eitem.cap>span{display:none}.ecw{position:absolute;top:3px;height:24px;padding:0 5px;font-size:11px;font-style:normal;font-weight:500;line-height:24px;color:#E7E5E4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;z-index:1}.eitem.cap span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;font-weight:500}
 .eitem.snd{background:#1F5C4A;border-color:#2F8C6F;color:#FFFFFF;overflow:hidden}
 .eitem.snd svg.wv{position:absolute;inset:2px 0;width:100%;height:calc(100% - 4px)}
 .eitem.snd.narrow span{display:none}.eitem.snd.narrow:hover span{display:block;position:absolute;bottom:28px;left:0;background:var(--ink);color:var(--onink);border-radius:5px;padding:2px 6px}
@@ -362,7 +363,9 @@ body.edcalm #mute::before,body.edcalm #safebtn::before,body.edcalm #full::before
 .etip{position:absolute;font-style:normal;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--onink);font-size:10px;font-weight:600;line-height:14px;padding:1px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:6}
 .edlab{height:30px;line-height:30px;font-size:12px;font-weight:600;color:var(--quiet);padding:0 9px}
 .etrack.dropon{outline:2px dashed var(--ink);outline-offset:2px}
-.eph{position:absolute;top:8px;bottom:0;width:2px;margin-left:-1px;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.4);pointer-events:none;z-index:3}
+.eph{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--ink);box-shadow:0 0 0 1px var(--page);pointer-events:none;z-index:3}
+.eph::before{content:"";position:absolute;top:0;left:-6px;width:14px;height:16px;border-radius:4px;background:var(--ink);pointer-events:auto;cursor:ew-resize}   /* the handle to drag */
+.eruler{cursor:ew-resize;user-select:none}
 .timeline{position:relative}
 #sndpick{position:absolute;z-index:20;width:260px;max-height:320px;overflow:auto;padding:8px;border-radius:12px;background:var(--raise);border:1px solid var(--line);box-shadow:var(--pop)}
 #sndpick h4{margin:8px 4px 2px;font-size:11px;line-height:14px;font-weight:600;color:var(--muted)}
@@ -845,7 +848,7 @@ body.making #making{display:flex}
  <div class="brand"><button id="homebtn" class="homebtn" title="Back to your videos"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Your videos</button><span class="sl">/</span><span id="name"></span><span id="homemsg" class="homemsg" hidden></span></div>
  <div class="seg" id="stages"><button id="st1" data-go="cut"></button><svg class="chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="st2" data-go="edit"></button></div>
  <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
- <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="popen" class="popen" title="Open the notes">Notes <small id="ncount2"></small></button><button id="mapprove"></button>
+ <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="popen" class="popen" title="Chat with Claude and your notes" aria-label="open the chat with Claude and your notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5a8 8 0 0 1-8 8H5l-2 1.5v-9.5a8 8 0 0 1 8-8h1"/><path d="M18 2.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/></svg><small id="ncount2"></small></button><button id="mapprove"></button>
 </header>
 <section id="how" aria-label="how this works"><ol>
  <li><b>1. Watch and note</b>Pause where something is off and leave a note. It is pinned to that moment, with the frame. On the edit, click a card, caption or zoom on the video, or select words in the transcript, and the note starts with what it is. Paste or drop an image to show what you mean.</li>
@@ -896,7 +899,7 @@ body.making #making{display:flex}
 </div>
 <div class="rsz" id="rszside" role="separator" aria-orientation="vertical" aria-label="drag to resize the notes panel" title="drag to resize"></div>
 <aside>
- <div class="phead"><div class="seg" id="ptabs"><button data-tab="notes">Notes <small id="ncount"></small></button><button data-tab="rounds">Drafts</button><button data-tab="trials" hidden>Trial reels</button></div><button id="pclose" class="pclose" title="Close the notes" aria-label="close the notes">×</button><span id="pmeta"></span></div>
+ <div class="phead"><div class="seg" id="ptabs"><button data-tab="notes">Notes <small id="ncount"></small></button><button data-tab="rounds">Drafts</button><button data-tab="trials" hidden>Trial reels</button></div><button id="pclose" class="pclose" title="Close this panel" aria-label="close this panel">×</button><span id="pmeta"></span></div>
  <div class="mhead2"><div><b>Notes</b><span id="mcount"></span></div><button id="msend"></button></div>
  <div id="list"></div>
  <div class="pfoot">
@@ -1328,6 +1331,11 @@ $('railtx').onclick=()=>$('txfold').click();
 const capTyping={};
 function capText(c){if(c&&capTyping[c.s]!=null)return {text:capTyping[c.s],edited:true};const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};
   const orig=c.text.split(/\s+/);return {text:c.w.map((k,i)=>k in cw?cw[k]:orig[i]||'').filter(Boolean).join(' '),edited:true}}
+// the Captions row's words: a caption can be one word and a few pixels wide, so neighbours share one label until each has room
+function capWords(cs,T){const pps=Math.max(1,$('edtracks').clientWidth-84)*zm/T,out=[];let a=null,b=0,words=[];
+  const flush=()=>{if(words.length)out.push(`<i class="ecw" style="left:${a/T*100}%;width:${(b-a)/T*100}%">${esc(words.join(' '))}</i>`);a=null;words=[]};
+  for(const c of cs){const t=capText(c).text;if(!t)continue;const[s,e]=capAt(c);if(a==null)a=s;b=e;words.push(t);if((b-a)*pps>=70)flush()}
+  flush();return out.join('')}
 function renderEdTracks(){const E=$('edtracks'),T=D();
   const on=!!(S&&view&&view.stage==='edit'&&noteOk()&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
   if(!on){E.innerHTML='';E._h='';return}
@@ -1344,12 +1352,11 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const cp=k=>(S.cards_pending||[]).find(p=>p.key===k)||{};
   const imgs=cardsAll().map(x=>{const p=cp(x.key),a=p.start??x.s,b=p.end??x.e;return `<div class="eitem img${p.key?' pend':''}${p.deleted?' gone':''}${csel&&csel.x.key===x.key?' sel':''}" data-ek="${esc(x.key)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(x.label)} · ${fmtx(a)}–${fmtx(b)} · click to select, drag to move, drag an edge to trim"><span>${esc(x.label.replace(/^the /,''))}</span></div>`}).join('');
   const vsps=cuts().splits.filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
-  const said=(a,b)=>W.filter(w=>w.t!=null&&w.t>=a&&w.t<b).map(w=>w.w).join(' ');
-  const vids=vpieces().map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':said(x.a,x.b)||fmtx(x.b-x.a))}</span></div>`).join('');
+  const vids=vpieces().map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':fmtx(x.b-x.a))}</span></div>`).join('');
   const h=`<div class="edwrap"><div class="edleft"><div class="ehd"><span>Video</span><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div><div class="ehd"><span>Images</span></div><div class="ehd"><span>Text</span><button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button></div><div class="ehd"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div><div class="ehd"><span>Sounds</span><button id="addsnd" title="Add one of your sounds at the playhead" aria-label="add a sound at the playhead">+</button></div></div>
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
-    <div class="etrack" data-row="vid">${vids}${vsps}</div><div class="etrack" data-row="img">${imgs}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack" data-row="cap">${caps}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
+    <div class="etrack" data-row="vid">${vids}${vsps}</div><div class="etrack" data-row="img">${imgs}</div><div class="etrack" data-row="text">${texts}</div><div class="etrack capw" data-row="cap">${caps}${capWords(it.captions||[],T)}</div><div class="etrack" data-row="snd">${snds}</div><b class="eph" id="eph"></b></div></div></div></div>`;
   if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
     E.querySelectorAll('.eitem.snd,.eitem.img').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}edPh()}
 // a caption page's time: as dragged on the Captions row (overrides.json cap_times, by its first word) until the bake has it
@@ -1483,6 +1490,14 @@ const dropT=e=>{const tk=e.target.closest('.etrack');if(!tk)return v.currentTime
     const md=rest.filter(isMedia),other=rest.filter(f=>!md.includes(f));   // an image or a video: into Media, on the video at once
     if(md.length)medUpload(md).then(ms=>ms.reduce((p,m)=>p.then(()=>medAdd(m,t,px,py)),Promise.resolve()));
     if(other.length){addImgs(other,say);toast(`Adding it at ${fmtx(t)}${say.startsWith('at ')?'':` on "${say}"`}. Submit feedback and Claude puts it there.`)}})});
+// the playhead drags, like CapCut: from its handle, the ruler or any empty part of a row. The video follows and stays paused;
+// near an edge of a zoomed timeline the rows scroll along
+$('edtracks').addEventListener('pointerdown',e=>{if(e.button||!(e.target.closest('.eruler,.eph')||e.target.closest('.etrack')&&!e.target.closest('.eitem,.vsp')))return;
+  e.preventDefault();v.pause();tfol=false;const go=ev=>{const inn=document.querySelector('#edtracks .einner'),sc=$('escroll');if(!inn||!sc)return;
+    const r=sc.getBoundingClientRect(),edge=ev.clientX<r.left+24?-16:ev.clientX>r.right-24?16:0;if(edge&&zm>1)tscrollTo(sc.scrollLeft+edge);
+    const ir=inn.getBoundingClientRect();v.currentTime=Math.max(0,Math.min(1,(ev.clientX-ir.left)/ir.width))*D();edPh()};go(e);
+  const up=()=>{document.removeEventListener('pointermove',go);document.removeEventListener('pointerup',up);edDragged=performance.now();tfol=true};
+  document.addEventListener('pointermove',go);document.addEventListener('pointerup',up)});
 function edPh(){const ph=$('eph'),T=D();if(ph&&T)ph.style.left=v.currentTime/T*100+'%'}
 $('edtracks').addEventListener('click',async e=>{
   const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem')){const r=tk.getBoundingClientRect();v.currentTime=Math.max(0,(e.clientX-r.left)/r.width*D());return}   /* click empty track: go there */
