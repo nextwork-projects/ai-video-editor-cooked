@@ -2,6 +2,12 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.30, creator-teardown 2.7.30 (2026-10-30)
+- The playhead drags again on the edit page: from its handle, the ruler or any empty part of a row. The video follows.
+- A zoomed-in timeline scrolls and follows the playhead again.
+- The Captions row shows the words at any zoom, and the Video row no longer repeats them.
+- An AI chat icon in the top bar opens the panel when it is closed.
+
 ## ai-editor 2.7.29, creator-teardown 2.7.29 (2026-10-30)
 - New versions install themselves while the window or a video page is open and nothing is being made. Open pages refresh on their own and say what's new. Turn it off in Settings, under Updates.
 - On a trial reel (picked in the Version menu), the notes box works after the video is approved: "Note on t2 at this moment..." goes to that trial, and Claude answers on the Trial reels tab.
