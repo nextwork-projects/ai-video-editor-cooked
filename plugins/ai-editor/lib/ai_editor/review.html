@@ -276,7 +276,7 @@ body.edalt .etrack:not([data-row="vid"]),body.edalt .ehd:not(:first-child){displ
 /* the edit, tidied (body.edcalm, calm()): edit tools only on the rail, transcript left, video big, one control row, one timeline */
 #railtx{display:none}body.edcalm #railtx{display:flex}
 body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd:not(.rupd),body.edcalm #railtog{display:none}
-body.edcalm .rtile{cursor:pointer}
+.rtile{cursor:pointer}
 body.edcalm.staged #stagebar,body.edcalm #back,body.edcalm #fwd{display:none}
 body.edcalm .transport #cmprow{display:flex;margin-right:4px}body.edcalm.canCompare .transport #cmprow .hint{display:none}
 body.edcalm .transport .tzoom{height:32px;margin-left:8px}
@@ -828,7 +828,7 @@ body.making #making{display:flex}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style></head><body>
 <nav class="rail" aria-label="cooked.">
- <div class="rtop"><span class="rtile" title="cooked."><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z" fill="currentColor"/><path d="M45 36H58A3 3 0 0 1 58 42H45Z" fill="currentColor"/><path d="M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></span><span class="rname">cooked.</span>
+ <div class="rtop"><span class="rtile" title="Back to your videos"><svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true"><path d="M6 36H46C46 46 40 52 32 52H20C12 52 6 46 6 36Z" fill="currentColor"/><path d="M45 36H58A3 3 0 0 1 58 42H45Z" fill="currentColor"/><path d="M16 29C13 25 19 22 16 17M26 29C23 25 29 22 26 17M36 29C33 25 39 22 36 17" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/></svg></span><span class="rname">cooked.</span>
   <button class="rtog" id="railtog" aria-label="Expand the sidebar" title="Expand the sidebar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16M13 10l2 2-2 2"/></svg></button></div>
  <a class="rnew" data-home data-view="new" href="#"><i><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></i>New</a>
  <div class="rgap"></div>
@@ -984,10 +984,12 @@ const D=()=>v.duration||data().duration||1;
 
 // Redraw only when the state changed: redrawing every poll replaced the buttons under the pointer.
 let lastRaw='';
-document.getElementById('homebtn').onclick=()=>{
-  if(S&&S.home){location.href=S.home+'#videos';return}   // the same tab: back to the editor's window at its fixed address
-  const m=document.getElementById('homemsg');m.textContent='The editor window is closed. Type nextwork-editor in Terminal to open it again.';m.hidden=false;setTimeout(()=>m.hidden=true,6000);
-};
+// home, in the same tab, always: /home answers with the window's address, starting it first when it is down (a restart of the Mac stops it)
+async function goHome(view){if(goHome.busy)return;goHome.busy=true;const m=document.getElementById('homemsg');m.textContent='Opening your videos...';m.hidden=false;
+  try{const j=await (await fetch('/home',{method:'POST',body:'{}'})).json();if(j.url){location.href=j.url+'#'+view;return}throw 0}
+  catch(e){m.textContent='Could not open your videos. Type nextwork-editor in Terminal.';setTimeout(()=>m.hidden=true,8000)}
+  finally{goHome.busy=false}}
+document.getElementById('homebtn').onclick=()=>goHome('videos');
 // the rail: the home window's views at its address; without one, the items that cannot work are hidden
 function renderRail(){
   document.body.classList.toggle('nohome',!S.home);
@@ -1006,10 +1008,7 @@ let updating=false,updWas=false,checking=false;
 function whatsNew(j){if(!j||!j.version||Date.now()/1000-(j.at||0)>86400)return;try{if(localStorage.getItem('review-seen-update')===j.version)return;localStorage.setItem('review-seen-update',j.version)}catch(e){return}
   toast('Updated to '+j.version+'.'+((j.notes||[])[0]?' '+j.notes[0]:''),9000)}
 // the window closed: the rail still shows, and a click starts the window's page (POST /home) and goes there
-document.querySelector('.rail').addEventListener('click',async e=>{const a=e.target.closest('[data-home]');if(!a||(S&&S.home))return;e.preventDefault();
-  if(a.dataset.busy)return;a.dataset.busy='1';toast('Opening your videos...');
-  try{const r=await fetch('/home',{method:'POST',body:'{}'}),j=await r.json();if(j.url)location.href=j.url+'#'+a.dataset.view;else alert(j.error||'The editor did not open.')}
-  finally{delete a.dataset.busy}});
+document.querySelector('.rail').addEventListener('click',e=>{const a=e.target.closest('[data-home]');if(!a||e.metaKey||e.ctrlKey)return;e.preventDefault();goHome(a.dataset.view)});
 $('railupd').onclick=async()=>{const u=(S&&S.update)||{};
   if(!(u.newer||u.error)){   // Check for updates: the window asks GitHub; the item turns into Update to <version>, or says you are up to date
     checking=true;renderRail();try{const r=await fetch('/update/check',{method:'POST',body:'{}'});if(!r.ok)toast((await r.json().catch(()=>({}))).error||'Could not check')
@@ -1331,7 +1330,7 @@ function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';
 function calm(on){if(document.body.classList.contains('edcalm')===on)return;document.body.classList.toggle('edcalm',on);
   const tr=document.querySelector('.transport'),z=document.querySelector('.tzoom'),c=$('cmprow');
   if(on){tr.insertBefore(c,$('speed').nextSibling);tr.appendChild(z)}else{$('stage').before(c);$('timeline').prepend(z)}}
-document.querySelector('.rtile').onclick=()=>{if(document.body.classList.contains('edcalm'))$('homebtn').click()};
+document.querySelector('.rtile').onclick=()=>goHome('videos');
 $('railtx').onclick=()=>$('txfold').click();
 const capTyping={};
 function capText(c){if(c&&capTyping[c.s]!=null)return {text:capTyping[c.s],edited:true};const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};

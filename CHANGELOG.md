@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.32, creator-teardown 2.7.32 (2026-11-02)
+- The back button and the logo always take you home from a video page. If the editor's window stopped, for example when the Mac restarted, they start it first.
+
 ## ai-editor 2.7.31, creator-teardown 2.7.31 (2026-10-30)
 - The chat icon sits at the far right of the top bar and stays there: it opens and closes the panel.
 - The timeline stays on an approved draft and on trial reels, to look and scrub. A trial reel shows its ruler, playhead and video bar.
