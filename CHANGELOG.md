@@ -2,6 +2,12 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.33, creator-teardown 2.7.33 (2026-11-02)
+- Hand edits just update. Caption style, caption words and timing, and sounds on the timeline go into the video by themselves, with no note in the chat. A note is only written when the draft cannot be updated by itself, such as while Claude has it or when its render is gone.
+- A caption style reaches every frame, so it takes a full render in the background. The live player shows it at once, and Approve waits until the video has it.
+- Cmd+Z and Shift+Cmd+Z work on caption size, place, colour, look and words, on text (moved, resized, restyled, added, deleted) and on sounds added or removed. They work right after using a slider too. Undo and redo buttons sit in the control row.
+- A text saves itself when you let go or stop typing. A click anywhere else lets it go without losing the change.
+
 ## ai-editor 2.7.32, creator-teardown 2.7.32 (2026-11-02)
 - The back button and the logo always take you home from a video page. If the editor's window stopped, for example when the Mac restarted, they start it first.
 

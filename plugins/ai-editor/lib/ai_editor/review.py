@@ -365,7 +365,7 @@ def captions_info(folder, plan=None):
     except (OSError, ValueError):
         st = {}
     base = {f: st[f] for f in ("size_pct", "y_pct", "width_pct", "weight", "case", "color", "highlight_color", "stroke", "box",
-                               "box_color", "shadow", "font_match", "style") if st.get(f) is not None}
+                               "box_color", "shadow", "font_match", "style", "words_per_caption") if st.get(f) is not None}
     return {"looks": looks, "look": cap.get("preset"), "base": base, "mine": mine,
             "words": next((k for k, v in CAP_GROUPS.items() if v == n), str(n) if n else None)}
 
@@ -1313,6 +1313,27 @@ def live_video(folder, plan, plan_f):
     return rel
 
 
+def tell_claude(folder, d):
+    """A hand edit needs a note only when it cannot go in by itself: Claude has the round (it plans it in itself), or the
+    draft cannot be baked (finished by hand, no render). Otherwise the page's change is the whole job."""
+    return bake_ready(folder, d) is not None
+
+
+def lay_captions(p, cap):
+    """This video's caption style (captions_info) on a plan, as plan.py lays it: the live player and the bake."""
+    if not p.get("captions"):
+        return
+    st = p["captions"].setdefault("style", {})
+    n0 = st.get("words_per_caption")
+    st.update((cap["looks"].get(cap["look"]) or {}) if cap.get("look") and cap["look"] != st.get("style") else {}, **cap["mine"])
+    n = CAP_GROUPS.get(str(cap.get("words"))) or st.get("words_per_caption")
+    if n and n != n0:   # words at a time changed: re-paged as plan.py pages them
+        from plan import chunk_captions, mark_emph
+        words = [w for ch in p["captions"]["chunks"] for w in ch.get("words") or [] if "start" in w]
+        p["captions"]["chunks"] = mark_emph(chunk_captions(words, n, st.get("case", "sentence")))
+        st["words_per_caption"] = n
+
+
 def live_plan(folder, d):
     """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
     the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
@@ -1338,15 +1359,7 @@ def live_plan(folder, d):
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
-    st = p["captions"].setdefault("style", {})
-    n0 = st.get("words_per_caption")
-    st.update((cap["looks"].get(cap["look"]) or {}) if cap.get("look") and cap["look"] != st.get("style") else {}, **cap["mine"])
-    n = CAP_GROUPS.get(str(cap.get("words"))) or st.get("words_per_caption")
-    if n and n != n0:   # words at a time changed: re-paged as plan.py pages them
-        from plan import chunk_captions, mark_emph
-        words = [w for ch in p["captions"]["chunks"] for w in ch.get("words") or [] if "start" in w]
-        p["captions"]["chunks"] = mark_emph(chunk_captions(words, n, st.get("case", "sentence")))
-        st["words_per_caption"] = n
+    lay_captions(p, cap)
     p["video"] = video
     for c in p["cards"]:
         c["_key"] = card_key(c)
@@ -1424,9 +1437,16 @@ def bake_now(folder, run=subprocess.run):
     p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import apply_overrides   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
+    from plan import placed_sounds
+    cap = captions_info(folder, plan_f)
     p = apply_overrides(p, folder, plan_f.name)
+    lay_captions(p, cap)   # what the live player shows goes in the video: this video's caption style and the placed sounds
+    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")]
+    p = placed_sounds(p, folder)
     save(plan_f, p)
     r = run([sys.executable, str(EDIT_PY), "patch", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
+    if r.returncode and "not local" in (r.stderr or "") + (r.stdout or ""):   # a caption style reaches every frame: all of it
+        r = run([sys.executable, str(EDIT_PY), "render", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
     if r.returncode:
         b.update(state="failed", why=((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1])
         return b["why"]
@@ -2578,6 +2598,10 @@ def make_handler(folder, token):
                         (k, was["mine"].get(k, was["base"].get(k)), cur["mine"].get(k)) for k, *_ in CAP_STYLE.values()]:
                     if b is not None and a != b:
                         log_edit(folder, "captions." + k, "captions", a, b)
+                if not tell_claude(folder, d):   # it just updates: the player has it at once, the bake puts it in the video
+                    self.drop_note("captions")
+                    bake_soon(folder)
+                    return self.send(200, {"ok": True})
                 mine = cur["mine"]
                 now_said = [w for w in (("a sentence at a time" if cur["words"] == "sentence" else f"{cur['words']} word"
                                          f"{'' if cur['words'] == '1' else 's'} at a time") if cur["words"] else None,
@@ -2678,7 +2702,13 @@ def make_handler(folder, token):
                 items = placed_raw(folder)
                 try:
                     t = round(float(body["t"]), 2)
-                    if path == "/sfx/add":
+                    if path == "/sfx/add" and isinstance(body.get("item"), dict):   # undo of a remove: the same sound, as it was
+                        x = {k: body["item"][k] for k in ("id", "t", "sound", "kind", "in", "dur", "vol", "d") if k in body["item"]}
+                        if not x.get("id") or any(i["id"] == x["id"] for i in items) or not (x.get("sound") in sfx.own_sounds() or (folder / "audio" / str(x.get("sound"))).is_file()):
+                            raise ValueError
+                        save(f, {"items": items + [x]})
+                        line, nk, nd = f"add {Path(x['sound']).stem} at {fmt(x['t'])}", x["id"], False
+                    elif path == "/sfx/add":
                         name = str(body.get("sound") or "")
                         if name not in sfx.own_sounds():
                             raise ValueError
@@ -2965,10 +2995,21 @@ def make_handler(folder, token):
                 return self.send(200, {"shown": show_claude(folder)})
             self.send(404, {})
 
+        def drop_note(self, k):
+            """Take back this round's note of a kind: the edit it told Claude about no longer needs Claude."""
+            def f(x):
+                x["comments"] = [c for c in x["comments"] if not ((c.get("on") or {}).get("k") == k and c["stage"] == x["stage"]
+                                                                  and c["round"] >= x["round"] and editable(x, c))]
+            update(rj, f)
+
         def timeline_note(self, k, title, line, tail, key=None, drop=False):
             """One note per round for the timeline's changes of a kind, one line per thing changed (key): a later
             change replaces its line, and drop takes it out (a sound added then removed leaves nothing)."""
             d = load(rj)
+            if not tell_claude(folder, d):   # it just updates: the player has it at once, the bake puts it in the video
+                self.drop_note(k)
+                bake_soon(folder)
+                return self.send(200, {"ok": True})
             old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == k and c["stage"] == d["stage"]
                         and c["round"] >= d["round"] and editable(d, c)), None)
             lines = list((old or {}).get("lines") or [])
@@ -5039,6 +5080,22 @@ def demo():
         sm = post("/sfx/remove", {"t": 3, "placed": clip["id"], "src": "my song.wav"})
         assert sm["lines"] == ["remove pop at 0:03.5"], sm   # dropped, moved and removed: still one line
         post("/delete", {"id": sa["id"]})   # the sounds note, so the next one starts clean
+        # a hand edit that can go in by itself needs no note: nothing lands in the chat, and an old note of that kind goes
+        post("/sfx/remove", {"t": 4.5, "src": ".sfx/pop.wav"})   # a note to take back
+        keep_ready, keep_bake, baked = globals()["bake_ready"], globals()["bake_soon"], []
+        globals().update(bake_ready=lambda *a: None, bake_soon=baked.append)
+        try:
+            n0 = len(load(folder / "review.json")["comments"])
+            q = post("/sfx/add", {"t": 2.0, "sound": "my ding.wav"})
+            assert q == {"ok": True} and baked, q
+            added = json.loads(get("/state").read())["placed_sounds"][0]
+            assert post("/sfx/remove", {"t": 2.0, "placed": added["id"], "src": "my ding.wav"}) == {"ok": True}
+            assert post("/sfx/add", {"t": 2.0, "item": added}) == {"ok": True}, "undo of a remove: the same sound back"
+            assert json.loads(get("/state").read())["placed_sounds"][0]["id"] == added["id"]
+            post("/sfx/remove", {"t": 2.0, "placed": added["id"], "src": "my ding.wav"})
+            assert len(load(folder / "review.json")["comments"]) < n0, "the note it no longer needs is gone"
+        finally:
+            globals().update(bake_ready=keep_ready, bake_soon=keep_bake)
         (folder / "overrides.json").unlink()
         post("/delete", {"id": s1["id"]})
     finally:
