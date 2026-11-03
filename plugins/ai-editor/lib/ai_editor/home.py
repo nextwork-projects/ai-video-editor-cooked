@@ -2569,6 +2569,17 @@ def make_handler(token):
             if path == "/update/auto":   # Settings: new versions install themselves, or wait for the Update button
                 update(lambda d: d.__setitem__("auto_update", body.get("on") is not False))
                 return self.send(200, {})
+            if path == "/support":   # the support popup: Not now asks again in 30 days, a donation in 180, Don't ask again never
+                act = body.get("act")
+                if act not in ("later", "gave", "never"):
+                    return self.send(400, {"error": "act: later, gave or never"})
+
+                def f(d):
+                    sp = d.setdefault("support", {})
+                    sp.update(never=True) if act == "never" else sp.update(until=time.time() + (180 if act == "gave" else 30) * 86400)
+                    sp["last"] = act
+                update(f)
+                return self.send(200, {"ok": True})
             if path == "/scanhome":   # the one-time opt-in: recent clips from Movies, Desktop and Downloads
                 update(lambda d: d.__setitem__("scan_home", body.get("on") is True))
                 return self.send(200, {})
@@ -4436,6 +4447,20 @@ def demo():
     assert get("/state")["auto_update"] is False
     post("/update/auto", {"on": True})
     assert get("/state")["auto_update"] is True
+    # the support popup: Not now waits 30 days, a donation 180, Don't ask again for good
+    post("/support", {"act": "later"})
+    sp = get("/state")["support"]
+    assert 29 * 86400 < sp["until"] - time.time() < 31 * 86400 and sp["last"] == "later", sp
+    post("/support", {"act": "gave"})
+    assert 179 * 86400 < get("/state")["support"]["until"] - time.time() < 181 * 86400
+    post("/support", {"act": "never"})
+    assert get("/state")["support"]["never"] is True
+    try:
+        post("/support", {"act": "spam"})
+        raise AssertionError("an unknown act")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+    update(lambda d: d.pop("support", None))
     # Update runs in the window itself (no Claude): a fork is refused (the update skill merges it with the user); any
     # other install runs update.py window, shows its steps, keeps the new version and restarts from its folder
     real_info = update_info

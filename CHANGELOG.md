@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.35, creator-teardown 2.7.35 (2026-11-03)
+- Support cooked. cooked. stays free, and a Stripe link (pay what you want) now sits in the sidebar and in Settings. After you have finished 2 videos, one popup asks once: Not now asks again in 30 days, Don't ask again never does. The repo has a Sponsor button too.
+
 ## ai-editor 2.7.34, creator-teardown 2.7.34 (2026-11-03)
 - Songs on the timeline edit like CapCut. Drag either edge to trim (the handles show on hover), drag the middle to move, and Alt-drag to slide which part of the song plays. Press Cmd+B or Split in its box to split it at the playhead, then Delete cuts a piece away. Every step undoes, volume too, and it goes into the video by itself.
 - A song baked into the draft keeps its name and its handles.
