@@ -2,6 +2,13 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.36, creator-teardown 2.7.36 (2026-11-03)
+- The timeline has lanes. Images, Text and Sounds each get a lane per overlap, so nothing sits on top of anything else. Drag an item up or down to move it to another lane, or below the last one to make a new lane. A later lane draws on top in the video.
+- Each lane has hide (mute for sounds) and lock. A hidden lane leaves the video and comes back when you show it. A locked lane cannot be picked or moved.
+- Moves and trims snap to the playhead, to every other item's edges and to caption words, with a yellow line and the time. Hold Cmd to drag freely.
+- Shift-click picks several texts, images or sounds. Drag one to move them all, or press Delete to remove them all. Each is one undo.
+- The Support cooked. link lets you choose how much to give.
+
 ## ai-editor 2.7.35, creator-teardown 2.7.35 (2026-11-03)
 - Support cooked. cooked. stays free, and a Stripe link (pay what you want) now sits in the sidebar and in Settings. After you have finished 2 videos, one popup asks once: Not now asks again in 30 days, Don't ask again never does. The repo has a Sponsor button too.
 

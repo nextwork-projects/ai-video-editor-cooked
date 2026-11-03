@@ -811,7 +811,8 @@ def placed_sounds(plan, edit_dir):
         return plan
     import sfx
     fps = plan.get("fps") or 30
-    for x in json.loads(f.read_text(encoding="utf-8")).get("items") or []:
+    from preview import laned, read_ov   # a muted Sounds lane on the timeline (overrides.json lanes) leaves its sounds out
+    for x in laned(json.loads(f.read_text(encoding="utf-8")).get("items") or [], read_ov(edit_dir), "snd", lambda x: x.get("id")):
         try:   # a dropped audio file plays from its moment; a library sound lands its hit there
             src, att = (sfx.clip_cue(edit_dir, x), 0.0) if x.get("kind") == "clip" else sfx.own_cue(edit_dir, x["sound"])
         except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as e:
@@ -832,7 +833,9 @@ def typed_texts(edit_dir):
         return []
     keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct")
     extra = ("font", "color", "width_pct")   # set only when the user picked them (review.py text_look)
-    return [{"kind": "label", **{k: x[k] for k in keep}, **{k: x[k] for k in extra if x.get(k) is not None}} for x in json.loads(f.read_text(encoding="utf-8")).get("items") or []]
+    from preview import laned, read_ov   # the Text lanes: a hidden one's texts out, a later lane's drawn on top
+    return [{"kind": "label", **{k: x[k] for k in keep}, **{k: x[k] for k in extra if x.get(k) is not None}}
+            for x in laned(json.loads(f.read_text(encoding="utf-8")).get("items") or [], read_ov(edit_dir), "text", lambda x: x.get("id"))]
 
 
 def under_titles(cards, texts):

@@ -42,6 +42,7 @@ export type Card = {
   entrance: "pop" | "slide" | "fade" | "scale" | "cut"; // cut: the creator's measured hard cut (props.enter)
   box: [number, number, number, number];
   lane?: string; // "logo": the logo tiles' own lane
+  z?: number; // the review page's timeline lane (overrides.json lanes): a later lane draws on top and never swaps with an earlier one
   size?: [number, number]; // image px (capture.mjs writes it), so a capture fits at its own ratio
   highlight?: { rects: [number, number, number, number][] }; // the sentence's lines, fractions of the image
   marks?: Mark[]; // capture marks, rects in image px (references/motion.md)
@@ -259,7 +260,8 @@ type Slot = { card: Card; prev?: Card; next?: Card; from: number; to: number; co
 const slots = (cards: Card[], split: boolean): Slot[] => {
   const gap = split ? BRIDGE_S : SWAP_S;
   const lanes = new Map<string, Card[]>();
-  for (const c of cards) lanes.set(c.lane ?? "", [...(lanes.get(c.lane ?? "") ?? []), c]);
+  const k = (c: Card) => `${c.lane ?? ""}${c.z ? `@${c.z}` : ""}`;
+  for (const c of cards) lanes.set(k(c), [...(lanes.get(k(c)) ?? []), c]);
   const out: Slot[] = [];
   for (const lane of lanes.values()) {
     lane.sort((a, b) => a.start - b.start);
@@ -277,7 +279,7 @@ const slots = (cards: Card[], split: boolean): Slot[] => {
       out.push({ card: c, prev, next, covered, from: c.start - (split && !prev ? PANEL_T : 0), to });
     });
   }
-  return out;
+  return out.sort((a, b) => (a.card.z ?? 0) - (b.card.z ?? 0));
 };
 
 /** How far the split panel is open, 0 (speaker full frame) to 1 (split), from the runs of cards. */

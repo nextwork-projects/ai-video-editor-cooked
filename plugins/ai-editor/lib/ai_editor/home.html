@@ -2628,7 +2628,7 @@ function vSettings(){
 }
 // support: the Stripe link (pay what you want) in the sidebar, in Settings and, once a few videos are done, one popup that
 // asks again 30 days after Not now, 180 after a donation, and never after Don't ask again (state.json "support")
-const SUPPORT_URL='https://buy.stripe.com/dRm9ATePOgi9fQo7xd5Vu03',SUPP_COPY='cooked. is free to use. If it saves you hours of editing, you can chip in to help keep it going.';
+const SUPPORT_URL='https://buy.stripe.com/dRmaEXePO1nf33C5p55Vu04',SUPP_COPY='cooked. is free to use. If it saves you hours of editing, you can chip in to help keep it going.';
 function stSupport(){return `<div class="scd"><div class="hd"><b>Support cooked.</b></div><div class="t2" style="white-space:normal">${SUPP_COPY}</div><div class="lks"><button class="b1 s" onclick="supportGo()">${ic('heart',14)}Support cooked.</button></div></div>`}
 function supportGo(){window.open(SUPPORT_URL,'_blank','noopener');supportAct('gave')}
 async function supportAct(act){ui.supp=false;ui.suppSeen=true;await post('/support',{act});await load();render()}

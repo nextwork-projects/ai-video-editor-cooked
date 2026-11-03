@@ -1143,8 +1143,10 @@ def typed_labels(folder):
     """texts.json as plan.json's "label" texts (plan.py typed_texts does the same when Claude plans)."""
     f = Path(folder) / "texts.json"
     keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct")
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import laned, read_ov   # the Text lanes (overrides.json lanes): a hidden one's texts out, a later one on top
     return [{"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}}
-            for x in ((load(f).get("items") or []) if f.exists() else [])]
+            for x in laned((load(f).get("items") or []) if f.exists() else [], read_ov(folder), "text", lambda x: x.get("id"))]
 
 
 def label_key(x):
@@ -1334,6 +1336,13 @@ def lay_captions(p, cap):
         st["words_per_caption"] = n
 
 
+def lane_out(kind, m):
+    """What one kind's lanes (overrides.json lanes) put in the video: the lanes hidden or muted, and which lane each item
+    is on (the draw order; a sound's lane only matters while a lane is muted)."""
+    off = [i for i, x in enumerate(m.get("state") or []) if x.get("hidden") or x.get("muted")]
+    return off, (m.get("of") or {}) if kind != "snd" or off else None
+
+
 def live_plan(folder, d):
     """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
     the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
@@ -1355,7 +1364,9 @@ def live_plan(folder, d):
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import apply_overrides
     p = apply_overrides(p, folder, plan_f.name)
-    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x]
+    from preview import laned, read_ov   # a muted Sounds lane leaves its placed sounds out, as plan.py placed_sounds does
+    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in laned(
+        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x], read_ov(folder), "snd", lambda x: x.get("id"))]
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
@@ -2239,6 +2250,7 @@ def make_handler(folder, token):
                 d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})
                 d["cap_times"] = ((load(ovf).get("cap_times") or {}) if ovf.exists() else {})   # caption pages retimed, until baked   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
+                d["lanes"] = ((load(ovf).get("lanes") or {}) if ovf.exists() else {})   # the timeline's lanes (/timeline/lanes)
                 d["sounds_ui"] = sounds_info() if d.get("stage") == "edit" else None   # the Sounds panel
                 snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
                 d["captions_ui"] = captions_info(folder, snap_plan) if d.get("stage") == "edit" else None   # the Captions panel, its base the video shown
@@ -2846,6 +2858,41 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True})
                 return self.comment({"t": t, "t_end": te, "text": f"{what} {label} as shown on the page: overrides.json has it "
                                      f"(card {key}). Plan again so it shows."})
+            if path == "/timeline/lanes":   # the timeline's lanes of one kind: shown or hidden (muted), locked, and which lane
+                # each item is on. overrides.json "lanes", each field given replaced whole (an undo sends the old one back)
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Lanes change on the edit, before it is approved."})
+                try:
+                    kind = body["kind"]
+                    if kind not in ("img", "text", "snd") or not ({"state", "of"} & body.keys()):
+                        raise ValueError
+                    new = {}
+                    if "state" in body:
+                        flags = ("muted",) if kind == "snd" else ("hidden",)
+                        st = body["state"]
+                        if not isinstance(st, list) or len(st) > 20 or not all(
+                                isinstance(x, dict) and all(k in (*flags, "locked") and isinstance(v, bool) for k, v in x.items()) for x in st):
+                            raise ValueError
+                        new["state"] = st
+                    if "of" in body:
+                        of = body["of"]
+                        if not isinstance(of, dict) or not all(isinstance(k, str) and type(v) is int and 0 <= v <= 19 for k, v in of.items()):
+                            raise ValueError
+                        new["of"] = of
+                except (KeyError, TypeError, ValueError, AttributeError):
+                    return self.send(400, {"error": "timeline/lanes takes kind (img, text or snd), state [{hidden or muted, locked}] "
+                                                    "and of {item key: lane 0-19}"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                lanes = ov.setdefault("lanes", {})
+                was = json.loads(json.dumps(lanes.get(kind) or {}))
+                lanes[kind] = {**(lanes.get(kind) or {}), **new}
+                save(ovf, ov)
+                if lane_out(kind, was) != lane_out(kind, lanes[kind]):   # locking alone changes nothing in the video
+                    bake_soon(folder)   # no note for Claude: plan.py applies overrides.json lanes on its own
+                return self.send(200, {"ok": True, "lanes": lanes})
             if path == "/media/add":   # the Media panel: a picture or a clip dropped on the video becomes a card there
                 # (overrides.json added_cards, its key moves it like any card), baked in by itself (bake_soon)
                 d = load(rj)
@@ -4541,6 +4588,37 @@ def demo_live(tmp):
     assert [(c["src"], c.get("from"), c.get("dur"), c.get("vol")) for c in lp["sfx"]] == [
         (".sfx/pop.wav", None, None, None), ("/audio/song%20one.mp3", 0.5, 0.8, 0.5)], lp["sfx"]   # the old placed copy is gone
     assert live_plan(f, d) is lp, "unchanged files: the same plan, nothing made again"
+    # the timeline's lanes: a hidden or muted lane's items out, a later lane's card after (on top, "z"), a card kept aside
+    # in lane_off so showing its lane again after a bake brings it back
+    ov0 = load(f / "overrides.json")
+    two = {**plan, "cards": [{"start": 0.2, "end": 1.0, "trigger_word": "zip", "box": [0, 0, 20, 20]}] + plan["cards"]}
+    (f / "plan.json").write_text(json.dumps(two), encoding="utf-8")
+    save(f / "texts.json", {"items": [{"id": "t1", "text": "hi", "style": "box", "start": 0.5, "end": 1.5, "x_pct": 50, "y_pct": 30},
+                                      {"id": "t2", "text": "yo", "style": "box", "start": 0.5, "end": 1.5, "x_pct": 50, "y_pct": 60}]})
+    save(f / "overrides.json", {**ov0, "lanes": {"img": {"of": {"zip@0.200": 1}}, "text": {"of": {"t1": 1}}}})
+    lz = live_plan(f, d)
+    assert [c["_key"] for c in lz["cards"]] == ["repo@0.500", "zip@0.200"] and lz["cards"][1]["z"] == 1 and "z" not in lz["cards"][0], lz["cards"]
+    assert [x["text"] for x in lz["texts"]] == ["T", "yo", "hi"], lz["texts"]
+    save(f / "overrides.json", {**ov0, "lanes": {"img": {"state": [{}, {"hidden": True}], "of": {"zip@0.200": 1}},
+                                                 "text": {"state": [{"hidden": True, "locked": True}], "of": {"t1": 1}},
+                                                 "snd": {"state": [{}, {"muted": True}], "of": {"t:0.70": 1, "a1": 1}}}})   # pop moved with its card to 0.7
+    lh = live_plan(f, d)
+    assert [c["_key"] for c in lh["cards"]] == ["repo@0.500"] and [x["text"] for x in lh["texts"]] == ["T", "hi"], lh
+    assert lh["sfx"] == [] and lh["lane_off"]["sfx"][0]["src"] == ".sfx/pop.wav" and lh["lane_off"]["cards"][0]["trigger_word"] == "zip", lh
+    from plan import placed_sounds as plan_placed
+    assert plan_placed({"fps": 30, "sfx": []}, f)["sfx"] == [], "a muted lane: plan.py leaves its placed sound out too"
+    baked = apply_overrides(load(f / "plan.json"), f, "plan.json")
+    again = apply_overrides(json.loads(json.dumps(baked)), f, "plan.json")
+    assert (again["cards"], again["lane_off"]) == (baked["cards"], baked["lane_off"]), "lanes are idempotent"
+    save(f / "overrides.json", {**ov0, "lanes": {"img": {"state": [{}, {}], "of": {"zip@0.200": 1}}}})
+    back = apply_overrides(json.loads(json.dumps(baked)), f, "plan.json")
+    assert [card_key(c) for c in back["cards"]] == ["repo@0.500", "zip@0.200"] and [c["src"] for c in back["sfx"]] == [".sfx/pop.wav", ".sfx/clip-old.wav"] \
+        and "lane_off" not in back, back
+    save(f / "overrides.json", ov0)
+    (f / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
+    save(f / "texts.json", {"items": [{"id": "t1", "text": "hi", "style": "box", "start": 0.5, "end": 1.5, "x_pct": 50, "y_pct": 30,
+                                       "size_pct": 8, "color": "#FF3B30"}]})
+    assert {k: v for k, v in live_plan(f, d).items() if k != "video"} == {k: v for k, v in lp.items() if k != "video"}, "no lanes: as before"
     from ai_editor import taste
     rp = taste.rules_path()
     keep = rp.read_bytes() if rp.exists() else None   # this demo's caption rules come out again after
@@ -5192,6 +5270,35 @@ def demo():
             raise AssertionError(bad)
         except urllib.error.HTTPError as e:
             assert e.code == 400, bad
+    (folder / "overrides.json").unlink()
+    # the timeline's lanes: each field given replaced whole, in /state, bad input refused; locking alone bakes nothing,
+    # and no lane change is ever a note for Claude
+    notes = len(load(folder / "review.json")["comments"])
+
+    def unbake():   # no bake waiting, so the next change shows whether it starts one
+        t = (BAKE.pop(str(folder), None) or {}).get("timer")
+        t and t.cancel()
+    unbake()
+    ln = post("/timeline/lanes", {"kind": "img", "state": [{}, {"hidden": True}], "of": {k0: 1}})
+    assert ln == {"ok": True, "lanes": {"img": {"state": [{}, {"hidden": True}], "of": {k0: 1}}}} and BAKE[str(folder)]["state"] == "waiting", ln
+    unbake()
+    ln = post("/timeline/lanes", {"kind": "img", "state": [{"locked": True}, {"hidden": True}]})
+    assert ln["lanes"]["img"] == {"state": [{"locked": True}, {"hidden": True}], "of": {k0: 1}} and str(folder) not in BAKE, "locking: no bake"
+    post("/timeline/lanes", {"kind": "snd", "of": {"t:1.00": 2}})
+    assert str(folder) not in BAKE, "a sound's lane with nothing muted: no bake"
+    post("/timeline/lanes", {"kind": "img", "of": {}})
+    assert json.loads(get("/state").read())["lanes"] == {"img": {"state": [{"locked": True}, {"hidden": True}], "of": {}},
+                                                         "snd": {"of": {"t:1.00": 2}}} and BAKE[str(folder)]["state"] == "waiting"
+    for bad in ({"kind": "vid", "of": {}}, {"kind": "img"}, {"kind": "img", "state": [{"muted": True}]}, {"kind": "snd", "state": [{"hidden": True}]},
+                {"kind": "img", "state": [{"hidden": 1}]}, {"kind": "img", "state": {}}, {"kind": "text", "of": {"a": 20}},
+                {"kind": "text", "of": {"a": True}}, {"kind": "text", "of": {"a": -1}}, {"kind": "text", "of": []}):
+        try:
+            post("/timeline/lanes", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
+    assert len(load(folder / "review.json")["comments"]) == notes, "lanes: never a note for Claude"
+    unbake()
     (folder / "overrides.json").unlink()
     # the Media panel: a file streamed into media/ (not assets.json), dropped on the video as a card the page draws at
     # once; moved and deleted by its key like any card
