@@ -74,6 +74,29 @@ def gained(edit_dir, src, db):
 ZOOM_MATCH_S = 0.4   # a dropped zoom is found again after a re-plan by its start, within this
 
 
+def read_ov(edit_dir):
+    f = edit_dir and Path(edit_dir) / "overrides.json"
+    return json.loads(f.read_text(encoding="utf-8")) if f and f.exists() else {}
+
+
+def lanes_of(ov, kind):
+    """overrides.json "lanes" for one kind (img, text, snd; review.py /timeline/lanes): each item's lane by its key
+    (0 when not given), and the lanes hidden or muted."""
+    m = (ov.get("lanes") or {}).get(kind) or {}
+    of = m.get("of") or {}
+    return (lambda k: int(of.get(str(k), 0))), {i for i, s in enumerate(m.get("state") or []) if s.get("hidden") or s.get("muted")}
+
+
+def laned(items, ov, kind, key):
+    """items with the hidden or muted lanes' ones left out, the rest in lane order, stable (a later lane draws on top)."""
+    lane, off = lanes_of(ov, kind)
+    return sorted((x for x in items if lane(key(x)) not in off), key=lambda x: lane(key(x)))
+
+
+def plan_cue_key(c):
+    return "t:" + f"{c['t']:.2f}"   # the page's data-st for one of the plan's own sounds
+
+
 def apply_overrides(plan, edit_dir, plan_name=None):
     """plan with edits/NAME/overrides.json applied. Idempotent: applying to an already applied plan
     changes nothing, so it is safe after plan.py and again on the preview server."""
@@ -84,6 +107,11 @@ def apply_overrides(plan, edit_dir, plan_name=None):
     if plan_name and ov.get("plan") and ov["plan"] != plan_name:
         print(f"warning: overrides.json is for {ov['plan']}, not {plan_name}: not applied", file=sys.stderr)
         return plan
+    held = plan.pop("lane_off", None) or {}   # cards and cues a hidden or muted lane kept out last time: back in to be laid again
+    if held.get("cards"):
+        plan["cards"] = sorted(plan["cards"] + held["cards"], key=lambda c: c["start"])
+    if held.get("sfx"):
+        plan["sfx"] = sorted((plan.get("sfx") or []) + held["sfx"], key=lambda c: c["t"])
     cues = plan.get("sfx") or []
     for key, db in (ov.get("sfx") or {}).items():
         if isinstance(db, dict) and db.get("deleted"):   # the video page's x on a sound in the timeline
@@ -140,6 +168,23 @@ def apply_overrides(plan, edit_dir, plan_name=None):
             ch["words"] = [w for w in ch["words"] if w["text"].strip()]
             ch["text"] = " ".join(w["text"] for w in ch["words"])
         plan["captions"]["chunks"] = [ch for ch in plan["captions"]["chunks"] if ch["words"]]
+    if ov.get("lanes"):   # the timeline's lanes: hidden or muted ones kept aside in "lane_off" (so showing them again
+        # brings them back after a bake), the rest in lane order, each card's lane as "z" for the composition
+        lane, off = lanes_of(ov, "img")
+        keep = laned(plan["cards"], ov, "img", card_key)
+        for c in keep:
+            c.pop("z", None)
+            if lane(card_key(c)):
+                c["z"] = lane(card_key(c))
+        held = {"cards": [c for c in plan["cards"] if lane(card_key(c)) in off]}
+        plan["cards"] = keep
+        lane, off = lanes_of(ov, "snd")
+        if "sfx" in plan:   # a placed sound comes back from sounds.json each time (plan.py placed_sounds): not held
+            held["sfx"] = [c for c in plan["sfx"] if not c.get("placed") and lane(plan_cue_key(c)) in off]
+            plan["sfx"] = [c for c in plan["sfx"] if lane(c["placed"] if c.get("placed") else plan_cue_key(c)) not in off]
+        held = {k: v for k, v in held.items() if v}
+        if held:
+            plan["lane_off"] = held
     return plan
 
 
