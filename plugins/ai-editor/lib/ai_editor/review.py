@@ -2693,6 +2693,26 @@ def make_handler(folder, token):
                 line = f"add {Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
                                           "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"])
+            if path == "/sfx/split":   # the Sounds row: a song split at a moment (Cmd+B), two clips of the same file
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "Sounds change on the edit, before it is approved."})
+                items = placed_raw(folder)
+                x = next((i for i in items if i.get("id") == body.get("placed")), None)
+                try:
+                    at = round(float(body["at"]), 2)
+                except (KeyError, TypeError, ValueError):
+                    return self.send(400, {"error": "sfx/split takes placed and at"})
+                if not x or x.get("kind") != "clip" or not x["t"] + 0.1 <= at <= x["t"] + x["dur"] - 0.1:
+                    return self.send(400, {"error": "Put the playhead inside the song to split it."})
+                k = round(at - x["t"], 2)
+                y = {**x, "id": secrets.token_hex(4), "t": at, "in": round(float(x.get("in") or 0) + k, 2), "dur": round(x["dur"] - k, 2)}
+                x["dur"] = k
+                save(folder / "sounds.json", {"items": items + [y]})
+                log_edit(folder, "sfx.split", x["id"], None, {"at": at, "new": y["id"]}, Path(x["sound"]).stem)
+                return self.timeline_note("sounds-timeline", "Sounds on the timeline", f"add {Path(x['sound']).stem} at {fmt(y['t'])} "
+                                          f"for {y['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=y["id"])
             if path in ("/sfx/add", "/sfx/remove"):   # the timeline's Sounds row: put a library sound at a moment, or take one out
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -5094,6 +5114,19 @@ def demo():
             assert json.loads(get("/state").read())["placed_sounds"][0]["id"] == added["id"]
             post("/sfx/remove", {"t": 2.0, "placed": added["id"], "src": "my ding.wav"})
             assert len(load(folder / "review.json")["comments"]) < n0, "the note it no longer needs is gone"
+            # a song split in two: two clips of the same file, the second starting where the first now ends
+            up = urllib.request.Request(base + "/audio/upload?name=split%20song.wav&at=1.0&t=" + tok, buf.getvalue(), method="POST")
+            urllib.request.urlopen(up).read()
+            song = next(x for x in load(folder / "sounds.json")["items"] if x["sound"].startswith("split song"))
+            assert post("/sfx/split", {"placed": song["id"], "at": 2.0}) == {"ok": True}
+            a, b = sorted((x for x in load(folder / "sounds.json")["items"] if x["sound"] == song["sound"]), key=lambda x: x["t"])
+            assert (a["t"], a["dur"], b["t"], b["in"]) == (1.0, 1.0, 2.0, 1.0) and abs(b["dur"] - (song["dur"] - 1.0)) < 0.01, (a, b)
+            try:
+                post("/sfx/split", {"placed": song["id"], "at": 0.5})
+                raise AssertionError("a split outside the song")
+            except urllib.error.HTTPError as e:
+                assert e.code == 400
+            save(folder / "sounds.json", {"items": [x for x in load(folder / "sounds.json")["items"] if x["sound"] != song["sound"]]})
         finally:
             globals().update(bake_ready=keep_ready, bake_soon=keep_bake)
         (folder / "overrides.json").unlink()

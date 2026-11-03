@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.34, creator-teardown 2.7.34 (2026-11-03)
+- Songs on the timeline edit like CapCut. Drag either edge to trim (the handles show on hover), drag the middle to move, and Alt-drag to slide which part of the song plays. Press Cmd+B or Split in its box to split it at the playhead, then Delete cuts a piece away. Every step undoes, volume too, and it goes into the video by itself.
+- A song baked into the draft keeps its name and its handles.
+- Text on the video clicks and drags again in live mode: its click target had been hidden, so a click picked the picture under it. A text with the cursor in it drags when you press and move, and a plain click still places the cursor. A picked text sits over pictures.
+
 ## ai-editor 2.7.33, creator-teardown 2.7.33 (2026-11-02)
 - Hand edits just update. Caption style, caption words and timing, and sounds on the timeline go into the video by themselves, with no note in the chat. A note is only written when the draft cannot be updated by itself, such as while Claude has it or when its render is gone.
 - A caption style reaches every frame, so it takes a full render in the background. The live player shows it at once, and Approve waits until the video has it.
