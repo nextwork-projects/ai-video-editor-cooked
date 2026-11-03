@@ -2312,7 +2312,7 @@ async function trashEdit(dir){const r=await post('/edit/trash',{dir});ui.edittra
 // ---------------------------------------------------------------- the app shell (Paper "P App: main")
 // A labelled sidebar (brand, New video, Home / Your videos / My styles, video folders, the live job, Settings,
 // theme), or the icon rail: collapsed by the toggle (remembered in this browser) or always under 1100 px wide.
-const IC={file:'<path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/>',home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+const IC={heart:'<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>',file:'<path d="M14 3H7a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7z"/><path d="M14 3v4h4"/>',home:'<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
  videos:'<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M10 9.2v5.6l4.6-2.8z"/>',styles:'<path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/>',
  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
  upload:'<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>',
@@ -2400,7 +2400,7 @@ function sideHTML(){
       ${it('home','Home',cur==='home','goHome()')}${it('videos','Videos',cur==='videos',vgo,dropAttrs('videos',null))}${it('styles','Styles',onS,"rgo('mystyle')")}${it('skill','Skills',cur==='skills',"rgo('skills')")}${it('term','Claude',cur==='claude',"rgo('claude')")}
       <div class="sb-sp"></div>
       ${ji?`<button class="rl-it rl-job" onclick="${ji.go}" title="${esc(ji.label+': '+ji.text)}"><span class="ic">${ringSvg(ji.frac)}${ji.n}</span>${ji.short}</button>`:''}
-      ${it('upload',updLabel(true),false,"sbUpd()",updBusy()?'disabled':'')}${it('gear','Settings',cur==='settings',"rgo('settings')")}${thm}`;
+      ${it('heart','Support',false,"supportGo()")}${it('upload',updLabel(true),false,"sbUpd()",updBusy()?'disabled':'')}${it('gear','Settings',cur==='settings',"rgo('settings')")}${thm}`;
   }
   const cnt=(k,id)=>Object.entries(fd(k).items).filter(([d,f])=>f===id&&(k==='videos'?vids.some(v=>v.dir===d):st.some(c=>c.id===d))).length;
   const inp=(e,ph)=>`<input id="fold-name" value="${esc(e.val||'')}" placeholder="${ph}" maxlength="40" aria-label="Folder name" onclick="event.stopPropagation()" oninput="(ui.newfold||ui.renfold).val=this.value" onkeydown="event.stopPropagation();if(event.key==='Enter')foldSave();if(event.key==='Escape'){ui.newfold=ui.renfold=null;render()}">`;
@@ -2424,6 +2424,7 @@ function sideHTML(){
     ${rail?'':updCard()}
     ${gsBlock()}
     ${updRow()}
+    <button class="sb-row" onclick="supportGo()" title="Opens Stripe in a new tab">${ic('heart')}<span class="lb">Support cooked.</span></button>
     <div class="sb-bot"><button class="sb-row ${cur==='settings'?'on':''}" onclick="rgo('settings')" ${upd?'title="A new version is out"':''}>${ic('gear')}<span class="lb">Settings</span>${upd?'<span class="sdot"></span>':''}</button>${thm}</div>`;
 }
 // a question for a video whose editor tab has it (askhook "elsewhere"): one row on Home and in the sidebar job card
@@ -2621,10 +2622,23 @@ function stLook(){
 function vSettings(){
   return `<div class="pgc"><div class="ph"><h1>Settings</h1><p>Keys, updates, where your videos live, and the look.</p></div><div class="sgrid">
     <div class="scol"><div class="scd" style="gap:16px"><div class="hd"><b>Keys</b><span class="st-lock">${ic('lock',14)}Saved on this computer only</span></div>${KEYS.map(stKey).join('')}${stModal()}</div>${stPost()}</div>
-    <div class="scol">${stUpdate()}${stFolder()}${stLook()}${stAlerts()}
+    <div class="scol">${stUpdate()}${stSupport()}${stFolder()}${stLook()}${stAlerts()}
       <div class="scd"><label class="srow" style="cursor:pointer"><div><div>Recent clips</div><div class="t2">From Movies, Desktop and Downloads</div></div><input type="checkbox" class="st-check" ${R&&R.scan_home?'checked':''} onchange="scanHome(this.checked)"></label>
         ${toolsRow()}</div></div></div></div>`;
 }
+// support: the Stripe link (pay what you want) in the sidebar, in Settings and, once a few videos are done, one popup that
+// asks again 30 days after Not now, 180 after a donation, and never after Don't ask again (state.json "support")
+const SUPPORT_URL='https://buy.stripe.com/dRm9ATePOgi9fQo7xd5Vu03',SUPP_COPY='cooked. is free to use. If it saves you hours of editing, you can chip in to help keep it going.';
+function stSupport(){return `<div class="scd"><div class="hd"><b>Support cooked.</b></div><div class="t2" style="white-space:normal">${SUPP_COPY}</div><div class="lks"><button class="b1 s" onclick="supportGo()">${ic('heart',14)}Support cooked.</button></div></div>`}
+function supportGo(){window.open(SUPPORT_URL,'_blank','noopener');supportAct('gave')}
+async function supportAct(act){ui.supp=false;ui.suppSeen=true;await post('/support',{act});await load();render()}
+function suppDue(){const s=S.support||{},now=Date.now()/1000,done=((L&&L.videos)||[]).filter(v=>vPh(v)==='done').length;
+  return !ui.suppSeen&&!s.never&&done>=2&&now>(s.until||0)}
+function suppModal(){return `<div class="modalbg" onclick="if(event.target===this)supportAct('later')"><div class="dlg" role="dialog" aria-modal="true" aria-labelledby="stitle" style="width:min(460px,100%)">
+    <span style="display:grid;place-items:center;width:44px;height:44px;border-radius:12px;background:var(--card)">${ic('heart',22)}</span>
+    <b id="stitle">Enjoying cooked.?</b><p>${SUPP_COPY}</p>
+    <div class="row" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><button class="hlink" style="font-size:13px;color:var(--t2)" onclick="supportAct('never')">Don't ask again</button>
+      <span class="row" style="gap:12px"><button class="b2" onclick="supportAct('later')">Not now</button><button class="b1" onclick="supportGo()">Support cooked.</button></span></div></div></div>`}
 // Alerts: the chime (this browser only) and system notices while the tab is hidden; permission only from the button
 function stAlerts(){
   const A=window.aveAlert,N=window.Notification?Notification.permission:'none';
@@ -2679,7 +2693,8 @@ function rrender(){
   if(rv==='home'&&askRow())h=h.replace(/^\s*(<div class="pgc[^"]*">)/,'$1'+askRow());   // Home's first row
   $('#main').classList.toggle('pg',['home','videos','settings','mystyle','style','stylepage','skills','claude'].includes(rv));
   paint($('#main'),h,rv+'|'+ui.sp);$('#main').classList.toggle('spwrap',rv==='stylepage');
-  const md=ui.skdel?skDelModal():ui.del?delModal():ui.create?createModal():ui.bconn?bconnModal():'';paint($('#modal'),md,'m');document.documentElement.style.overflow=md?'hidden':'';$('#main').classList.toggle('hmain',rv==='home');
+  if(!ui.supp&&S&&L&&!ui.create&&!ui.del&&!ui.skdel&&!ui.bconn&&suppDue()){ui.supp=true;ui.suppSeen=true}
+  const md=ui.skdel?skDelModal():ui.del?delModal():ui.create?createModal():ui.bconn?bconnModal():ui.supp?suppModal():'';paint($('#modal'),md,'m');document.documentElement.style.overflow=md?'hidden':'';$('#main').classList.toggle('hmain',rv==='home');
   if(rv==='mystyle'||rv==='style')flashBuilt();
   const o=$('#order');if(o)o.querySelectorAll('[draggable]').forEach(el=>{
     el.ondragstart=e=>{e.dataTransfer.setData('text/plain',el.dataset.i)};el.ondragover=e=>e.preventDefault();
