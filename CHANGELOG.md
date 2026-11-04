@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.37, creator-teardown 2.7.37 (2026-11-04)
+- Words or pieces you cut on the page now only skip on the draft you cut them on. A new draft no longer jumps over the same seconds of a different video, so it starts where it should.
+
 ## ai-editor 2.7.36, creator-teardown 2.7.36 (2026-11-03)
 - The timeline has lanes. Images, Text and Sounds each get a lane per overlap, so nothing sits on top of anything else. Drag an item up or down to move it to another lane, or below the last one to make a new lane. A later lane draws on top in the video.
 - Each lane has hide (mute for sounds) and lock. A hidden lane leaves the video and comes back when you show it. A locked lane cannot be picked or moved.

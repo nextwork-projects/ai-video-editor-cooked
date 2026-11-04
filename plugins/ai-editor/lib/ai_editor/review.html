@@ -1502,7 +1502,7 @@ function edTxOp(op){const ks=[];for(let k=txSel.a;k<=txSel.b;k++)if(!W[k].nt&&W[
 // one jump per cut: the frame a seek lands on can start before the cut's end (a 24 fps video, FPS is 30), so the same
 // jump never fires again within 0.5 s, or it seeks in a loop and the sound stutters and repeats
 let goneTo=null,goneAt=0;
-function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp||alt)return;   // the main draft's cuts: another version is its own video
+function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||key(view)!==key(cur())||cmp||alt)return;   // the draft on screen's cuts only: an older draft or another version is its own video
   const g=cuts().gone.find(([a,b])=>t>=a-.5/FPS&&t<b-.5/FPS);if(!g)return;
   if(goneTo===g[1]&&performance.now()-goneAt<500)return;goneTo=g[1];goneAt=performance.now();v.currentTime=g[1]+.01}
 // undo / redo (Cmd+Z, Shift+Cmd+Z) for the timeline edits made on this page: each entry replays the opposite save.

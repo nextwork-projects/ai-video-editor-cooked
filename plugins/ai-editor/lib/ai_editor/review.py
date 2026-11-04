@@ -1119,6 +1119,13 @@ def timeline_cuts(body):
     return {"splits": splits, "gone": gone}
 
 
+def draft_cuts(ov, d):
+    """overrides.json's page cuts, only on the draft they were made on: they are times on that draft's clock, and a
+    new round is a new video (an old [[0, 1.75]] skipped a line the next draft says there). {} for another draft."""
+    c = ov.get("cuts") or {}
+    return c if c.get("draft") == f'{d.get("stage")}-{d.get("round")}' else {}
+
+
 def cuts_text(transcript, gone):
     """The note for the timeline's cut pieces: each range on the edit's clock with the words said in it (a word is
     in when its middle is, apply_edits' rule), for Claude to take out of spans.json and render again. "" for none."""
@@ -2247,7 +2254,7 @@ def make_handler(folder, token):
                 d["sfx_removed"] = [float(k) for k, v in ((load(ovf).get("sfx") or {}) if ovf.exists() else {}).items()
                                     if isinstance(v, dict) and v.get("deleted")]
                 d["cap_words"] = ((load(ovf).get("words") or {}) if ovf.exists() else {})   # caption words retyped, for the next draft
-                d["cuts"] = ((load(ovf).get("cuts") or {}) if ovf.exists() else {})
+                d["cuts"] = draft_cuts(load(ovf), d) if ovf.exists() else {}
                 d["cap_times"] = ((load(ovf).get("cap_times") or {}) if ovf.exists() else {})   # caption pages retimed, until baked   # the timeline's splits and cut pieces
                 d["placed_sounds"] = placed_sounds(folder)   # the timeline's Sounds row: the ones the user put there
                 d["lanes"] = ((load(ovf).get("lanes") or {}) if ovf.exists() else {})   # the timeline's lanes (/timeline/lanes)
@@ -2940,8 +2947,8 @@ def make_handler(folder, token):
                     return self.send(400, {"error": "timeline/cut takes splits [t] and gone [[start, end]]"})
                 ovf = folder / "overrides.json"
                 ov = load(ovf) if ovf.exists() else {}
-                was = [list(g) for g in (ov.get("cuts") or {}).get("gone") or []]
-                ov["cuts"] = cuts
+                was = [list(g) for g in draft_cuts(ov, d).get("gone") or []]
+                ov["cuts"] = {**cuts, "draft": f'{d["stage"]}-{d["round"]}'}   # draft_cuts: this draft only
                 save(ovf, ov)
                 for g in cuts["gone"]:   # each new piece with the words said in it ("" for a pause)
                     if g not in was:
@@ -5089,7 +5096,12 @@ def demo():
     assert timeline_cuts({"splits": [3, 1, 1, 0], "gone": [[2, 3], [1, 2], [5, 5.01]]}) == {"splits": [1, 3], "gone": [[1, 3]]}
     r = post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]]})
     note = [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
-    assert load(folder / "overrides.json")["cuts"] == {"splits": [1.0, 2.0], "gone": [[1.0, 2.0]]} and r["id"] and len(note) == 1 and "0:01.0-0:02.0" in note[0]["text"], note
+    assert load(folder / "overrides.json")["cuts"] == {"splits": [1.0, 2.0], "gone": [[1.0, 2.0]], "draft": "edit-1"} and r["id"] and len(note) == 1 and "0:01.0-0:02.0" in note[0]["text"], note
+    assert json.loads(get("/state").read())["cuts"]["gone"] == [[1.0, 2.0]]
+    update(folder / "review.json", lambda x: x.update(round=2))   # the next draft is a new video: its clock, not draft 1's
+    assert json.loads(get("/state").read())["cuts"] == {}, "a cut from draft 1 skipped on draft 2"
+    assert draft_cuts({"cuts": {"gone": [[0, 1.75]]}}, {"stage": "edit", "round": 1}) == {}   # saved before cuts had a draft
+    update(folder / "review.json", lambda x: x.update(round=1))
     assert json.loads(get("/state").read())["cuts"]["gone"] == [[1.0, 2.0]]
     post("/timeline/cut", {"splits": [1, 2], "gone": []})
     assert not [c for c in load(folder / "review.json")["comments"] if (c.get("on") or {}).get("k") == "cuts"]
