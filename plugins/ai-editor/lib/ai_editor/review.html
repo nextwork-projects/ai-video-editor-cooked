@@ -376,6 +376,8 @@ body.edcalm #mute::before,body.edcalm #safebtn::before,body.edcalm #full::before
 .eitem.img::before,.eitem.img::after{content:"";position:absolute;top:0;bottom:0;width:6px;cursor:ew-resize}.eitem.img::before{left:-1px}.eitem.img::after{right:-1px}
 .vsp{position:absolute;top:0;bottom:0;width:12px;margin-left:-6px;cursor:col-resize;z-index:3}.vsp::after{content:"";position:absolute;left:5px;top:4px;bottom:4px;width:2px;border-radius:1px;background:var(--quiet)}
 .vsp:hover::after,.vsp.drag::after{background:#FFFFFF}
+.vjn{position:absolute;top:0;bottom:0;width:14px;margin-left:-7px;cursor:pointer;z-index:3}.vjn::after{content:"";position:absolute;left:5px;top:3px;bottom:3px;width:4px;border-radius:2px;background:var(--quiet);box-shadow:0 0 0 2px var(--rail)}
+.vjn:hover::after,.vjn.sel::after{background:#FFFFFF}   /* ripple: where a cut piece was */
 .etip{position:absolute;font-style:normal;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--onink);font-size:10px;font-weight:600;line-height:14px;padding:1px 6px;border-radius:4px;white-space:nowrap;pointer-events:none;z-index:6}
 .edlab{height:30px;line-height:30px;font-size:12px;font-weight:600;color:var(--quiet);padding:0 9px}
 .etrack.dropon{outline:2px dashed var(--ink);outline-offset:2px}
@@ -916,7 +918,7 @@ body.making #making{display:flex}
  </div>
  <div class="transport">
   <button id="play" aria-label="play or pause"></button>
-  <button class="tbtn" id="back" title="j">-5s</button><button class="tbtn" id="fwd" title="l">+5s</button>
+  <button class="tbtn" id="back" title="Back 5 s">-5s</button><button class="tbtn" id="fwd" title="Forward 5 s">+5s</button>
   <span id="time" class="num"><b>0:00.0</b><span>/ 0:00</span></span>
   <button class="tbtn edb" id="undob" title="Undo (⌘Z)" aria-label="undo" disabled></button><button class="tbtn edb" id="redob" title="Redo (⇧⌘Z)" aria-label="redo" disabled></button>
   <div class="grow"></div>
@@ -971,8 +973,8 @@ body.making #making{display:flex}
 let themeAt=0;   // a poll already in flight still carries the old theme: ignore the server's for 3 s after a click
 const $=id=>document.getElementById(id),vid=$('v'),v=media(vid),v2=$('v2'),bar=$('bar'),ta=$('ta'),box=$('box');
 const SPEEDS=[0.5,1,1.25,1.5,2],FPS=30,STAGE={cut:'The cut',edit:'The edit'};
-const KEYS=[['Play or pause','space'],['Back or forward 5 s','j l'],['Back or forward 1 s','← →'],['One frame',', .'],['Slower or faster','[ ]'],
- ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Split the video','s ⌘B'],['Delete what you picked','delete'],['Copy the picked text','⌘D'],['Nudge the picked clip','⌥← ⌥→'],['Let go','esc'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
+const KEYS=[['Play or pause','space'],['Back, stop, forward (again: faster)','j k l'],['One frame','← →'],['One second','⇧← ⇧→'],['Previous or next edge','↑ ↓'],['Slower or faster','[ ]'],
+ ['Write a note','c'],['Mark a range','i o'],['Save note','enter'],['Cancel','esc'],['Full screen','f'],['Split the video','s ⌘B'],['Delete what you picked','delete'],['Copy, paste at the playhead','⌘C ⌘V'],['Duplicate what you picked','⌘D'],['Pick the whole lane','⌘A'],['Trim to the playhead','q w'],['Nudge the picked clip','⌥← ⌥→'],['Undo or redo','⌘Z ⇧⌘Z'],['Let go','esc'],['Zoom the timeline','⌘= ⌘-'],['Fit the timeline','shift z'],['Mute','m'],['Safe zone (vertical)','z'],['This help','?']];
 $('keys').innerHTML=KEYS.map(([a,k])=>`<div><span>${a}</span><span>${k.split(' ').map(x=>'<kbd>'+x+'</kbd>').join('&nbsp;&nbsp;')}</span></div>`).join('');
 const TICK='<svg width="12" height="12" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const SPIN='<svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="var(--line)" stroke-width="3"/><path d="M12 3a9 9 0 0 1 9 9" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
@@ -1346,7 +1348,7 @@ let zm=1,tfol=true,tseek=false,tset=0;
 const zmax=()=>Math.max(1,D()),tstep=(vis,n)=>[.5,1,2,5,10,15,30,60,120,300,600].find(x=>vis/x<=n)||1200;
 function tscrollTo(x){const a=$('tscroll'),b=$('escroll');tset=performance.now();a.scrollLeft=x;if(b)b.scrollLeft=a.scrollLeft}   // both rows scroll as one
 function setZoom(z,cx){const T=D(),sc=$('tscroll'),inn=$('tinner');z=Math.max(1,Math.min(zmax(),z));
-  const r=sc.getBoundingClientRect(),ir=inn.getBoundingClientRect(),ph=ir.left+v.currentTime/T*ir.width;
+  const r=sc.getBoundingClientRect(),ir=inn.getBoundingClientRect(),ph=ir.left+so(v.currentTime)/TO()*ir.width;
   if(cx==null)cx=ph>=r.left&&ph<=r.right?ph:r.left+r.width/2;   // buttons and keys hold the playhead still, else the middle
   const f=(cx-ir.left)/ir.width,pad=ir.left-r.left+sc.scrollLeft;
   zm=z;$('timeline').style.setProperty('--zm',z);$('tzr').value=Math.log(z)/Math.log(zmax())*100||0;
@@ -1363,7 +1365,7 @@ $('timeline').addEventListener('scroll',e=>{if(!/^(tscroll|escroll)$/.test(e.tar
   if(performance.now()-tset>150)tfol=false;const o=$(e.target.id==='tscroll'?'escroll':'tscroll');if(o&&Math.abs(o.scrollLeft-e.target.scrollLeft)>1){tset=performance.now();o.scrollLeft=e.target.scrollLeft}},true);
 v.addEventListener('seeking',()=>{tfol=tseek=true});v.addEventListener('play',()=>tfol=true);
 function tfollow(){if(zm<=1||!tfol||(v.paused&&!tseek))return;tseek=false;
-  const sc=$('tscroll'),r=sc.getBoundingClientRect(),ir=$('tinner').getBoundingClientRect(),x=ir.left+v.currentTime/D()*ir.width;
+  const sc=$('tscroll'),r=sc.getBoundingClientRect(),ir=$('tinner').getBoundingClientRect(),x=ir.left+so(v.currentTime)/TO()*ir.width;
   if(x<r.left+8||x>r.right-24)tscrollTo(sc.scrollLeft+x-r.left-r.width*.1)}   // page along: the playhead goes back near the left
 // the edit's Text and Sounds rows: every text (made or changing) and every sound in the draft or put there by the user.
 const NOTE_ICON='<svg width="10" height="10" viewBox="0 0 12 12"><path d="M5 1.5v6.2A1.8 1.8 0 1 0 6.3 9.4V4l3.2-1V1z" fill="currentColor"/></svg>';
@@ -1382,49 +1384,53 @@ const capTyping={};
 function capText(c){if(c&&capTyping[c.s]!=null)return {text:capTyping[c.s],edited:true};const cw=(S&&S.cap_words)||{};if(!(c.w||[]).some(k=>k in cw))return {text:c.text,edited:false};
   const orig=c.text.split(/\s+/);return {text:c.w.map((k,i)=>k in cw?cw[k]:orig[i]||'').filter(Boolean).join(' '),edited:true}}
 // the Captions row's words: a caption can be one word and a few pixels wide, so neighbours share one label until each has room
-function capWords(cs,T){const pps=Math.max(1,$('edtracks').clientWidth-140)*zm/T,out=[];let a=null,b=0,words=[];
+function capWords(cs){const T=TO(),pps=Math.max(1,$('edtracks').clientWidth-140)*zm/T,out=[];let a=null,b=0,words=[];
   const flush=()=>{if(words.length)out.push(`<i class="ecw" style="left:${a/T*100}%;width:${(b-a)/T*100}%">${esc(words.join(' '))}</i>`);a=null;words=[]};
-  for(const c of cs){const t=capText(c).text;if(!t)continue;const[s,e]=capAt(c);if(a==null)a=s;b=e;words.push(t);if((b-a)*pps>=70)flush()}
+  for(const c of cs){const t=capText(c).text;if(!t||inGone(...capAt(c)))continue;const[s,e]=capAt(c).map(so);if(a==null)a=s;b=e;words.push(t);if((b-a)*pps>=70)flush()}
   flush();return out.join('')}
 function renderEdTracks(){const E=$('edtracks'),T=D();
   // an approved draft or another version still shows it, to look and scrub (body.edro). A version has only its video here, so just its own bar (body.edalt)
   const on=!!(S&&view&&view.stage==='edit'&&isCur()&&!previewOn&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
   document.body.classList.toggle('edro',on&&(!noteOk()||!!alt));document.body.classList.toggle('edalt',on&&!!alt);
   if(!on){E.innerHTML='';E._h='';return}
-  const pc=t=>Math.max(0,Math.min(100,t/T*100)),it=data().items||{};
+  const TT=TO(),pc=t=>Math.max(0,Math.min(100,so(t)/TT*100)),it=data().items||{};   // pc: on the output clock (ripple)
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
-  const step=tstep(T/zm,10),ticks=[];for(let t=0;t<T;t+=step)ticks.push(t);
+  const step=tstep(TT/zm,10),ticks=[];for(let t=0;t<TT;t+=step)ticks.push(t);
   const texts=textItems().map(x=>({k:String(x.id),a:x.start,b:x.end,h:`<div class="eitem txt${x.fresh?' pend':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}" data-et="${esc(String(x.id))}" data-lkey="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(x.start)}–${fmtx(x.end)}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`}));
-  const clip=(t0,d,cls,attrs,name,peaks,at,k)=>({k,a:t0,b:t0+Math.max(.3,d||0),h:`<div class="eitem snd${cls}" ${attrs} data-lkey="${esc(k)}" style="left:${pc(t0)}%;width:${(d||.3)/T*100}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`});
+  const clip=(t0,d,cls,attrs,name,peaks,at,k)=>({k,a:t0,b:t0+Math.max(.3,d||0),h:`<div class="eitem snd${cls}" ${attrs} data-lkey="${esc(k)}" style="left:${pc(t0)}%;width:${Math.max(.3/TT*100,pc(t0+(d||.3))-pc(t0))}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`});
   const snds=[...(it.sfx||[]),...((LV.off||{}).sfx||[]).filter(c=>!(it.sfx||[]).some(x=>x.src===c.src&&Math.abs((x.start??x.t)-c.t)<.05)).map(c=>({t:+(c.event??c.t),start:c.t,d:c.d,src:c.src}))].map(x=>{const px=x.placed&&placed(x.placed),pc2=px&&px.kind==='clip';   // one the user placed, now in the draft: still its name and its handles
       return clip(x.start??x.t,x.d,(gone.has(x.t.toFixed(2))?' gone':'')+(pc2?' clip':'')+(px&&ssel===px.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,px?px.sound.replace(/\.[a-z0-9]+$/i,''):sname(x.src),x.peaks,x.t,x.placed||'t:'+(x.start??x.t).toFixed(2))}).concat(
      (S.placed_sounds||[]).filter(x=>!inDraft.has(x.id)).map(x=>{const n=(x.peaks||[]).length,c=x.kind==='clip'&&x.d,pk=c?x.peaks.slice(Math.floor(x.in/x.d*n),Math.ceil((x.in+x.dur)/x.d*n)):x.peaks;
       return clip(x.t,c?x.dur:x.d,' pend'+(c?' clip':'')+(ssel===x.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.sound)}" data-sp2="${esc(x.id)}"`,x.sound.replace(/\.[a-z0-9]+$/i,''),pk,x.t,x.id)}));
-  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c),[cs0,ce0]=capAt(c);return `<div class="eitem cap${ct.edited||capMoved(c)?' pend':''}${!ct.text?' gone':''}${tool==='captions'&&capSel===c.s&&lastPick==='cap'?' sel':''}" data-ec="${i}" style="left:${pc(cs0)}%;width:${pc(ce0)-pc(cs0)}%" title="${esc(ct.text||c.text)} · ${fmtx(cs0)}–${fmtx(ce0)} · drag an edge to change how long it shows, click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
+  const caps=(it.captions||[]).map((c,i)=>{const ct=capText(c),[cs0,ce0]=capAt(c);if(inGone(cs0,ce0))return '';return `<div class="eitem cap${ct.edited||capMoved(c)?' pend':''}${!ct.text?' gone':''}${tool==='captions'&&capSel===c.s&&lastPick==='cap'?' sel':''}" data-ec="${i}" style="left:${pc(cs0)}%;width:${pc(ce0)-pc(cs0)}%" title="${esc(ct.text||c.text)} · ${fmtx(cs0)}–${fmtx(ce0)} · drag an edge to change how long it shows, click to edit"><span>${esc(ct.text||c.text)}</span><b class="ex" data-ex="1" title="Delete this caption">×</b></div>`}).join('');
   const cp=k=>(S.cards_pending||[]).find(p=>p.key===k)||{};
   const imgs=cardsAll().map(x=>{const p=cp(x.key),a=p.start??x.s,b=p.end??x.e;return {k:x.key,a,b,h:`<div class="eitem img${p.key?' pend':''}${p.deleted?' gone':''}${csel&&csel.x.key===x.key?' sel':''}" data-ek="${esc(x.key)}" data-lkey="${esc(x.key)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(x.label)} · ${fmtx(a)}–${fmtx(b)} · click to select, drag to move, drag an edge to trim"><span>${esc(x.label.replace(/^the /,''))}</span></div>`}});
-  const vsps=(alt?[]:cuts().splits).filter(t=>t>0&&t<T).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
-  const vids=(alt?[{a:0,b:T}]:vpieces()).map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':fmtx(x.b-x.a))}</span></div>`).join('');
+  const vsps=(alt?[]:cuts().splits).filter(t=>t>0&&t<T&&!gonR().some(g=>Math.abs(g[0]-t)<.005||Math.abs(g[1]-t)<.005)).map(t=>`<i class="vsp" data-vs="${t}" style="left:${pc(t)}%" title="${fmtx(t)} · drag to move, double-click to remove"></i>`).join('');
+  const vids=(alt?[{a:0,b:T}]:vpieces().filter(x=>!x.cut||!rip())).map(x=>`<div class="eitem vid${x.cut?' cut':''}${vsel!=null&&Math.abs(vsel-x.a)<.01?' sel':''}" data-va="${x.a}" style="left:${pc(x.a)}%;width:calc(${pc(x.b)-pc(x.a)}% - 2px)" title="${fmtx(x.a)}–${fmtx(x.b)}${x.cut?' · cut: click, then Delete to put it back':' · click, then Delete to cut it'}"><span>${esc(x.cut?'Cut':fmtx(x.b-x.a))}</span></div>`).join('')
+    +gonR().map(g=>`<i class="vjn${vsel!=null&&Math.abs(vsel-g[0])<.01?' sel':''}" data-vj="${g[0]}" style="left:${pc(g[0])}%" title="Cut ${fmtx(g[0])}–${fmtx(g[1])} · double-click or Delete to put it back"></i>`).join('');   // ripple: a join where a cut piece was
   // lanes (CapCut's tracks): each kind packs into rows, an item on the lane review.py has for it (S.lanes of) unless it would sit on another there
   const L=[],R=[],add=(hd,tk)=>{L.push(hd);R.push(tk)};
-  const lanes=(kind,xs,btn)=>{const p=packLanes(kind,xs),r=Array.from({length:p.n},()=>''),nm=LNAME[kind],m=kind==='snd'?'muted':'hidden';xs.forEach(x=>r[p.of[x.k]]+=x.h);
+  const lanes=(kind,xs,btn)=>{xs=xs.filter(x=>!inGone(x.a,x.b));const p=packLanes(kind,xs),r=Array.from({length:p.n},()=>''),nm=LNAME[kind],m=kind==='snd'?'muted':'hidden';xs.forEach(x=>r[p.of[x.k]]+=x.h);
     r.forEach((h,i)=>{const s=laneSt(kind,i),off=!!s[m];
       add(`<div class="ehd${i?' lsub':' l1'}"><span>${i?nm+' '+(i+1):nm}</span>${i?'':btn||''}<button data-lt="${m}" data-lk="${kind}" data-li="${i}" class="${off?'on':''}" title="${kind==='snd'?(off?'Unmute this lane':'Mute this lane'):(off?'Show this lane':'Hide this lane')}">${lico((kind==='snd'?LICO.spk:LICO.eye)+(off?LICO.off:''))}</button><button data-lt="locked" data-lk="${kind}" data-li="${i}" class="${s.locked?'on':''}" title="${s.locked?'Unlock this lane':'Lock this lane'}">${lico(s.locked?LICO.lock:LICO.open)}</button></div>`,
         `<div class="etrack${i?'':' l1'}${off?' lhid':''}${s.locked?' llock':''}" data-row="${kind}" data-lane="${i}">${h}</div>`)});
     add(`<div class="ehd newl" data-row="${kind}"></div>`,`<div class="etrack newl" data-row="${kind}" data-lane="${p.n}">Drop here for a new lane</div>`)};
-  add(`<div class="ehd"><span>Video</span><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div>`,`<div class="etrack" data-row="vid">${vids}${vsps}</div>`);
+  const rp=cuts().ripple!==false;add(`<div class="ehd"><span>Video</span><button id="vrip" class="${rp?'on':''}" title="${rp?'Ripple on: cut pieces close up. Click to keep their place':'Ripple off: cut pieces keep their place. Click to close them up'}" aria-label="ripple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 7h4M14 7h4"/></svg></button><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div>`,`<div class="etrack" data-row="vid">${vids}${vsps}</div>`);
   const lay=!!S.layer;   // a layer draft (its MP4 under the user's layers): no Images, its captions are burned in, so those rows only show when they hold something
   if(!lay||imgs.length)lanes('img',imgs);lanes('text',texts,`<button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button>`);
-  if(!lay||(it.captions||[]).length)add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[],T)}</div>`);
+  if(!lay||(it.captions||[]).length)add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[])}</div>`);
   lanes('snd',snds,`<button id="addsnd" title="Add one of your sounds at the playhead" aria-label="add a sound at the playhead">+</button>`);
   const h=`<div class="edwrap"><div class="edleft">${L.join('')}</div>
     <div class="edright">
-    <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${pc(t)}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
+    <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${t/TT*100}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
     ${R.join('')}<b class="eph" id="eph"></b><b class="esnap" id="esnap" hidden><i></i></b></div></div></div></div>`;
-  if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
+  if(E._h!==h&&edHold){edSkip=1}else if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
     E.querySelectorAll('.eitem.snd,.eitem.img').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}
   E.querySelectorAll('[data-lkey]').forEach(el=>el.classList.toggle('msel',msel.has(mkey(el))));edPh()}
+// a pointer down on the rows: nothing redraws them under it (a bake or a poll landing mid-drag lost the drag) until it lets go
+let edHold=0,edSkip=0;$('edtracks').addEventListener('pointerdown',()=>{edHold=1},true);
+['pointerup','pointercancel'].forEach(k=>document.addEventListener(k,()=>{if(!edHold)return;edHold=0;if(edSkip)setTimeout(()=>{edSkip=0;$('edtracks')._h=null;renderEdTracks()})}));   // after its click
 document.addEventListener('pointerdown',e=>{if(!e.shiftKey||msel.size||!e.target.closest('#edtracks [data-lkey]'))return;
   if(csel)msel.add('img|'+csel.x.key);if(tx&&tx.edit)msel.add('text|'+String(tx.edit.id));if(ssel)msel.add('snd|'+ssel)},true);
 // lanes: S.lanes {img|text|snd: {state: [{hidden|muted, locked}], of: {key: lane}}} from review.py; lane 0 is the bottom of the stack
@@ -1446,15 +1452,15 @@ const laneOff=(row,k)=>!!document.querySelector(`#edtracks .etrack.lhid[data-row
 const msel=new Set(),mkey=el=>el.parentElement.dataset.row+'|'+el.dataset.lkey;
 // the undo entries pushed since n0 as one
 function edGroup(what,n0){const xs=EH.u.splice(n0);if(xs.length<2){EH.u.push(...xs);return}
-  EH.u.push({what,undo:async()=>{for(const h of xs.slice().reverse())await h.undo()},redo:async()=>{for(const h of xs)await h.redo()}});edBtns()}
+  EH.u.push({what,j:xs.every(h=>h.j&&h.j.length)?xs.flatMap(h=>h.j):[],undo:async()=>{for(const h of xs.slice().reverse())await h.undo()},redo:async()=>{for(const h of xs)await h.redo()}});edBtns()}
 // snapping: an edge being moved lands on the playhead, any other clip's edge on any row or a caption word's start
 // within 8 px; hold ⌘ or ctrl to drag free. pts: where it can land, read once when the drag starts
-function snapPts(skip){const T=D(),n=s=>+((s||'').match(/-?[\d.]+/)||[NaN])[0],ps=[v.currentTime];
+function snapPts(skip){const T=TO(),n=s=>+((s||'').match(/-?[\d.]+/)||[NaN])[0],ps=[so(v.currentTime)];
   document.querySelectorAll('#edtracks .eitem').forEach(el=>{if(skip.includes(el))return;const a=n(el.style.left)/100*T,w=n(el.style.width)/100*T;if(!isNaN(a)){ps.push(a);if(!isNaN(w))ps.push(a+w)}});
-  W.forEach(w=>{if(w.t!=null&&!w.nt)ps.push(w.t)});return ps}
-function snapTo(ev,ts,ps,W0){const ln=$('esnap');if(!ln)return 0;let best=null;const px=8/W0*D();
+  W.forEach(w=>{if(w.t!=null&&!w.nt)ps.push(so(w.t))});return ps}
+function snapTo(ev,ts,ps,W0){const ln=$('esnap');if(!ln)return 0;let best=null;const px=8/W0*TO();
   if(!ev.metaKey&&!ev.ctrlKey)for(const t of ts)for(const p of ps){const d=p-t;if(Math.abs(d)<=px&&(!best||Math.abs(d)<Math.abs(best.d)))best={d,p}}
-  ln.hidden=!best;if(!best)return 0;ln.style.left=best.p/D()*100+'%';ln.firstChild.textContent=fmtx(best.p);return best.d}
+  ln.hidden=!best;if(!best)return 0;ln.style.left=best.p/TO()*100+'%';ln.firstChild.textContent=fmtx(best.p);return best.d}
 const snapDt=(ev,mode,a,b,dt,ps,W0)=>dt+snapTo(ev,mode==='m'?[a+dt,b+dt]:mode==='l'?[a+dt]:mode==='r'?[b+dt]:[],ps,W0);
 document.addEventListener('pointerup',()=>{const s=$('esnap');if(s)s.hidden=true},true);
 // up or down while moving a clip: the lane under the pointer; past the last one a dashed slot for a new lane
@@ -1468,17 +1474,17 @@ function laneMv(it,ev,y0){const E=$('edtracks'),tk=it.parentElement,kind=tk.data
 // (read before the row redraws; run after the move saves)
 function laneUp(it){const E=$('edtracks'),kind=it.parentElement.dataset.row,i=it._lane;delete E.dataset.ld;E.querySelector('.edwrap').style.height='';E.querySelectorAll('.dropon').forEach(r=>r.classList.remove('dropon'));delete it._lane;
   if(i==null)return null;const of={...(laneOf(kind).of||{})},k=it.dataset.lkey;if(i===(+of[k]||0))return null;if(i)of[k]=i;else delete of[k];
-  return ()=>laneSave(kind,{of},'lane change')}
+  return ()=>laneSave(kind,{of},'change lane')}
 // the rest of a picked lot follows the one dragged, by the same time
 const mselSkip=it=>msel.has(mkey(it))?[...document.querySelectorAll('#edtracks [data-lkey]')].filter(el=>msel.has(mkey(el))):[it];
-function mselMv(it,dt){if(!msel.has(mkey(it)))return;const T=D();mselSkip(it).forEach(el=>{if(el===it)return;if(el._l0==null)el._l0=parseFloat(el.style.left);el.style.left=el._l0+dt/T*100+'%'})}
-async function mselUp(me,dt){if(!msel.has(me)||Math.abs(dt)<.005)return;const r2=x=>Math.round(Math.max(0,x)*100)/100;
+function mselMv(it,dt){if(!msel.has(mkey(it)))return;const T=TO();mselSkip(it).forEach(el=>{if(el===it)return;if(el._l0==null)el._l0=parseFloat(el.style.left);el.style.left=el._l0+dt/T*100+'%'})}
+async function mselUp(me,dt){if(!msel.has(me)||Math.abs(dt)<.005)return;const r2=x=>Math.round(Math.max(0,os(Math.max(0,so(x)+dt)))*100)/100;   // dt: on the output clock
   for(const k of [...msel]){if(k===me)continue;const i=k.indexOf('|'),row=k.slice(0,i),id=k.slice(i+1);let path,b,was;
-    if(row==='text'){const x=(S.texts||[]).find(x=>String(x.id)===id);if(!x)continue;path='/text/edit';b={id:x.id,start:r2(x.start+dt),end:r2(x.end+dt)};was={id:x.id,start:x.start,end:x.end}}
+    if(row==='text'){const x=(S.texts||[]).find(x=>String(x.id)===id);if(!x)continue;path='/text/edit';b={id:x.id,start:r2(x.start),end:r2(x.end)};was={id:x.id,start:x.start,end:x.end}}
     else if(row==='img'){const x=cardsAll().find(c=>c.key===id);if(!x)continue;const q=(S.cards_pending||[]).find(q=>q.key===id)||{},a=q.start??x.s,e=q.end??x.e,o={key:x.key,label:x.label,t:x.s,t_end:x.e};
-      path='/card/edit';b={...o,start:r2(a+dt),end:r2(e+dt)};was={...o,start:a,end:e}}
-    else{const x=placed(id);if(!x)continue;path='/sfx/move';b={placed:id,t:r2(x.t+dt)};was={placed:id,t:x.t}}
-    try{await edSave(path,b);edPush('moved',()=>edSave(path,was),()=>edSave(path,b))}catch(e){toast(e.message||'That did not save.')}}}
+      path='/card/edit';b={...o,start:r2(a),end:r2(e)};was={...o,start:a,end:e}}
+    else{const x=placed(id);if(!x)continue;path='/sfx/move';b={placed:id,t:r2(x.t)};was={placed:id,t:x.t}}
+    try{await edSave(path,b);edPush('move',()=>edSave(path,was),()=>edSave(path,b))}catch(e){toast(e.message||'That did not save.')}}}
 // a caption page's time: as dragged on the Captions row (overrides.json cap_times, by its first word) until the bake has it
 const capAt=c=>{const o=(S&&S.cap_times||{})[(c.w||[])[0]];return o?[o[0],o[1]]:[c.s,c.e]};
 const capMoved=c=>{const[a,b]=capAt(c);return Math.abs(a-c.s)>.01||Math.abs(b-c.e)>.01};
@@ -1486,42 +1492,51 @@ const capMoved=c=>{const[a,b]=capAt(c);return Math.abs(a-c.s)>.01||Math.abs(b-c.
 // neighbours. It saves on release and bakes into the video by itself; the page shows it at its new time at once
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.cap');if(!it||e.button||e.target.closest('[data-ex]'))return;
   const cs=(data().items||{}).captions||[],i=+it.dataset.ec,c=cs[i];if(!c||!(c.w||[]).length)return;
-  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX,[o0,o1]=capAt(c);
-  const P=i?cs[i-1]:null,N=i<cs.length-1?cs[i+1]:null,[p0,p1]=P?capAt(P):[0,0],[n0,n1]=N?capAt(N):[T,T];
+  const T=TO(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX,[o0,o1]=capAt(c).map(so);   // on the output clock
+  const P=i?cs[i-1]:null,N=i<cs.length-1?cs[i+1]:null,[p0,p1]=P?capAt(P).map(so):[0,0],[n0,n1]=N?capAt(N).map(so):[T,T];
   const mode=e.clientX-r.left<6?'l':r.right-e.clientX<6?'r':'m';let a=o0,b=o1,pe=p1,ns=n0,moved=false;   // an edge into a neighbour pushes its edge too
   it.setPointerCapture(e.pointerId);const ps=snapPts([it]);
   it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3)moved=true;if(!moved)return;const dt=snapDt(ev,mode,o0,o1,(ev.clientX-x0)/W0*T,ps,W0);
     if(mode==='m'){a=Math.max(p1,Math.min(n0-(o1-o0),o0+dt));b=a+o1-o0}
     else if(mode==='l'){a=Math.max(P?p0+.1:0,Math.min(o1-.1,o0+dt));pe=Math.min(p1,a)}else{b=Math.min(N?n1-.1:T,Math.max(o0+.1,o1+dt));ns=Math.max(n0,b)}
-    it.style.left=a/T*100+'%';it.style.width=(b-a)/T*100+'%';v.pause();v.currentTime=mode==='r'?Math.max(a,b-.04):a+.02;
-    const ct={...(S.cap_times||{}),[c.w[0]]:[a,b]};if(P&&pe!==p1)ct[P.w[0]]=[p0,pe];if(N&&ns!==n0)ct[N.w[0]]=[ns,n1];S.cap_times=ct;drawCapPrev()};   // the caption on the video follows
+    it.style.left=a/T*100+'%';it.style.width=(b-a)/T*100+'%';v.pause();v.currentTime=os(mode==='r'?Math.max(a,b-.04):a+.02);
+    const ct={...(S.cap_times||{}),[c.w[0]]:[os(a),os(b)]};if(P&&pe!==p1)ct[P.w[0]]=[os(p0),os(pe)];if(N&&ns!==n0)ct[N.w[0]]=[os(ns),os(n1)];S.cap_times=ct;drawCapPrev()};   // the caption on the video follows
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();const r2=x=>Math.round(x*100)/100;
-    const put=x=>x.c?post('/captions/time',{w:x.c.w[0],s:r2(x.s),e:r2(x.e),text:x.c.text}):null;
+    const put=x=>x.c?post('/captions/time',{w:x.c.w[0],s:r2(os(x.s)),e:r2(os(x.e)),text:x.c.text}):null;
     const now=[{c,s:a,e:b},P&&pe!==p1&&{c:P,s:p0,e:pe},N&&ns!==n0&&{c:N,s:ns,e:n1}].filter(Boolean),was=[{c,s:o0,e:o1},P&&pe!==p1&&{c:P,s:p0,e:p1},N&&ns!==n0&&{c:N,s:n0,e:n1}].filter(Boolean);
     const save=xs=>Promise.all(xs.map(put)).then(()=>{$('edtracks')._h=null;return load()});
-    if(typeof edPush==='function')edPush('caption timing',()=>save(was),()=>save(now));
-    const res=await Promise.all(now.map(put));toast(res.every(x=>x&&(x.ok||x.id))?`"${c.text}" shows ${fmtx(a)}–${fmtx(b)}.`:'That did not save.');
+    const res=await Promise.all(now.map(put));edPush('retime caption',()=>save(was),()=>save(now));toast(res.every(x=>x&&(x.ok||x.id))?`"${c.text}" shows ${fmtx(a)}–${fmtx(b)}.`:'That did not save.');
     $('edtracks')._h=null;await load()}});
 // the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
 // draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
 let vsel=null,edDragged=0;
 const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
+// ripple (the Video row's magnet, on unless turned off, overrides.json cuts.ripple): the timeline runs on the output clock,
+// the video with its cut pieces out, as the bake renders it. Everything is kept on the source clock; so maps a source time
+// onto the output clock (inside a cut piece: its join), os back. With ripple off both are t and a cut piece keeps its place
+const rip=()=>!!S&&!!view&&view.stage==='edit'&&!alt&&!cmp&&cuts().ripple!==false;
+function gonR(){if(!rip())return [];const g=cuts().gone;if(gonR.g!==g){gonR.g=g;gonR.m=g.map(r=>[+r[0],+r[1]]).sort((x,y)=>x[0]-y[0]).reduce((o,r)=>{const l=o[o.length-1];if(l&&r[0]<=l[1])l[1]=Math.max(l[1],r[1]);else o.push(r);return o},[])}return gonR.m}   // merged, in order
+const so=t=>{let s=0;for(const[a,b] of gonR()){if(t>=b)s+=b-a;else{if(t>a)return a-s;break}}return t-s};
+const os=t=>{for(const[a,b] of gonR()){if(t>=a)t+=b-a;else break}return t};
+const TO=()=>so(D()),inGone=(a,b)=>gonR().some(([x,y])=>a>=x-.005&&b<=y+.005);   // an item wholly in a cut piece is not drawn
 function vpieces(){const T=D(),c=cuts(),b=[0,...c.splits.filter(t=>t>0&&t<T),T];
   return b.slice(0,-1).map((a,i)=>({a,b:b[i+1],cut:c.gone.some(([x,y])=>a>=x-.01&&b[i+1]<=y+.01)}))}
-async function setCuts(c,what){editAt=performance.now();if(what){const was=JSON.parse(JSON.stringify(cuts()));edPush(what,()=>setCuts(was),()=>setCuts(c))}S.cuts=c;$('edtracks')._h=null;renderEdTracks();
-  const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');$('edtracks')._h=null;await load()}   // ok, or the note it made
+async function setCuts(c,what){editAt=performance.now();const was=JSON.parse(JSON.stringify(cuts()));S.cuts=c;$('edtracks')._h=null;renderEdTracks();
+  const r=await post('/timeline/cut',c);if(!r.ok&&!r.id)toast(r.error||'That did not save.');else if(what)edPush(what,()=>setCuts(was),()=>setCuts(c));$('edtracks')._h=null;await load()}   // ok, or the note it made
 // a song split at the playhead (Cmd+B with it picked, or Split in its box): two clips of one file, each trims and moves on its own
 async function sndSplit(x,t){t=Math.round(t*100)/100;if(!x||x.kind!=='clip'||t<x.t+.1||t>x.t+x.dur-.1){toast('Put the playhead inside the song to split it.');return false}
   const was={placed:x.id,t:x.t,in:x.in||0,dur:x.dur};let nid=null;
   const go=async()=>{const r=await post('/sfx/split',{placed:x.id,at:t});if(!r.id&&!r.ok)throw new Error(r.error||'');await load(true);const y=(S.placed_sounds||[]).find(y=>y.id!==x.id&&y.sound===x.sound&&Math.abs(y.t-t)<.02);nid=y&&y.id};
   try{await go()}catch(e){toast(e.message||'That did not save.');return false}
-  edPush('song split',async()=>{if(nid)await post('/sfx/remove',{t,src:x.sound,placed:nid});await edSave('/sfx/move',was)},go);
+  edPush('split song',async()=>{if(nid)await post('/sfx/remove',{t,src:x.sound,placed:nid});await edSave('/sfx/move',was)},go);
   $('sndpick').hidden=true;$('edtracks')._h=null;renderEdTracks();toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`);return true}
 function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.splits.some(x=>Math.abs(x-t)<.1))return;
-  setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
-function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
+  setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split video');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
+function cutPiece(a){const c=cuts(),g=gonR().find(g=>Math.abs(g[0]-a)<.01);   // ripple: a join puts its whole piece back
+  if(g){vsel=null;setCuts({...c,gone:c.gone.filter(([x,y])=>!(x>=g[0]-.005&&y<=g[1]+.005))},'put piece back');return toast('Piece put back.')}
+  const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;
   const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
-  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now.'+(S.layer?'':' Submit feedback and the next draft is cut.'))}
+  setCuts({...c,gone},p.cut?'put piece back':'cut piece');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now.'+(S.sent?' Claude cuts it in the next draft.':''))}
 // the transcript cuts on the edit too: Delete puts the words' time (first word's start to the last one's end, edit
 // clock) in the Video row's gone ranges, so the row, the skip and Claude's note follow; Delete on struck words puts them back
 const edTxOk=()=>!alt&&!!S&&!!view&&view.stage==='edit'&&noteOk()&&!cmp;
@@ -1531,7 +1546,7 @@ function edTxOp(op){const ks=[];for(let k=txSel.a;k<=txSel.b;k++)if(!W[k].nt&&W[
   if(!op)op=ks.every(edGone)?'restore':'cut';const r2=x=>Math.round(x*100)/100,a=r2(W[ks[0]].t),b=r2(wEnd(ks[ks.length-1])),c=cuts(),T=D();
   const gone=op==='cut'?[...c.gone,[a,b]]:c.gone.flatMap(([x,y])=>y<=a||x>=b?[[x,y]]:[...(a>x?[[x,a]]:[]),...(b<y?[[b,y]]:[])]);
   const splits=[...new Set([...c.splits,...[a,b].filter(t=>t>.05&&t<T-.05&&!c.splits.some(x=>Math.abs(x-t)<.01))])].sort((x,y)=>x-y);   // the row shows it as its own piece
-  txSel=null;hideBar();setCuts({...c,splits,gone},op==='cut'?'words cut':'words put back');renderTx();renderTools();toast(op==='cut'?'Cut. It plays without those words now.':'Words put back.')}
+  txSel=null;hideBar();setCuts({...c,splits,gone},op==='cut'?'cut words':'put words back');renderTx();renderTools();toast(op==='cut'?'Cut. It plays without those words now.':'Words put back.')}
 // one jump per cut: the frame a seek lands on can start before the cut's end (a 24 fps video, FPS is 30), so the same
 // jump never fires again within 0.5 s, or it seeks in a loop and the sound stutters and repeats
 let goneTo=null,goneAt=0;
@@ -1542,12 +1557,17 @@ function skipGone(t){if(v.paused||!S||!view||view.stage!=='edit'||cmp||alt)retur
 // The transcript keeps its own undo (HIST); whichever was touched last takes the key.
 const EH={u:[],r:[]};let edAt=0,txAt=0;
 // key: changes in a row to one thing (typing a caption) are one undo
-function edPush(what,undo,redo,key){const l=EH.u[EH.u.length-1];if(key&&l&&l.key===key&&performance.now()-edAt<4000){l.redo=redo}else{EH.u.push({what,undo,redo,key});if(EH.u.length>60)EH.u.shift()}EH.r=[];edAt=performance.now();edBtns()}
-function edBtns(){$('undob').disabled=!EH.u.length;$('redob').disabled=!EH.r.length}
+// j: review.py's journal ids of the saves the edit made (post collects them in JQ): Undo puts the files back as they
+// were before the first, Redo as they were after the last, byte for byte. An entry without them replays undo or redo
+let JQ=[];
+function edPush(what,undo,redo,key){const j=JQ.splice(0),l=EH.u[EH.u.length-1];if(key&&l&&l.key===key&&performance.now()-edAt<4000){l.redo=redo;l.j=[...(l.j||[]),...j]}else{EH.u.push({what,undo,redo,key,j});if(EH.u.length>60)EH.u.shift()}EH.r=[];edAt=performance.now();edBtns()}
+const jPush=what=>edPush(what,async()=>{},async()=>{});   // an edit undone by its journal alone
+function edBtns(){const u=EH.u.at(-1),r=EH.r.at(-1);$('undob').disabled=!u;$('redob').disabled=!r;$('undob').title=u?`Undo ${u.what} (⌘Z)`:'Undo (⌘Z)';$('redob').title=r?`Redo ${r.what} (⇧⌘Z)`:'Redo (⇧⌘Z)'}
 const edSave=(path,b)=>post(path,b).then(r=>{if(!(r.ok||r.id))throw new Error(r.error||'');$('edtracks')._h=null;return load()});
 async function edUndo(redo){if(tx)await textAuto();const h=(redo?EH.r:EH.u).pop();if(!h)return;(redo?EH.u:EH.r).push(h);h.key=null;edAt=performance.now();edBtns();
   if(csel){csel=null;drawCard()}if(tx)setText(null);   // what was picked may be what changes: let go, so the old box is not drawn over it
-  try{await (redo?h.redo:h.undo)();$('cbody')._s=null;$('edtracks')._h=null;await load(true);toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
+  try{if(h.j&&h.j.length){const r=await post('/timeline/restore',{j:redo?Math.max(...h.j):Math.min(...h.j),side:redo?'after':'before'});if(!r.ok)throw new Error('That change was on another draft.')}
+    else await (redo?h.redo:h.undo)();JQ.length=0;$('cbody')._s=null;$('edtracks')._h=null;await load(true);toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
 $('undob').onclick=()=>edUndo();$('redob').onclick=()=>edUndo(true);
 $('tx').addEventListener('pointerdown',()=>txAt=performance.now(),true);
 // Cmd+Z, Shift+Cmd+Z: a slider or a colour keeps the focus after a change, so they do not count as typing
@@ -1560,57 +1580,57 @@ document.addEventListener('keydown',e=>{if(!(e.metaKey||e.ctrlKey)||e.altKey||e.
 const tip=(el,t)=>{let b=el.querySelector('.etip');if(!b){b=document.createElement('b');b.className='etip';el.appendChild(b)}b.textContent=t};
 $('edtracks').addEventListener('pointerdown',e=>{const h=e.target.closest('.vsp');if(!h||e.button)return;e.preventDefault();
   const t0=+h.dataset.vs,T=D(),tk=h.parentElement,W0=tk.getBoundingClientRect().width,x0=e.clientX,c=cuts();
-  const bs=[0,...c.splits.filter(t=>t>0&&t<T),T],i=bs.indexOf(t0),lo=bs[i-1]+.1,hi=bs[i+1]-.1,pc=t=>t/T*100;
+  const bs=[0,...c.splits.filter(t=>t>0&&t<T),T],i=bs.indexOf(t0),lo=bs[i-1]+.1,hi=bs[i+1]-.1,pc=t=>so(t)/TO()*100;
   const L=tk.querySelector(`[data-va="${bs[i-1]}"]`),R=tk.querySelector(`[data-va="${t0}"]`);let t=t0,moved=false;
   h.setPointerCapture(e.pointerId);h.classList.add('drag');tip(h,fmtx(t0));const ps=snapPts([L,R]);
-  h.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>2)moved=true;if(!moved)return;t=t0+(ev.clientX-x0)/W0*T;if(!ev.altKey)t+=snapTo(ev,[t],ps,W0);t=Math.max(lo,Math.min(hi,t));
+  h.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>2)moved=true;if(!moved)return;let o=so(t0)+(ev.clientX-x0)/W0*TO();if(!ev.altKey)o+=snapTo(ev,[o],ps,W0);t=Math.max(lo,Math.min(hi,os(o)));
     t=Math.round(t*100)/100;h.style.left=pc(t)+'%';tip(h,fmtx(t));
     if(L)L.style.width=`calc(${pc(t)-pc(bs[i-1])}% - 2px)`;if(R){R.style.left=pc(t)+'%';R.style.width=`calc(${pc(bs[i+1])-pc(t)}% - 2px)`}
     v.pause();v.currentTime=t};
   h.onpointerup=()=>{h.onpointermove=h.onpointerup=null;h.classList.remove('drag');h.querySelector('.etip')?.remove();if(!moved||Math.abs(t-t0)<.005)return;edDragged=performance.now();
-    const m=x=>Math.abs(x-t0)<.005?t:x;setCuts({splits:c.splits.map(m).sort((a,b)=>a-b),gone:c.gone.map(r=>r.map(m))},'split moved');toast(`Split moved to ${fmtx(t)}.`)}});
-$('edtracks').addEventListener('dblclick',e=>{const h=e.target.closest('.vsp');if(!h)return;const t=+h.dataset.vs,c=cuts();
+    const m=x=>Math.abs(x-t0)<.005?t:x;setCuts({...c,splits:c.splits.map(m).sort((a,b)=>a-b),gone:c.gone.map(r=>r.map(m))},'move split');toast(`Split moved to ${fmtx(t)}.`)}});
+$('edtracks').addEventListener('dblclick',e=>{const jn=e.target.closest('[data-vj]');if(jn)return cutPiece(+jn.dataset.vj);const h=e.target.closest('.vsp');if(!h)return;const t=+h.dataset.vs,c=cuts();
   if(c.gone.some(r=>r.some(x=>Math.abs(x-t)<.005)))return toast('That split is the edge of a cut. Put the piece back first.');
-  setCuts({...c,splits:c.splits.filter(x=>Math.abs(x-t)>=.005)},'split removed');toast('Split removed.')});
+  setCuts({...c,splits:c.splits.filter(x=>Math.abs(x-t)>=.005)},'remove split');toast('Split removed.')});
 // the Images row: every card on the video as a clip. Click it to select it on the video; drag it to move it in time,
 // an edge to trim it. It saves on release (/card/edit start, end into overrides.json) and bakes into the video by itself.
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.img');if(!it||e.button)return;
   const x=cardsAll().find(c=>c.key===it.dataset.ek);if(!x)return;
   const p=(S.cards_pending||[]).find(p=>p.key===x.key)||{},s0=p.start??x.s,e0=p.end??x.e;
-  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
-  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=s0,en=e0,moved=false;const y0=e.clientY,ps=snapPts(mselSkip(it));
+  const T=TO(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX,a0=so(s0),b0=so(e0);   // a0, b0, A, B: the output clock
+  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=s0,en=e0,A=a0,B=b0,moved=false;const y0=e.clientY,ps=snapPts(mselSkip(it));
   it.setPointerCapture(e.pointerId);
-  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,s0,e0,(ev.clientX-x0)/W0*T,ps,W0);
-    if(mode==='m'){st=Math.max(0,Math.min(T-(e0-s0),s0+dt));en=st+e0-s0;laneMv(it,ev,y0);mselMv(it,st-s0)}
-    else if(mode==='l')st=Math.max(0,Math.min(e0-.2,s0+dt));else en=Math.min(T,Math.max(s0+.2,e0+dt));
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,a0,b0,(ev.clientX-x0)/W0*T,ps,W0);
+    if(mode==='m'){A=Math.max(0,Math.min(T-(b0-a0),a0+dt));B=A+b0-a0;st=os(A);en=os(B);laneMv(it,ev,y0);mselMv(it,A-a0)}
+    else if(mode==='l'){A=Math.max(0,Math.min(b0-.2,a0+dt));st=os(A)}else{B=Math.min(T,Math.max(a0+.2,b0+dt));en=os(B)}
     st=Math.round(st*100)/100;en=Math.round(en*100)/100;
-    it.classList.add('drag');it.style.left=st/T*100+'%';it.style.width=(en-st)/T*100+'%';tip(it,`${fmtx(st)}–${fmtx(en)}`);
+    it.classList.add('drag');it.style.left=A/T*100+'%';it.style.width=(B-A)/T*100+'%';tip(it,`${fmtx(A)}–${fmtx(B)}`);
     S.cards_pending=[...(S.cards_pending||[]).filter(q=>q.key!==x.key),{...p,key:x.key,start:st,end:en}];v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02;liveSync()};   // the next poll has the saved one
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;it.querySelector('.etip')?.remove();if(!moved)return;edDragged=performance.now();
     const b={key:x.key,label:x.label,t:st,t_end:en},lz=laneUp(it),me=mkey(it),n0=EH.u.length;
     try{if(Math.abs(st-s0)>.005||Math.abs(en-e0)>.005){await edSave('/card/edit',{...b,start:st,end:en});toast(`${x.label[0].toUpperCase()+x.label.slice(1)} now ${fmtx(st)}–${fmtx(en)}.`);
-      edPush('image moved',()=>edSave('/card/edit',{...b,start:s0,end:e0}),()=>edSave('/card/edit',{...b,start:st,end:en}))}
-      if(lz)await lz();await mselUp(me,st-s0);edGroup('image moved',n0)}
+      edPush('move image',()=>edSave('/card/edit',{...b,start:s0,end:e0}),()=>edSave('/card/edit',{...b,start:st,end:en}))}
+      if(lz)await lz();await mselUp(me,A-a0);edGroup('move image',n0)}
     catch(err){toast(err.message||'That did not save.')}$('edtracks')._h=null;renderEdTracks()}});
 // drag a text on the Text row to move it in time, or drag its edge to trim it; it saves on release (texts.json)
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.txt');if(!it||it.dataset.ef||e.button||e.target.closest('[data-ex]'))return;
   const x=(S.texts||[]).find(x=>String(x.id)===it.dataset.et);if(!x)return;
-  const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
-  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=x.start,en=x.end,moved=false;const y0=e.clientY,ps=snapPts(mselSkip(it));
+  const T=TO(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX,a0=so(x.start),b0=so(x.end);   // a0, b0, A, B: the output clock
+  const mode=e.clientX-r.left<7?'l':r.right-e.clientX<7?'r':'m';let st=x.start,en=x.end,A=a0,B=b0,moved=false;const y0=e.clientY,ps=snapPts(mselSkip(it));
   it.setPointerCapture(e.pointerId);
-  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,x.start,x.end,(ev.clientX-x0)/W0*T,ps,W0);
-    if(mode==='m'){st=Math.max(0,Math.min(T-(x.end-x.start),x.start+dt));en=st+x.end-x.start;laneMv(it,ev,y0);mselMv(it,st-x.start)}
-    else if(mode==='l')st=Math.max(0,Math.min(x.end-.2,x.start+dt));else en=Math.min(T,Math.max(x.start+.2,x.end+dt));
-    it.classList.add('drag');it.style.left=st/T*100+'%';it.style.width=(en-st)/T*100+'%';x._t=[st,en];v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02;liveSync()};
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,a0,b0,(ev.clientX-x0)/W0*T,ps,W0);
+    if(mode==='m'){A=Math.max(0,Math.min(T-(b0-a0),a0+dt));B=A+b0-a0;st=os(A);en=os(B);laneMv(it,ev,y0);mselMv(it,A-a0)}
+    else if(mode==='l'){A=Math.max(0,Math.min(b0-.2,a0+dt));st=os(A)}else{B=Math.min(T,Math.max(a0+.2,b0+dt));en=os(B)}
+    it.classList.add('drag');it.style.left=A/T*100+'%';it.style.width=(B-A)/T*100+'%';x._t=[st,en];v.pause();v.currentTime=mode==='r'?Math.max(st,en-.05):st+.02;liveSync()};
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
     const b={id:x.id,start:Math.round(st*100)/100,end:Math.round(en*100)/100},was={id:x.id,start:x.start,end:x.end},lz=laneUp(it),me=mkey(it),n0=EH.u.length;delete x._t;
     if(Math.abs(st-x.start)>.005||Math.abs(en-x.end)>.005){const r=await post('/text/edit',b);
-      if(r.ok||r.id)edPush(`"${x.text}" moved`,()=>edSave('/text/edit',was),()=>edSave('/text/edit',b));
-      toast(r.ok||r.id?`"${x.text}" now ${fmtx(st)}–${fmtx(en)}.`:r.error||'That did not save.')}
-    if(lz)await lz();await mselUp(me,st-x.start);edGroup(`"${x.text}" moved`,n0);$('edtracks')._h=null;await load(true)}});
+      if(r.ok||r.id)edPush('move text',()=>edSave('/text/edit',was),()=>edSave('/text/edit',b));
+      toast(r.ok||r.id?`"${x.text}" now ${fmtx(A)}–${fmtx(B)}.`:r.error||'That did not save.')}
+    if(lz)await lz();await mselUp(me,A-a0);edGroup('move text',n0);$('edtracks')._h=null;await load(true)}});
 // drop a video or an image on the timeline (at the spot) or on the video (at the playhead, where it landed): it goes
 // into Media and on screen there at once (medAdd); a sound onto the Sounds row; anything else in "Anything to add?"
-const dropT=e=>{const tk=e.target.closest('.etrack');if(!tk)return v.currentTime;const r=tk.getBoundingClientRect();return Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*D()};
+const dropT=e=>{const tk=e.target.closest('.etrack');if(!tk)return v.currentTime;const r=tk.getBoundingClientRect();return os(Math.max(0,Math.min(1,(e.clientX-r.left)/r.width))*TO())};
 ['timeline','p1'].forEach(id=>{const el=$(id);
   el.addEventListener('dragover',e=>{const ty=[...e.dataTransfer.types];if(!S||view.stage!=='edit'||!ty.includes('Files')&&!ty.includes('application/x-cooked-sound')&&!ty.includes('application/x-cooked-media'))return;e.preventDefault();
     document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'));const tk=e.target.closest('.etrack');if(tk)tk.classList.add('dropon')});
@@ -1629,22 +1649,24 @@ const dropT=e=>{const tk=e.target.closest('.etrack');if(!tk)return v.currentTime
     if(other.length){addImgs(other,say);toast(`Adding it at ${fmtx(t)}${say.startsWith('at ')?'':` on "${say}"`}. Submit feedback and Claude puts it there.`)}})});
 // the playhead drags, like CapCut: from its handle, the ruler or any empty part of a row. The video follows and stays paused;
 // near an edge of a zoomed timeline the rows scroll along
-$('edtracks').addEventListener('pointerdown',e=>{if(e.button||!(e.target.closest('.eruler,.eph')||e.target.closest('.etrack')&&!e.target.closest('.eitem,.vsp')))return;
+$('edtracks').addEventListener('pointerdown',e=>{if(e.button||!(e.target.closest('.eruler,.eph')||e.target.closest('.etrack')&&!e.target.closest('.eitem,.vsp,.vjn')))return;
   e.preventDefault();v.pause();tfol=false;const go=ev=>{const inn=document.querySelector('#edtracks .einner'),sc=$('escroll');if(!inn||!sc)return;
     const r=sc.getBoundingClientRect(),edge=ev.clientX<r.left+24?-16:ev.clientX>r.right-24?16:0;if(edge&&zm>1)tscrollTo(sc.scrollLeft+edge);
-    const ir=inn.getBoundingClientRect();v.currentTime=Math.max(0,Math.min(1,(ev.clientX-ir.left)/ir.width))*D();edPh()};go(e);
+    const ir=inn.getBoundingClientRect();v.currentTime=os(Math.max(0,Math.min(1,(ev.clientX-ir.left)/ir.width))*TO());edPh()};go(e);
   const up=()=>{document.removeEventListener('pointermove',go);document.removeEventListener('pointerup',up);edDragged=performance.now();tfol=true};
   document.addEventListener('pointermove',go);document.addEventListener('pointerup',up)});
-function edPh(){const ph=$('eph'),T=D();if(ph&&T)ph.style.left=v.currentTime/T*100+'%'}
+function edPh(){const ph=$('eph'),T=TO();if(ph&&T)ph.style.left=so(v.currentTime)/T*100+'%'}
 $('edtracks').addEventListener('click',async e=>{
-  const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem')){const r=tk.getBoundingClientRect();v.currentTime=Math.max(0,(e.clientX-r.left)/r.width*D());if(msel.size){msel.clear();renderEdTracks()}return}   /* click empty track: go there */
+  const tk=e.target.closest('.etrack');if(tk&&!e.target.closest('.eitem,.vjn')){const r=tk.getBoundingClientRect();v.currentTime=os(Math.max(0,(e.clientX-r.left)/r.width*TO()));if(msel.size){msel.clear();renderEdTracks()}return}   /* click empty track: go there */
   if(performance.now()-edDragged<300)return;
   const lt=e.target.closest('[data-lt]');if(lt){const k=lt.dataset.lk,i=+lt.dataset.li,f=lt.dataset.lt,st=(laneOf(k).state||[]).slice();
     while(st.length<=i)st.push(k==='snd'?{muted:false,locked:false}:{hidden:false,locked:false});st[i]={...st[i],[f]:!st[i][f]};
     if(f==='locked'&&st[i][f]){msel.clear();if(csel){csel=null;drawCard()}ssel=null;$('sndpick').hidden=true;if(tx)setText(null)}   // nothing in a locked lane stays picked
-    const nm=i?LNAME[k]+' '+(i+1):LNAME[k];return laneSave(k,{state:st},`${nm} ${st[i][f]?f:f==='locked'?'unlocked':f==='muted'?'unmuted':'shown'}`)}
+    const nm=i?LNAME[k]+' '+(i+1):LNAME[k];return laneSave(k,{state:st},`${(st[i][f]?{hidden:'hide',muted:'mute',locked:'lock'}:{hidden:'show',muted:'unmute',locked:'unlock'})[f]} ${nm}`)}
   const pk=e.shiftKey&&e.target.closest('[data-lkey]');if(pk&&(pk.dataset.ek||pk.dataset.et||pk.dataset.sp2&&placed(pk.dataset.sp2))){const k=mkey(pk);msel.has(k)?msel.delete(k):msel.add(k);return renderEdTracks()}   // shift-click: one more in the lot, or one out
   if(e.target.id==='vsplit')return splitAt(v.currentTime);
+  if(e.target.id==='vrip'){const c=cuts(),on=c.ripple!==false;return setCuts({...c,ripple:!on},on?'turn ripple off':'turn ripple on')}
+  const jn=e.target.closest('[data-vj]');if(jn){ssel=null;if(csel){csel=null;drawCard()}vsel=+jn.dataset.vj;v.pause();const g=gonR().find(g=>Math.abs(g[0]-vsel)<.01);if(g)v.currentTime=g[1]+.01;$('edtracks').querySelectorAll('.sel').forEach(x=>x.classList.remove('sel'));jn.classList.add('sel');return}   // a join: Delete puts its piece back (no redraw: a double-click lands on it)
   const ik=e.target.closest('[data-ek]');if(ik){const x=cardsAll().find(c=>c.key===ik.dataset.ek);if(!x)return;
     const p=(S.cards_pending||[]).find(p=>p.key===x.key)||{};vsel=ssel=null;v.currentTime=Math.max(x.s,Math.min(x.e-.05,p.start??x.s))+.02;return selectCard(x)}   // where the video shows it
   const vp=e.target.closest('[data-va]');if(vp){ssel=null;if(csel){csel=null;drawCard()}vsel=+vp.dataset.va;v.pause();v.currentTime=vsel+.02;$('edtracks')._h=null;return renderEdTracks()}
@@ -1658,7 +1680,7 @@ $('edtracks').addEventListener('click',async e=>{
   if(ti&&ex){e.stopPropagation();return delText(ti.dataset.et,!!ti.dataset.ef)}
   if(ti){if(tool!=='text')openTool('text');tlOpen=true;return editText(ti.dataset.et,ti.dataset.ef)}   // picked, not typed in
   if(si&&ex){e.stopPropagation();const sp=si.dataset.sp2&&placed(si.dataset.sp2);if(sp)return delSnd(sp);const r=await post('/sfx/remove',{t:+si.dataset.st,src:si.dataset.ssrc});
-    if(!r.id&&!r.ok)return toast(r.error||'That did not save.');toast('Sound removed.');$('edtracks')._h=null;return load()}
+    if(!r.id&&!r.ok)return toast(r.error||'That did not save.');jPush('remove sound');toast('Sound removed.');$('edtracks')._h=null;return load()}
   if(si&&si.dataset.sp2&&placed(si.dataset.sp2)){ssel=si.dataset.sp2;$('edtracks')._h=null;renderEdTracks();return openSndEdit(document.querySelector(`#edtracks [data-sp2="${CSS.escape(ssel)}"]`)||si)}   // the row was redrawn
   if(si){v.currentTime=Math.max(0,+si.dataset.st-.6);v.play();setTimeout(()=>v.pause(),1600)}});   /* hear it in place */
 // the sounds the user put on the timeline (sounds.json): a library sound, or an audio file dropped there (kind "clip",
@@ -1683,30 +1705,30 @@ function openSndEdit(el){const x=placed(ssel);if(!x)return;const P=$('sndpick'),
   P._v0=x.vol??1;
   P.style.left=Math.max(0,Math.min(tr.width-260,r.left-tr.left))+'px';P.style.bottom=(tr.bottom-r.top+6)+'px';P.hidden=false;P.dataset.t=x.t}
 $('sndpick').addEventListener('input',e=>{if(e.target.id!=='svol')return;const x=placed(ssel);if(!x)return;x.vol=+e.target.value;$('svoln').textContent=Math.round(x.vol*100)+'%';liveAudio();liveSync();
-  const P=$('sndpick'),v0=P._v0,v1=x.vol;clearTimeout(P._vt);P._vt=setTimeout(()=>post('/sfx/move',{placed:x.id,vol:v1}).then(r=>{if((r.id||r.ok)&&v0!==v1)edPush('volume',()=>edSave('/sfx/move',{placed:x.id,vol:v0}),()=>edSave('/sfx/move',{placed:x.id,vol:v1}),'vol:'+x.id)}),400)});
+  const P=$('sndpick'),v0=P._v0,v1=x.vol;clearTimeout(P._vt);P._vt=setTimeout(()=>post('/sfx/move',{placed:x.id,vol:v1}).then(r=>{if((r.id||r.ok)&&v0!==v1)edPush('change volume',()=>edSave('/sfx/move',{placed:x.id,vol:v0}),()=>edSave('/sfx/move',{placed:x.id,vol:v1}),'vol:'+x.id)}),400)});
 $('sndpick').addEventListener('click',async e=>{const x=placed(ssel);if(!x)return;
   if(e.target.closest('#splayit')){v.currentTime=Math.max(0,x.t-.3);v.play();return}
   if(e.target.closest('#ssplit'))return sndSplit(x,v.currentTime);
   if(e.target.closest('#srm')){$('sndpick').hidden=true;return delSnd(x)}});
 async function delSnd(x){S.placed_sounds=(S.placed_sounds||[]).filter(y=>y!==x);liveSync();const r=await post('/sfx/remove',{t:x.t,src:x.sound,placed:x.id});ssel=null;if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
-  edPush('sound removed',()=>edSave('/sfx/add',{t:x.t,item:x}),()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}));
+  edPush('remove sound',()=>edSave('/sfx/add',{t:x.t,item:x}),()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}));
   toast('Sound removed.');$('edtracks')._h=null;await load()}
 // drag a placed sound along the Sounds row to move it; a dropped audio clip's edges trim it (CapCut's way)
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.snd[data-sp2]');if(!it||e.button||e.target.closest('[data-ex]'))return;
-  const x=placed(it.dataset.sp2);if(!x)return;const T=D(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
+  const x=placed(it.dataset.sp2);if(!x)return;const T=TO(),W0=it.parentElement.getBoundingClientRect().width,r=it.getBoundingClientRect(),x0=e.clientX;
   const clipped=x.kind==='clip',edge=Math.min(10,r.width/4),mode=clipped&&e.clientX-r.left<edge?'l':clipped&&r.right-e.clientX<edge?'r':clipped&&e.altKey?'s':'m',o={t:x.t,in:x.in||0,dur:x.dur};let moved=false;
-  const y0=e.clientY,ps=snapPts(mselSkip(it));it.setPointerCapture(e.pointerId);
-  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,o.t,o.t+sndLen({...x,...o}),(ev.clientX-x0)/W0*T,ps,W0);
-    if(mode==='m'){x.t=Math.max(0,Math.min(T-.1,o.t+dt));laneMv(it,ev,y0);mselMv(it,x.t-o.t)}
+  const y0=e.clientY,ps=snapPts(mselSkip(it)),a0=so(o.t),b0=so(o.t+sndLen({...x,...o}));it.setPointerCapture(e.pointerId);   // a0, b0: the output clock
+  it.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)>3||Math.abs(ev.clientY-y0)>6)moved=true;if(!moved)return;const dt=snapDt(ev,mode,a0,b0,(ev.clientX-x0)/W0*T,ps,W0);
+    if(mode==='m'){x.t=os(Math.max(0,Math.min(T-.1,a0+dt)));laneMv(it,ev,y0);mselMv(it,so(x.t)-a0)}
     else if(mode==='s')x.in=Math.max(0,Math.min((x.d||o.in+o.dur)-o.dur,o.in-dt));   // Alt: the clip stays, the part of the song in it slides
-    else if(mode==='l'){const k=Math.max(-o.in,Math.min(o.dur-.2,dt));x.t=o.t+k;x.in=o.in+k;x.dur=o.dur-k}
-    else x.dur=Math.max(.2,Math.min(x.d-o.in,T-o.t,o.dur+dt));
-    it.classList.add('drag');it.style.left=x.t/T*100+'%';it.style.width=sndLen(x)/T*100+'%';v.pause();v.currentTime=mode==='r'?x.t+x.dur-.05:x.t;liveSync()};
+    else if(mode==='l'){const k=Math.max(-o.in,Math.min(o.dur-.2,os(Math.max(0,a0+dt))-o.t));x.t=o.t+k;x.in=o.in+k;x.dur=o.dur-k}
+    else x.dur=Math.max(.2,Math.min(x.d-o.in,D()-o.t,os(b0+dt)-o.t));
+    it.classList.add('drag');it.style.left=so(x.t)/T*100+'%';it.style.width=(so(x.t+sndLen(x))-so(x.t))/T*100+'%';v.pause();v.currentTime=mode==='r'?x.t+x.dur-.05:x.t;liveSync()};
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();
     const b={placed:x.id,t:Math.round(x.t*100)/100,...(clipped?{in:Math.round(x.in*100)/100,dur:Math.round(x.dur*100)/100}:{})},was={placed:x.id,t:o.t,...(clipped?{in:o.in,dur:o.dur}:{})},lz=laneUp(it),me=mkey(it),n0=EH.u.length;
-    if(Math.abs(x.t-o.t)>.005||clipped&&(Math.abs(x.in-o.in)>.005||Math.abs(x.dur-o.dur)>.005)){const r=await post('/sfx/move',b);if(r.id||r.ok)edPush('sound moved',()=>edSave('/sfx/move',was),()=>edSave('/sfx/move',b));
+    if(Math.abs(x.t-o.t)>.005||clipped&&(Math.abs(x.in-o.in)>.005||Math.abs(x.dur-o.dur)>.005)){const r=await post('/sfx/move',b);if(r.id||r.ok)edPush('move sound',()=>edSave('/sfx/move',was),()=>edSave('/sfx/move',b));
       toast(r.id||r.ok?`${x.sound.replace(/\.[a-z0-9]+$/i,'')} at ${fmtx(x.t)}. It plays there now.`:r.error||'That did not save.')}
-    if(lz)await lz();await mselUp(me,x.t-o.t);edGroup('sound moved',n0);$('edtracks')._h=null;await load(true)}});
+    if(lz)await lz();await mselUp(me,so(x.t)-a0);edGroup('move sound',n0);$('edtracks')._h=null;await load(true)}});
 // a sound Claude placed: it stays at its time, but drags up or down into another lane
 $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eitem.snd');if(!it||e.button||e.target.closest('[data-ex]')||it.dataset.sp2&&placed(it.dataset.sp2))return;
   const y0=e.clientY;let moved=false;it.setPointerCapture(e.pointerId);
@@ -1717,7 +1739,7 @@ async function upAudio(f,t){toast(`Adding ${f.name}...`);
   const r=await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/audio/upload?name='+encodeURIComponent(f.name)+'&at='+t.toFixed(2));
     x.upload.onprogress=e=>{if(e.lengthComputable)toast(`Adding ${f.name}... ${Math.round(e.loaded/e.total*100)}%`)};
     x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Drop it again.'});x.send(f)});
-  if(!r.id&&!r.ok)return toast(r.error||'That audio was not added.');toast(`${f.name} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load();const lastS=(S.placed_sounds||[]).at(-1);if(lastS)sndAddedUndo(lastS.sound)}
+  if(!r.id&&!r.ok)return toast(r.error||'That audio was not added.');if(r.j!=null)JQ.push(r.j);toast(`${f.name} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load();const lastS=(S.placed_sounds||[]).at(-1);if(lastS)sndAddedUndo(lastS.sound)}
 $('audfile').onchange=e=>{const f=e.target.files[0],t=+($('sndpick').dataset.t||v.currentTime);e.target.value='';if(f)upAudio(f,t)};
 function openSndPick(btn){const P=$('sndpick'),own=((S.sounds_ui||{}).own)||[],groups={};
   own.forEach(f=>{const m=f.match(/^([a-z0-9]+) /i),g=m?m[1]:'Yours';(groups[g]=groups[g]||[]).push(f)});
@@ -2051,7 +2073,7 @@ $('list').addEventListener('click',e=>{
   renderList();
 });
 document.addEventListener('pointerdown',e=>{if(trMenu!=null&&!e.target.closest('.trmenu,.trsel')){trMenu=null;renderList()}});
-async function post(u,b){editAt=performance.now();const r=await fetch(u,{method:'POST',body:JSON.stringify(b)});editAt=performance.now();return r.ok?r.json():{}}
+async function post(u,b){editAt=performance.now();const r=await fetch(u,{method:'POST',body:JSON.stringify(b)});editAt=performance.now();const j=r.ok?await r.json():{};if(j&&j.j!=null)JQ.push(j.j);return j}
 
 $('stages').addEventListener('click',e=>{
   const b=e.target.closest('button');if(!b||b.disabled)return;
@@ -2422,6 +2444,19 @@ v.addEventListener('timeupdate',()=>{skip(v.currentTime);skipGone(v.currentTime)
 
 // player
 const toggle=()=>{v.paused?v.play():v.pause()};
+// J K L, as in CapCut and Resolve: back, stop, forward; L again plays 2x (then 4x), J again backs 2x. Steps and jumps
+// move on the timeline's clock (ripple: a cut piece is never landed in)
+let shut=0,shutRaf=0;
+const shutOff=()=>{cancelAnimationFrame(shutRaf);if(shut)v.playbackRate=speed;shut=0};
+function shuttle(d){const was=shut;shutOff();if(!d)return v.pause();
+  if(d>0){shut=was>0?Math.min(was*2,4):1;v.playbackRate=speed*shut;v.play();return}
+  shut=was<0?Math.max(was*2,-4):-1;v.pause();let t0=performance.now();
+  const f=now=>{if(shut>=0)return;const o=so(v.currentTime)-(now-t0)/1000*-shut*speed;t0=now;v.currentTime=os(Math.max(0,o));if(o<=0){shut=0;return}shutRaf=requestAnimationFrame(f)};shutRaf=requestAnimationFrame(f)}
+const stepO=d=>{v.currentTime=os(Math.max(0,Math.min(TO(),so(v.currentTime)+d)))};
+// up or down: the playhead to the previous or next edge of a piece or a clip on the timeline (not the caption words)
+function edgeJump(dir){const T=TO(),n=s=>parseFloat(s||''),c=so(v.currentTime),es=[0,T];
+  document.querySelectorAll('#edtracks .eitem:not(.cap),#edtracks .vsp,#edtracks .vjn').forEach(el=>{const a=n(el.style.left);if(isNaN(a))return;es.push(a/100*T);const w=n(el.style.width);if(!isNaN(w))es.push((a+w)/100*T)});
+  const t=dir<0?Math.max(...es.filter(x=>x<c-.02)):Math.min(...es.filter(x=>x>c+.02));if(!isFinite(t))return;shutOff();v.pause();v.currentTime=os(Math.min(Math.round(t*1000)/1000,T))}   // read back from % : rounded, or a join reads as just before it
 v.addEventListener('click',toggle);v2.addEventListener('click',toggle);$('play').onclick=toggle;
 const icon=()=>{$('play').innerHTML=$('fsplay').innerHTML=v.paused?'<svg width="14" height="14" viewBox="0 0 14 14"><path d="M3.5 1.5v11l9-5.5z" fill="currentColor"/></svg>':'<svg width="14" height="14" viewBox="0 0 14 14"><rect x="2" y="1" width="3.5" height="12" rx="1" fill="currentColor"/><rect x="8.5" y="1" width="3.5" height="12" rx="1" fill="currentColor"/></svg>';};
 v.addEventListener('play',icon);v.addEventListener('pause',icon);icon();
@@ -2470,8 +2505,8 @@ function tick(){const T=D(),t=v.currentTime,p=Math.min(100,t/T*100);
   document.querySelectorAll('.pin').forEach(el=>el.classList.toggle('cur',el.dataset.old==='0'&&Math.abs(+el.dataset.pt-t)<1));
   document.querySelectorAll('#ticks span[data-s]').forEach((el,i,all)=>el.classList.toggle('cur',t>=+el.dataset.s&&(!all[i+1]||t<+all[i+1].dataset.s)));
   document.querySelectorAll('.track .ph').forEach(el=>el.style.left=p+'%');
-  $('time').innerHTML=`<b>${fmtx(t)}</b><span>/ ${fmt(v.duration||0)}</span>`;
-  $('fsfill').style.width=$('fsknob').style.left=p+'%';$('fstime').innerHTML=`<b>${fmtx(t)}</b> / ${fmt(v.duration||0)}`;tfollow();tickTx();renderHits();renderTexts();if(!csel)drawPending();drawCapPrev();edPh()}
+  $('time').innerHTML=`<b>${fmtx(so(t))}</b><span>/ ${fmt(so(v.duration||0))}</span>`;   // ripple: the output clock
+  $('fsfill').style.width=$('fsknob').style.left=p+'%';$('fstime').innerHTML=`<b>${fmtx(so(t))}</b> / ${fmt(so(v.duration||0))}`;tfollow();tickTx();renderHits();renderTexts();if(!csel)drawPending();drawCapPrev();edPh()}
 v.addEventListener('timeupdate',tick);v.addEventListener('seeked',tick);
 const at=e=>{const r=bar.getBoundingClientRect();return Math.min(1,Math.max(0,(e.clientX-r.left)/r.width))*(v.duration||0)};
 bar.addEventListener('pointerdown',e=>{dragging=true;bar.setPointerCapture(e.pointerId);v.currentTime=at(e);tick()});
@@ -2517,8 +2552,10 @@ async function mselDel(){const ks=[...msel],n0=EH.u.length;msel.clear();
     if(row==='text'){const x=textItems().find(x=>String(x.id)===id);if(x)await delText(x.id,!!x.fresh)}
     else if(row==='img'){const x=cardsAll().find(c=>c.key===id);if(x){selectCard(x);await cardSave(true)}}
     else if(placed(id))await delSnd(placed(id))}
-  edGroup(`${ks.length} clips deleted`,n0);toast(`${ks.length} clips deleted.`)}
+  edGroup(`delete ${ks.length} clips`,n0);toast(`${ks.length} clips deleted.`)}
+const hoverClip=()=>(!lastPick||hoverMoved)&&!!document.querySelector('#edtracks .eitem:hover:not(.gone),#edtracks .vjn:hover');   // Delete goes to it, not the picked card
 function hoverDel(){if(lastPick&&!hoverMoved)return false;   // a click can scroll the rows: the clip under a still mouse is not the one picked
+  const jn=document.querySelector('#edtracks .vjn:hover');if(jn){cutPiece(+jn.dataset.vj);return true}
   const it=document.querySelector('#edtracks .eitem:hover');if(!it||it.classList.contains('gone'))return false;
   if(it.dataset.sp2&&placed(it.dataset.sp2)){$('sndpick').hidden=true;delSnd(placed(it.dataset.sp2));return true}   // its popover goes too
   if(it.dataset.et&&it.querySelector('[data-ex]')){delText(it.dataset.et,!!it.dataset.ef);return true}   // not a text Claude has
@@ -2527,30 +2564,53 @@ function hoverDel(){if(lastPick&&!hoverMoved)return false;   // a click can scro
   if(it.dataset.ek){const x=cardsAll().find(c=>c.key===it.dataset.ek);if(!x)return false;selectCard(x);cardSave(true);return true}
   if(it.dataset.va!=null){cutPiece(+it.dataset.va);return true}
   return false}
-// the timeline's keys, CapCut's: Delete takes out what was picked last, Cmd+B splits, Cmd+D duplicates a text,
-// Alt+arrows nudge the picked clip 0.1 s (1 s with Shift), Esc lets go of everything. True when a key was used
-function tlKeys(e){const k=e.key,del=k==='Delete'||k==='Backspace',mod=e.metaKey||e.ctrlKey;
+// the picked text, image or sound: {k, x, a, b} (its start and end on the source clock), or null
+function picked(){if(lastPick==='text'&&tx&&tx.edit&&!tx.edit.fresh){const x=(S.texts||[]).find(x=>String(x.id)===String(tx.edit.id));return x&&{k:'text',x,a:x.start,b:x.end}}
+  if(lastPick==='card'&&csel){const q=(S.cards_pending||[]).find(p=>p.key===csel.x.key)||{};return {k:'card',x:csel.x,a:q.start??csel.x.s,b:q.end??csel.x.e}}
+  const x=lastPick==='snd'&&ssel&&placed(ssel);return x?{k:'snd',x,a:x.t,b:x.t+sndLen(x)}:null}
+const KN={text:'text',card:'image',snd:'sound'};let CLIP=null;
+// a copy of a picked one at t (Cmd+V at the playhead, Cmd+D right after it), as long as it was; one undo
+async function pasteAt(P,t,verb){const r2=x=>Math.round(Math.max(0,x)*100)/100,x=P.x,len=P.b-P.a;t=r2(t);let r;
+  if(P.k==='text')r=await post('/text/add',{text:x.text,style:x.style,x_pct:x.x_pct,y_pct:x.y_pct,size_pct:x.size_pct,font:x.font,color:x.color,width_pct:x.width_pct,start:t,end:r2(t+len)});
+  else if(P.k==='snd')r=await post('/sfx/add',{t,item:{...x,id:Math.random().toString(16).slice(2,10),t}});
+  else{if(!x.src)return toast('This picture cannot be copied. Drop it on from Media instead.');r=await post('/media/add',{src:x.src,t,box:x.box});
+    if(r.key)await post('/card/edit',{key:r.key,label:x.label,t:r.start,t_end:r.end,start:t,end:r2(t+len)})}
+  if(!(r.id||r.ok||r.key))return toast(r.error||'That did not save.');jPush(`${verb} ${KN[P.k]}`);toast(`${verb==='paste'?'Pasted':'Duplicated'} at ${fmtx(so(t))}.`);$('edtracks')._h=null;await load()}
+// Q, W: the picked one's start or end to the playhead
+async function trimTo(P,q){const r2=x=>Math.round(x*100)/100,t=r2(v.currentTime),x=P.x;let r;
+  if(!(t>P.a+.1&&t<P.b-.1))return toast('Put the playhead inside the clip to trim it.');
+  if(P.k==='text')r=await post('/text/edit',{id:x.id,start:q?t:x.start,end:q?x.end:t});
+  else if(P.k==='card')r=await post('/card/edit',{key:x.key,label:x.label,t:x.s,t_end:x.e,start:q?t:P.a,end:q?P.b:t});
+  else{if(x.kind!=='clip')return toast('Only a song or an audio clip trims.');const k=t-x.t;r=await post('/sfx/move',q?{placed:x.id,t,in:r2((x.in||0)+k),dur:r2(x.dur-k)}:{placed:x.id,t:x.t,dur:r2(k)})}
+  if(!(r.id||r.ok))return toast(r.error||'That did not save.');jPush(`trim ${KN[P.k]}`);$('edtracks')._h=null;await load()}
+// the timeline's keys, CapCut's: Delete takes out what was picked last, Cmd+B splits, Cmd+C / Cmd+V copy and paste at the
+// playhead, Cmd+D duplicates, Cmd+A picks the whole lane, Q / W trim to the playhead, Alt+arrows nudge the picked clip
+// 0.1 s (1 s with Shift), Esc lets go of everything. True when a key was used
+function tlKeys(e){const k=e.key,del=k==='Delete'||k==='Backspace',mod=e.metaKey||e.ctrlKey,P=picked(),lk=k.toLowerCase();
+  if(mod&&!e.altKey&&!e.shiftKey&&lk==='c'&&P&&!String(getSelection())){e.preventDefault();CLIP=P;toast(`Copied the ${KN[P.k]}. ⌘V pastes it at the playhead.`);return true}
+  if(mod&&!e.altKey&&!e.shiftKey&&lk==='v'&&CLIP){e.preventDefault();pasteAt(CLIP,v.currentTime,'paste');return true}
+  if(mod&&!e.altKey&&lk==='d'&&P){e.preventDefault();pasteAt(P,P.b,'duplicate');return true}
+  if(mod&&!e.altKey&&!e.shiftKey&&lk==='a'){const el=document.querySelector('#edtracks .etrack:not(.lhid):not(.llock) .eitem.sel[data-lkey]');if(!el)return false;e.preventDefault();
+    el.parentElement.querySelectorAll('[data-lkey]').forEach(x=>{if(x.dataset.ek||x.dataset.et||x.dataset.sp2&&placed(x.dataset.sp2))msel.add(mkey(x))});renderEdTracks();toast(`${msel.size} picked. Drag one to move them all, Delete takes them out.`);return true}
+  if(!mod&&!e.altKey&&(lk==='q'||lk==='w')&&P){e.preventDefault();trimTo(P,lk==='q');return true}
   if(mod&&!e.altKey&&k.toLowerCase()==='b'){e.preventDefault();const x=lastPick==='snd'&&ssel&&placed(ssel);if(x&&x.kind==='clip')sndSplit(x,v.currentTime);else splitAt(v.currentTime);return true}
   if(k==='Escape'&&(csel||vsel!=null||ssel||tx)){csel=null;drawCard();vsel=null;ssel=null;$('sndpick').hidden=true;if(tx)setText(null);lastPick=null;$('edtracks')._h=null;renderEdTracks();return true}
   const T=tx&&tx.edit&&!tx.edit.fresh?(S.texts||[]).find(x=>String(x.id)===String(tx.edit.id)):null;
   if(del&&lastPick==='text'&&tx&&tx.edit){e.preventDefault();delText(tx.edit.id,tx.edit.fresh);return true}
   if(del&&lastPick==='cap'&&tool==='captions'&&capSel!=null){const c=((data().items||{}).captions||[]).find(c=>c.s===capSel);if(c){e.preventDefault();saveCapLine(c,'');return true}}
-  if(mod&&!e.altKey&&k.toLowerCase()==='d'&&lastPick==='text'&&T){e.preventDefault();const len=T.end-T.start;
-    post('/text/add',{text:T.text,style:T.style,x_pct:T.x_pct,y_pct:T.y_pct,size_pct:T.size_pct,font:T.font,color:T.color,width_pct:T.width_pct,start:T.end,end:T.end+len})
-      .then(r=>{toast(r.id||r.ok?`Copied "${T.text}" to ${fmtx(T.end)}.`:'That did not save.');$('edtracks')._h=null;load()});return true}
   if(e.altKey&&!mod&&(k==='ArrowLeft'||k==='ArrowRight')){const d=(k==='ArrowLeft'?-1:1)*(e.shiftKey?1:.1),r2=x=>Math.round(Math.max(0,x)*100)/100;
-    if(lastPick==='text'&&T){e.preventDefault();setText(null);post('/text/edit',{id:T.id,start:r2(T.start+d),end:r2(T.end+d)}).then(()=>{$('edtracks')._h=null;load()});return true}
+    if(lastPick==='text'&&T){e.preventDefault();setText(null);post('/text/edit',{id:T.id,start:r2(T.start+d),end:r2(T.end+d)}).then(r=>{if(r.ok||r.id)jPush('nudge text');$('edtracks')._h=null;load()});return true}
     if(lastPick==='card'&&csel){e.preventDefault();const q=(S.cards_pending||[]).find(p=>p.key===csel.x.key)||{},a=q.start??csel.x.s,b=q.end??csel.x.e;
-      post('/card/edit',{key:csel.x.key,label:csel.x.label,t:a,t_end:b,start:r2(a+d),end:r2(b+d)}).then(()=>{$('edtracks')._h=null;load()});return true}
-    if(lastPick==='snd'&&ssel&&placed(ssel)){e.preventDefault();const x=placed(ssel);post('/sfx/move',{placed:x.id,t:r2(x.t+d)}).then(()=>{$('edtracks')._h=null;load()});return true}}
+      post('/card/edit',{key:csel.x.key,label:csel.x.label,t:a,t_end:b,start:r2(a+d),end:r2(b+d)}).then(r=>{if(r.ok||r.id)jPush('nudge image');$('edtracks')._h=null;load()});return true}
+    if(lastPick==='snd'&&ssel&&placed(ssel)){e.preventDefault();const x=placed(ssel);post('/sfx/move',{placed:x.id,t:r2(x.t+d)}).then(r=>{if(r.ok||r.id)jPush('nudge sound');$('edtracks')._h=null;load()});return true}}
   return false}
 document.addEventListener('pointerdown',e=>{const t=e.target,on=sel=>t.closest&&t.closest(sel);
-  const k=on('.eitem.txt')||on('#tprev')?'text':on('.eitem.cap')||on('#cpline')||on('#cbody')?'cap':on('.eitem.img')||on('#csel')||on('[data-hit]')?'card':on('.eitem.snd')?'snd':on('.eitem.vid')||on('.vsp')?'vid':on('#tx')?'tx':null;
+  const k=on('.eitem.txt')||on('#tprev')?'text':on('.eitem.cap')||on('#cpline')||on('#cbody')?'cap':on('.eitem.img')||on('#csel')||on('[data-hit]')?'card':on('.eitem.snd')?'snd':on('.eitem.vid')||on('.vsp')||on('.vjn')?'vid':on('#tx')?'tx':null;
   if(!k)return;lastPick=k;if(k!=='tx'&&txSel&&typeof hideBar==='function'){txSel=null;hideBar();paintSel()}},true);
 // CapCut's rule: a click anywhere but on the picked thing (or its own bar and panel) lets it go; an open text saves first
-document.addEventListener('pointerdown',e=>{const on=sel=>e.target.closest(sel);
-  if(csel&&!on('#csel,.cbar,.eitem.img,[data-hit],#tside')){csel=null;drawCard()}
-  if((vsel!=null||ssel)&&!on('.eitem.vid,.eitem.snd,#sndpick,#tside,.vsp,#vsplit')){vsel=null;ssel=null;$('sndpick').hidden=true;$('edtracks')._h=null;renderEdTracks()}
+document.addEventListener('pointerdown',e=>{const on=sel=>e.target.closest(sel),later=f=>on('#edtracks')?document.addEventListener('pointerup',()=>setTimeout(f),{once:true}):f();   // a drag or click that starts on the rows keeps them until after it
+  if(csel&&!on('#csel,.cbar,.eitem.img,[data-hit],#tside')){csel=null;later(drawCard)}
+  if((vsel!=null||ssel)&&!on('.eitem.vid,.eitem.snd,#sndpick,#tside,.vsp,.vjn,#vsplit')){vsel=null;ssel=null;$('sndpick').hidden=true;later(()=>{$('edtracks')._h=null;renderEdTracks()})}
   if(tx&&tx.edit&&!on('#tprev,#tside,.eitem.txt,#edtracks,[data-h]')){if(tword())saveText();else setText(null)}},true);
 v.addEventListener('timeupdate',()=>{const t=v.currentTime;
   if(csel){const q=(S.cards_pending||[]).find(p=>p.key===csel.x.key)||{},a=q.start??csel.x.s,b=q.end??csel.x.e;if(t<a-.05||t>=b+.05){csel=null;drawCard()}}   // its time as moved, not as baked
@@ -2579,7 +2639,7 @@ async function cardSave(del,box){const c=csel;if(!c)return;const base={key:c.x.k
   if(del){S.cards_pending=[...(S.cards_pending||[]).filter(q=>q.key!==c.x.key),{key:c.x.key,deleted:true}];liveSync()}   // gone from the frame before the server answers
   const r=await post('/card/edit',{...base,...(del?{deleted:true}:{box:nb})});
   if(!(r.id||r.ok))return toast(r.error||'That did not save.');
-  if(!del)edPush('image moved',()=>edSave('/card/edit',{...base,box:was}),()=>edSave('/card/edit',{...base,box:nb}));   // a delete is baked out of the plan: no undo
+  if(del)jPush('delete image');else edPush('move image',()=>edSave('/card/edit',{...base,box:was}),()=>edSave('/card/edit',{...base,box:nb}));
   if(del){csel=null;toast(r.id?'Card deleted. Claude has this draft: it drops it in the next one.':'Card deleted.')}
   else{c.orig=c.box.slice();c.saved=true;if(r.id)toast('Saved. Claude has this draft: it moves it in the next one.')}
   drawCard();await load()}
@@ -2600,7 +2660,7 @@ $('clayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#csel'
     csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync()};
   el.onpointerup=()=>{el.onpointermove=null;if(cmoved())cardSave(false);else drawCard()}});   // let go: saved
 document.addEventListener('keydown',e=>{if(!csel||/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||''))return;
-  if(e.key==='Escape'){csel=null;drawCard()}if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();cardSave(true)}if(e.key==='Enter'){e.preventDefault();csel=null;drawCard()}});
+  if(e.key==='Escape'){csel=null;drawCard()}if((e.key==='Delete'||e.key==='Backspace')&&!hoverClip()){e.preventDefault();cardSave(true)}if(e.key==='Enter'){e.preventDefault();csel=null;drawCard()}});
 $('mini').addEventListener('click',e=>{const m=e.target.closest('[data-mk]');if(!m)return;const x=((data().items||{})[m.dataset.mk]||[])[+m.dataset.i];
   if(x&&noteOk())startNote(lead(m.dataset.mk,x),x.s,x.e,{k:m.dataset.mk,text:x.text||x.label||''});else v.currentTime=+m.dataset.s});
 // notes: the clock is always the playhead (scrub, a transcript word, a pin, a skip, a key, play), typing or not.
@@ -2733,9 +2793,9 @@ function bakeLine(){const b=(S&&S.bake)||{},live=(S.texts||[]).some(x=>!(S.texts
 // an open text saves itself: moved, resized or restyled when you let go, typed a moment after the last key. No Done, no note
 const txState=()=>({text:tword(),style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100});
 async function textAuto(){clearTimeout(textAuto.h);if(!tx||!tx.edit||tx.edit.fresh||!tword())return;const id=tx.edit.id,was=(S.texts||[]).find(x=>String(x.id)===String(id));if(!was)return;
-  const b=txState(),a=TXF(was),ks=Object.keys(b).filter(k=>b[k]!==a[k]);if(!ks.length)return;Object.assign(was,b);   // the page has it now: a poll or a second save never undoes it
+  const b=txState(),a=TXF(was),df={font:'TikTok Sans',color:'#FFFFFF',width_pct:84,size_pct:TEXT_SIZE,x_pct:50,y_pct:40},ks=Object.keys(b).filter(k=>b[k]!==(a[k]??df[k]));if(!ks.length)return;   // a click alone changes nothingObject.assign(was,b);   // the page has it now: a poll or a second save never undoes it
   const r=await post('/text/edit',{id,...b});if(!(r.id||r.ok))return toast(r.error||'That did not save.');
-  const words=ks.length===1&&ks[0]==='text';edPush(`"${b.text}" changed`,()=>edSave('/text/edit',{id,...a}),()=>edSave('/text/edit',{id,...b}),words?'txt:'+id:null);if(!words)EH.u[EH.u.length-1].look=true}
+  const words=ks.length===1&&ks[0]==='text';edPush('change text',()=>edSave('/text/edit',{id,...a}),()=>edSave('/text/edit',{id,...b}),words?'txt:'+id:null);if(!words)EH.u[EH.u.length-1].look=true}
 const textSoon=ms=>{clearTimeout(textAuto.h);textAuto.h=setTimeout(textAuto,ms)};
 document.addEventListener('pointerup',e=>{if(tx&&e.target.closest('#tedit,#tside,.eitem.txt'))textSoon(250)});
 document.addEventListener('input',e=>{if(tx&&e.target.closest('#tedit,#tside'))textSoon(600)});document.addEventListener('change',e=>{if(tx&&e.target.closest('#tside'))textSoon(100)});
@@ -2744,7 +2804,7 @@ function editText(id,fresh){const x=textItems().find(x=>String(x.id)===String(id
 const TXF=x=>({text:x.text,style:x.style,x_pct:x.x_pct,y_pct:x.y_pct,size_pct:x.size_pct,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end});
 async function delText(id,fresh){const was=fresh?null:(S.texts||[]).find(x=>String(x.id)===String(id));if(!fresh){S.texts=(S.texts||[]).filter(x=>String(x.id)!==String(id));liveSync()}const r=fresh?await post('/delete',{id:+id}):await post('/text/delete',{id});
   if(tx&&tx.edit&&String(tx.edit.id)===String(id))setText(null);toast(r.error||'Text deleted');
-  if(was&&!r.error){let cur=id;edPush(`"${was.text}" deleted`,async()=>{const a=await post('/text/add',TXF(was));if(!(a.id||a.ok))throw new Error(a.error||'');cur=a.text_id||a.id;await load()},()=>edSave('/text/delete',{id:cur}))}
+  if(was&&!r.error){let cur=id;edPush('delete text',async()=>{const a=await post('/text/add',TXF(was));if(!(a.id||a.ok))throw new Error(a.error||'');cur=a.text_id||a.id;await load()},()=>edSave('/text/delete',{id:cur}))}
   await load()}
 $('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool(tool==='captions'?null:'captions');$('railsnd').onclick=()=>openTool(tool==='sounds'?null:'sounds');$('railmed').onclick=()=>openTool(tool==='media'?null:'media');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
 $('tbody').addEventListener('click',async e=>{
@@ -2786,7 +2846,7 @@ function openCapLine(c,pick){if(tool!=='captions')openTool('captions');capFocus=
 async function saveCapLine(c,text,quiet){if(!c)return;const live=capTyping[c.s];delete capTyping[c.s];const old=capText(c).text;if(live==null&&text.trim()===old.trim())return;
   const r=await post('/captions/text',{s:c.s,w:c.w,text,old:c.text});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
   const putCap=x=>post('/captions/text',{s:c.s,w:c.w,text:x,old:c.text}).then(q=>{if(!q.id&&!q.ok)throw new Error(q.error||'');const i=$('cbody').querySelector(`.cline[data-cs="${c.s}"] input`);if(i)i.value=x;return load()});
-  edPush('caption text',()=>putCap(old),()=>putCap(text),'capt:'+c.s);
+  edPush('edit caption',()=>putCap(old),()=>putCap(text),'capt:'+c.s);
   if(!quiet)toast(text.trim()?'Caption changed.':'Caption taken out.');
   const row=$('cbody').querySelector(`.cline[data-cs="${c.s}"]`);if(row){row.classList.add('ed');if(!text.trim())row.querySelector('input').value=''}
   $('cbody')._s=null;$('edtracks')._h=null;await load()}
@@ -2798,7 +2858,7 @@ function capChanged(){const b=((S&&S.captions_ui)||{}).base||{},a=capLook();retu
 const CAPB={size:'size_pct',y:'y_pct',color:'color',highlight:'highlight_color'};
 async function saveCapStyle(body){const a={...capLook()},back={};capLive={...capLive};for(const k in body)if(CAPB[k]){const c=((S&&S.captions_ui)||{}),b=c.base||{},m=c.mine||{};back[k]=m[CAPB[k]]??b[CAPB[k]]??a[CAPB[k]]}
   const r=await post('/captions',body);if(!r.id&&!r.ok){capLive={};drawCapPrev();return toast(r.error||'That did not save.')}
-  if(Object.values(back).every(x=>x!=null))edPush('caption style',()=>capUndo(back),()=>capUndo(body),'cap:'+Object.keys(body).join());
+  if(Object.values(back).every(x=>x!=null))edPush('change caption style',()=>capUndo(back),()=>capUndo(body),'cap:'+Object.keys(body).join());
   $('cbody')._s=null;await load();capLive={};drawCapPrev()}
 async function capUndo(b){if($('cbody').contains(document.activeElement))document.activeElement.blur();const r=await post('/captions',b);if(!r.id&&!r.ok)throw new Error(r.error||'');$('cbody')._s=null;await load();capLive={};drawCapPrev()}
 function capLinesHtml(){const cs=(data().items||{}).captions||[];if(!cs.length)return '';
@@ -2841,7 +2901,7 @@ $('cbody').addEventListener('click',async e=>{const w=e.target.closest('[data-cw
   if(!w&&!l)return;
   const cu=(S&&S.captions_ui)||{},cb=cu.base||{},nw=cb.words_per_caption,wasW=cu.words||(nw===12?'sentence':nw?String(nw):null),wasL=cu.look||cb.style,now=w?{words:w.dataset.cw}:{look:l.dataset.cl},bk=w?{words:wasW}:{look:wasL};
   const r=await post('/captions',now);if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
-  if(bk.words||bk.look)edPush(w?'words at a time':'caption look',()=>capUndo(bk),()=>capUndo(now));
+  if(bk.words||bk.look)edPush(w?'change words at a time':'change caption look',()=>capUndo(bk),()=>capUndo(now));
   toast(w?`Captions: ${w.dataset.cw==='sentence'?'a sentence':w.dataset.cw+' word'+(w.dataset.cw==='1'?'':'s')} at a time.`:`Captions: the ${l.dataset.cl} look.`);
   $('cbody')._s=null;await load()});
 // the live caption: while the Captions panel is open, the line on screen drawn in the style the next draft gets, over a
@@ -2909,7 +2969,7 @@ async function libUpload(fs){fs=[...fs].filter(f=>/^audio\//.test(f.type)||/\.(w
 async function libAdd(name,t){const r=await post('/sfx/add',{t,sound:name});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
   toast(`${sndName(name)} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load();sndAddedUndo(name)}
 // the sound just put on the timeline is the newest of that name in S.placed_sounds (the server gives it its id)
-function sndAddedUndo(name){const x=[...(S.placed_sounds||[])].reverse().find(y=>y.sound===name);if(x)edPush('sound added',()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}),()=>edSave('/sfx/add',{t:x.t,item:x}))}
+function sndAddedUndo(name){const x=[...(S.placed_sounds||[])].reverse().find(y=>y.sound===name);if(x)edPush('add sound',()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}),()=>edSave('/sfx/add',{t:x.t,item:x}))}
 $('sbody').addEventListener('click',async e=>{const lp=e.target.closest('[data-lp]'),la=e.target.closest('[data-ladd]'),lr=e.target.closest('[data-lrm]'),cp=e.target.closest('[data-sp]');
   if(e.target.closest('#supload')){$('slibfile').click();return}
   if(lp)return sndHear('o:'+lp.dataset.lp,'/sound-file?name='+encodeURIComponent(lp.dataset.lp));
@@ -2960,7 +3020,7 @@ function medBox(iw,ih,px,py){const FW=v.videoWidth||1080,FH=v.videoHeight||1920,
   const x=Math.min(X1-w,Math.max(X0,cx-w/2)),y=Math.min(Y1-h,Math.max(Y0,cy-h/2)),q=n=>Math.round(n*10)/10;return [q(x),q(y),q(w),q(h)]}
 const medSize=m=>new Promise(res=>{const i=new Image();i.onload=()=>res([i.naturalWidth||16,i.naturalHeight||9]);i.onerror=()=>res([16,9]);i.src=medPic(m)});
 async function medAdd(m,t,px,py){medAdd.busy=1;try{const size=await medSize(m),r=await post('/media/add',{src:m.src,t:Math.round(t*100)/100,box:medBox(size[0],size[1],px,py),size});
-  if(!r.key&&!r.id)return toast(r.error||'That did not go on. Media goes on the edit, before it is approved.');
+  if(!r.key&&!r.id)return toast(r.error||'That did not go on. Media goes on the edit, before it is approved.');jPush('add media');
   toast(r.id?'Added. Claude has this draft: it puts it in the next one.':`${m.kind==='video'?'Clip':'Picture'} added at ${fmtx(r.start)}. Drag it to move, a corner to resize.`);
   $('edtracks')._h=null;await load();const x=r.key&&cardsAll().find(c=>c.key===r.key);if(x){v.currentTime=x.s+.02;selectCard(x)}}finally{medAdd.busy=0}}
 // where on the frame a drop landed, % of it (null off the frame)
@@ -2982,7 +3042,7 @@ async function saveText(){const text=tword();if(!tx||!text)return;
   if(!ed)r=await post('/text/add',{text,...look,...t});
   else if(ed.fresh)r=await post('/edit',{id:ed.id,text,add_text:look,t:t.start,t_end:t.end});
   if(!r||!(r.id||r.ok))return toast((r&&r.error)||'That did not save.');
-  if(!ed){let cur=r.text_id||r.id;edPush(`"${text}" added`,()=>edSave('/text/delete',{id:cur}),async()=>{const a=await post('/text/add',{text,...look,...t});cur=a.text_id||a.id;await load()})}
+  if(!ed){let cur=r.text_id||r.id;edPush('add text',()=>edSave('/text/delete',{id:cur}),async()=>{const a=await post('/text/add',{text,...look,...t});cur=a.text_id||a.id;await load()})}
   inT=outT=null;renderBar();setText(null);toast(ed?'Text changed.':'Text added.');await load()}
 function renderTexts(){
   const L=$('tlayer'),fs=sz=>Math.min(L.offsetWidth,L.offsetHeight)*(sz||TEXT_SIZE)/100,t=v.currentTime,edit=!!(S&&view&&view.stage==='edit');
@@ -3062,10 +3122,11 @@ document.addEventListener('keydown',e=>{
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&/^[=+\-_]$/.test(e.key)){e.preventDefault();return setZoom(zm*(/[=+]/.test(e.key)?2:.5))}   // the timeline, not the page
   if(!typing&&e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.altKey&&e.key==='Z'){tfol=true;return setZoom(1)}
   if(typing||e.target.isContentEditable||e.target.closest?.('#askq')||document.documentElement.dataset.askOpen||e.metaKey||e.ctrlKey||e.altKey)return;const k=e.key;   // never while typing or while Claude's question is up
-  if(k===' '){e.preventDefault();toggle()}
-  else if(k==='j')v.currentTime-=5;else if(k==='l')v.currentTime+=5;
-  else if(k==='ArrowLeft'){e.preventDefault();v.currentTime-=1}else if(k==='ArrowRight'){e.preventDefault();v.currentTime+=1}
-  else if(k===','){v.pause();v.currentTime-=1/FPS}else if(k==='.'){v.pause();v.currentTime+=1/FPS}
+  if(k===' '){e.preventDefault();shutOff();toggle()}
+  else if(/^[jkl]$/i.test(k))shuttle({j:-1,k:0,l:1}[k.toLowerCase()]);
+  else if(k==='ArrowLeft'||k==='ArrowRight'){e.preventDefault();shutOff();v.pause();stepO((k==='ArrowLeft'?-1:1)*(e.shiftKey?1:1/FPS))}
+  else if(k==='ArrowUp'||k==='ArrowDown'){if($('timeline').classList.contains('edon')){e.preventDefault();edgeJump(k==='ArrowUp'?-1:1)}}
+  else if(k===','||k==='.'){shutOff();v.pause();stepO(k===','?-1/FPS:1/FPS)}
   else if(k==='['||k===']'){const i=SPEEDS.indexOf(speed)+(k===']'?1:-1);setSpeed(SPEEDS[Math.max(0,Math.min(SPEEDS.length-1,i))])}
   else if(k==='i'){inT=v.currentTime;outT=null;renderBar();boxTime()}
   else if(k==='o'&&inT!==null){outT=v.currentTime;renderBar();boxTime()}
