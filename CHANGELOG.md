@@ -6,6 +6,10 @@ What changed for every user, newest first.
 - Every draft edits live, not only cooked.'s own plan renders. A finished video from any skill plays in the live player with your texts, sounds and lanes on top, so a change shows at once.
 - Hand edits on those drafts go into the video by themselves: texts, sounds and video cuts render onto the draft in the background, the cut pieces come out, and nothing becomes a note for Claude. The draft Claude made stays as the base, so nothing is drawn twice.
 - A cut piece plays without it straight away, and its toast says so.
+- Teach your styles and skills from any note, any round. "Make this a rule" on a note saves it straight to this video's style, My style, another style or one of your skills (trial reels, talking head and the rest), with Undo.
+- New style from this video sits in the video page's menu at any time, and home's New style can start from a video.
+- After the final approve, the rules card opens over the video. A "Rules to review" button reopens it, and home lists every video with rules waiting.
+- If no Claude is running for the video, cooked. reads your notes itself in the background, so the card never sits on "Claude is reading your notes".
 
 ## ai-editor 2.7.36, creator-teardown 2.7.36 (2026-11-03)
 - The timeline has lanes. Images, Text and Sounds each get a lane per overlap, so nothing sits on top of anything else. Drag an item up or down to move it to another lane, or below the last one to make a new lane. A later lane draws on top in the video.
