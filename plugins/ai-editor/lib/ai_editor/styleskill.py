@@ -503,7 +503,7 @@ def demo():
         assert not quoted(desc("fast-cuts")) & quoted(desc("my-style"))
         set_use_for(sp, "talking-head reels about AI tools.")
         assert "Use for: talking-head reels about AI tools. Not for:" in desc("fast-cuts") and all(len(desc(n)) <= 1024 for n in ("fast-cuts", "my-style"))
-        for bad, why in (("x", "at least 3"), ("../etc", "letters"), ("edit like other one", "already"), ("cut", "already")):
+        for bad, why in (("x", "at least 3"), ("../etc", "letters"), ("edit like other one", "is taken"), ("cut", "is taken")):
             try:   # too short, bad characters, another style's skill, a plugin skill
                 rename(sp, bad)
                 raise AssertionError(bad)
