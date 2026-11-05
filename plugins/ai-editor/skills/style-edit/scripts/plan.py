@@ -2995,6 +2995,15 @@ def demo():
     assert music_wanted({"sound": {"music": {"present_pct": 30}}}, {}) is False and music_wanted({}, {"sound": {"music": True}}) is True
     assert music_wanted({**snd, "blend": {"take": ["captions"]}}, {}) is False, "sound not taken from that creator"
     demo_punch()
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "lib"))
+    from ai_editor import profile as pm   # the Brand page's kit: roles and font_body reach the look; switched off, nothing
+    kit = {"colors": ["#F8F5F0", "#308DED", "#FA8A45", "#1B1918"], "roles": {"accent": "#FA8A45", "ink": "#1B1918"},
+           "font": "Suisse Neue", "font_body": "FK Grotesk Neue", "kit": "/x/BRAND.md"}
+    lk = pick_look({}, {"brand": kit}, pm)
+    assert lk == {"preset": "neutral", "mark": "#FA8A45", "font": "FK Grotesk Neue", "font_display": "Suisse Neue", "ink": "#1B1918"}, lk
+    assert pick_look({}, {"brand": {**kit, "use_creator": True}}, pm) == {"preset": "neutral"}
+    lk = pick_look({"look": {"preset": "editorial"}}, {"brand": kit}, pm)
+    assert lk["accent"] == "#FA8A45" and lk["ground"] == "#F8F5F0" and lk["font"] == "FK Grotesk Neue", lk
     with tempfile.TemporaryDirectory() as td:   # the review page's typed text (texts.json) goes in as typed
         assert typed_texts(td) == [] and typed_texts(None) == []
         (Path(td) / "texts.json").write_text(json.dumps({"items": [{"id": "edit1-3", "text": "wait for it", "style": "box", "start": 1.0,

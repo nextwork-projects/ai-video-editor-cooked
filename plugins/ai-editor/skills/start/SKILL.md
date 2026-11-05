@@ -81,11 +81,11 @@ Do each step in order, skipping what is already done. Read each skill's SKILL.md
    the default style). It prints the copied style's skill (`skill: edit-like-<h> -> <path>`): read
    it and follow its learned rules through the cut and the edit. `no creator style.json found`:
    run step 2 again.
-4. **cut** on the raw take, from its step 0b (start has already decided: cut, wait for the cut page
-   approval, then style). The user approves the cut page. This is approval 1 of 2.
+4. **cut** on the raw take, from its step 0b (start decided: cut, wait for the cut page approval,
+   then style). The user approves the cut page. This is approval 1 of 2.
 5. **style-edit** with `edits/<name>/style.json`. Renders on the cut's approve; the edit is approval 2. It reads the
-   profile itself: the brand kit sets the look, `names` get real logos and captures, `assets_dir`
-   images go on screen first, `avoid` is enforced by plan.py. Letterbox (wide take, title on top):
+   profile itself: a brand kit sets the look (say "Using your brand kit"), `names` get real logos and captures, `assets_dir`
+   images go first, `avoid` is enforced by plan.py. Letterbox (wide take, title on top):
    cut `--max-pause 0.5`, `--layout letterbox`.
    `skill=<skill>` on the job: step 5 is that skill, not style-edit (`references/home.md`, Skill style).
 

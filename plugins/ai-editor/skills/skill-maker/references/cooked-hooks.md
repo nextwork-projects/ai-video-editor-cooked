@@ -17,6 +17,12 @@ plugin folder (the one holding `lib/` and `skills/`). Run Python with `python3` 
 | `logos.json`, `images/logo-<brand>.svg/png` | checked brand logos (the logo-pack skill) |
 | `review.json` | review-page notes and replies (what skill-improver learns from) |
 
+## Read the user's brand
+
+`$AI_EDITOR_HOME/brand/BRAND.md` (default `~/.ai-video-editor/brand/BRAND.md`) is their brand kit from the home page's
+Brand page: colours, fonts, logo, voice, words to use and avoid, do and don't. `brand.json` beside it is what cooked.
+read from it. Use it when the profile's `brand.use_creator` is not true.
+
 ## Read the user's taste first
 
 `python3 "<plugin>/skills/taste/scripts/taste.py" show --edit edits/<name>` prints their saved rules. Follow
