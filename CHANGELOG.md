@@ -2,6 +2,15 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.38, creator-teardown 2.7.38 (2026-11-05)
+- Ripple. A magnet on the Video lane (on by default) takes a cut piece out of the timeline and pulls everything after it left, as the video will play. A join mark sits where pieces meet: double-click it or press Delete on it to bring the piece back. Cuts now come out of cooked.'s own drafts too, by themselves.
+- One undo for everything. Every hand edit undoes and redoes, deleting a picture too, and the button says what it will undo.
+- Editor keys: Space, J/K/L, a frame or a second at a time, jump between edges, copy, paste and duplicate at the playhead, pick the whole lane, Q and W trim to the playhead.
+- Your own shortcuts. Press ? to see every key and change any of them: click a key, press the new one. It warns when a key is taken and offers to swap. CapCut and Premiere Pro / Resolve presets, Reset and Reset all, and the same editor in home Settings. Saved once for every video.
+- Properties. Pick anything and its settings open on the left: text position, rotation, opacity, alignment, animation and text colour; picture position, scale, rotation and opacity; sound volume, fades, trim and mute. Several picked show what they share.
+- Handles on the video. A picked text or picture moves, resizes and rotates right on the video, snapping to the centre, other items and the reels safe zone. Alt-drag copies it, arrows nudge it.
+- Brand kit. A Brand page on home: import your BRAND.md, edit it there, or let Claude make one from your website. Every edit uses your colours, fonts, logo and voice.
+
 ## ai-editor 2.7.37, creator-teardown 2.7.37 (2026-11-05)
 - Every draft edits live, not only cooked.'s own plan renders. A finished video from any skill plays in the live player with your texts, sounds and lanes on top, so a change shows at once.
 - Hand edits on those drafts go into the video by themselves: texts, sounds and video cuts render onto the draft in the background, the cut pieces come out, and nothing becomes a note for Claude. The draft Claude made stays as the base, so nothing is drawn twice.
