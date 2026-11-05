@@ -85,6 +85,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import askhook  # noqa: E402
 import assets  # noqa: E402
+import brandkit  # noqa: E402
 import broll  # noqa: E402
 import custom  # noqa: E402
 import keys  # noqa: E402
@@ -2083,6 +2084,8 @@ def make_handler(token):
             path = unquote(urlsplit(self.path).path)
             if askhook.route(self, "GET", path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):   # Claude's questions
                 return
+            if brandkit.route(self, "GET", path, parse_qs(urlsplit(self.path).query)):   # the Brand page
+                return
             if path == "/":
                 return self.send(200, themed(HTML.read_bytes()), "text/html; charset=utf-8", cookie=True)
             if path == "/post/accounts":   # Settings, Auto-post your videos: asked when the card opens and on return from a sign-in, never per poll
@@ -2277,11 +2280,13 @@ def make_handler(token):
                 with live.busy():   # no live-reload restart under an upload
                     return self.upload() if path == "/upload" else self.cover()
             try:
-                cap = askhook.MAX_BODY if path in ("/ask/answer", "/job") else 1 << 20   # an answer or a new video can carry images
+                cap = askhook.MAX_BODY if path in ("/ask/answer", "/job", "/brand/claude") else 1 << 20   # an answer or a new video can carry images
                 body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), cap)) or b"{}")
             except ValueError:
                 return self.send(400, {"error": "not json"})
             if askhook.route(self, "POST", path, {}, body):
+                return
+            if brandkit.route(self, "POST", path, {}, body):
                 return
             if path == "/post/connect":   # one more account: Zernio's sign-in opens in a new tab, Settings re-lists on return
                 try:
@@ -3238,6 +3243,31 @@ def demo():
     assert get("/state")["theme"] == "system" and b"<html data-theme" not in urllib.request.urlopen(base + "/?t=" + tok).read()
     assert post("/theme", {"theme": "light"})["theme"] == "light" and get("/state")["theme"] == "light"
     assert b'<html data-theme="light" lang="en">' in urllib.request.urlopen(base + "/?t=" + tok).read()
+    # the Brand page (brandkit.py): the template, import / Edit > Save, the switch, Make one with Claude on a stub CLI
+    assert get("/brand")["kit"] is None and b"## Colours" in urllib.request.urlopen(base + "/brand/template?t=" + tok).read()
+    bs = post("/brand/save", {"md": "## Colours\n- Background: #F5F2EC\n- Accent: #E5482C\n## Fonts\n- Display: Fraunces\n- Body: IBM Plex Sans\n"})
+    assert bs["use"] and [c["role"] for c in bs["kit"]["colors"]] == ["ground", "accent"] and bs["kit"]["fonts"]["body"] == "IBM Plex Sans", bs
+    assert json.loads((tmp / "home" / "profile.json").read_text(encoding="utf-8"))["brand"]["font_body"] == "IBM Plex Sans"
+    assert post("/brand/use", {"on": False})["use"] is False and post("/brand/use", {"on": True})["use"] is True
+    try:
+        post("/brand/save", {"md": "  "})
+        raise AssertionError("an empty file saved")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+    keep_cli = os.environ.get("AI_EDITOR_CLAUDE")
+    os.environ["AI_EDITOR_CLAUDE"] = shutil.which("true") or "/usr/bin/true"
+    try:
+        assert post("/brand/claude", {"url": "example.com", "about": "calm"})["job"]["state"] in ("running", "failed")
+        for _ in range(100):
+            if get("/brand")["job"]["state"] != "running":
+                break
+            time.sleep(0.05)
+        assert "without writing" in get("/brand")["job"]["why"], get("/brand")["job"]
+        assert post("/brand/claude", {"clear": True})["job"] is None
+    finally:
+        os.environ.pop("AI_EDITOR_CLAUDE") if keep_cli is None else os.environ.__setitem__("AI_EDITOR_CLAUDE", keep_cli)
+    (tmp / "home" / "profile.json").unlink()   # the checks below start with no profile
+    shutil.rmtree(tmp / "home" / "brand")
     try:
         post("/theme", {"theme": "pink"})
         raise AssertionError("a made-up theme was saved")

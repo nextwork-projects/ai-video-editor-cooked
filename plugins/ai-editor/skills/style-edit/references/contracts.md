@@ -141,7 +141,9 @@ Only answered keys are stored; `profile.py missing` lists the rest and `load()` 
 ```
 
 - `platform`: `tiktok` | `reels` | `shorts` | `youtube`; `aspect` follows it (`9:16`, or `16:9` for youtube).
-- `brand`: `{"use_creator": true}` or colours, font and logo. `captions.style`: `creator` | `plain` | `bold` | `karaoke` | `minimal`.
+- `brand`: `{"use_creator": true}` or colours, font and logo. A kit from the home page's Brand page (lib/ai_editor/brandkit.py)
+  adds `roles` (ground, ink, accent), `font_body`, `voice`, `use`, `avoid`, `do`, `dont`, `captions`, `sounds`, `notes` and
+  `kit`, the path of `$AI_EDITOR_HOME/brand/BRAND.md` (the source of truth, any skill may read it); `use_creator: true` is its switch off. `captions.style`: `creator` | `plain` | `bold` | `karaoke` | `minimal`.
 - `goal` and `names` belong to one video and are re-confirmed on later videos.
 - Look order in plan.py: the profile's brand kit, then the creators' measured style.json, then the `editorial` preset.
 

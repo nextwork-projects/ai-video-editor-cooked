@@ -26,6 +26,7 @@ File: ~/.ai-video-editor/profile.json (AI_EDITOR_HOME overrides). Shape:
    "creators": [{"handle": "somecreator", "take": ["captions", "pace", "visuals"]}],
    "audience": "developers who use Claude", "goal": "follow + comment for the guide",
    "brand": {"colors": ["#F2EEE6", "#E5482C"], "font": "Archivo", "logo": "/path/logo.svg"}  or {"use_creator": true},
+            a BRAND.md kit (brandkit.py, the home page's Brand) adds roles, font_body, voice, use, avoid, do, dont, notes, kit
    "assets_dir": "/path/to/my/screenshots",
    "broll": {"travel": "/path/to/Drive/B-roll/Travel"},  b-roll libraries by type of video (broll.py)
    "names": [{"name": "Claude", "domain": "claude.com"}],
@@ -176,24 +177,29 @@ def creator_look(style):
 
 
 def brand_look(brand):
-    """A look from the profile's brand kit: colours (lightest = ground when light enough, the most
-    saturated = accent, the darkest = ink) and fonts."""
-    out = {}
+    """A look from the profile's brand kit: colours (the kit's roles first: ground, ink, accent; else the lightest =
+    ground when light enough, the most saturated = accent, the darkest = ink) and fonts (font = display, font_body =
+    body). {} when the Brand page's "Use for every video" is off (use_creator)."""
+    if brand.get("use_creator"):
+        return {}
+    out = {k: v for k, v in (brand.get("roles") or {}).items() if k in ("ground", "ink", "accent") and is_hex(v)}
     cols = [c if c.startswith("#") else "#" + c for c in (brand.get("colors") or []) if is_hex(c)]
     if cols:
         by_l = sorted(cols, key=lum)
         if lum(by_l[-1]) > 0.72:
-            out["ground"] = by_l[-1]
+            out.setdefault("ground", by_l[-1])
         if lum(by_l[0]) < 0.2:
-            out["ink"] = by_l[0]
+            out.setdefault("ink", by_l[0])
         sat = sorted(cols, key=lambda c: -hls(c)[2])
         if hls(sat[0])[2] > 0.3:
-            out["accent"] = sat[0]
+            out.setdefault("accent", sat[0])
     for k in LOOK_KEYS:
         if k not in out and brand.get(k):
             out[k] = brand[k]
     if brand.get("font") and not brand.get("font_display"):
         out["font_display"] = brand["font"]
+    if brand.get("font_body"):
+        out["font"] = brand["font_body"]
     return out
 
 
@@ -205,7 +211,7 @@ def resolve_look(style, prof=None, warn=print):
     look = {"preset": "editorial", **creator_look(style)}
     if look.get("preset") == "glass" and not (style.get("look") or {}).get("preset") == "glass":
         look["preset"] = "editorial"
-    own = brand_look(brand) if not brand.get("use_creator") or brand.get("colors") or brand.get("font") else {}
+    own = brand_look(brand)
     for k in ("accent", "ground"):
         if k in look and k not in own and generic_colour(look[k]):
             warn(f"look: {k} {look[k]} is the purple-blue AI default; using the preset's")
@@ -513,6 +519,13 @@ def demo():
     assert "accent" not in lk and lk["preset"] == "editorial" and len(w) == 2, (lk, w)
     lk = resolve_look({}, {"brand": {"colors": ["#7B61FF", "#FFFFFF", "#111111"], "font": "Inter"}}, warn=w.append)
     assert lk["accent"] == "#7B61FF" and lk["ground"] == "#FFFFFF" and lk["font"] == "Inter", lk   # the user's own brand wins
+    # a BRAND.md kit (brandkit.py): its roles beat the lightest / most saturated rule, font_body is the body font
+    kit = {"colors": ["#F8F5F0", "#E5DCC7", "#308DED", "#FA8A45", "#1B1918"], "font": "Suisse Neue", "font_body": "FK Grotesk Neue",
+           "roles": {"ground": "#E5DCC7", "accent": "#FA8A45"}}
+    lk = resolve_look({}, {"brand": kit}, warn=w.append)
+    assert (lk["ground"], lk["accent"], lk["ink"]) == ("#E5DCC7", "#FA8A45", "#1B1918"), lk
+    assert lk["font"] == "FK Grotesk Neue" and lk["font_display"] == "Suisse Neue", lk
+    assert brand_look({**kit, "use_creator": True}) == {} and "accent" not in resolve_look({}, {"brand": {**kit, "use_creator": True}}, warn=w.append)
     lk = resolve_look({"look": {"accent": "#E5482C"}}, {"avoid": {"colors": ["#E04A2E"]}}, warn=w.append)
     assert "accent" not in lk
     lk = resolve_look({"look": {"preset": "poster-green", "font_display": "Archivo"}}, {}, warn=w.append)
