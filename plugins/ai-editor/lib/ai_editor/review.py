@@ -1088,7 +1088,34 @@ def text_look(add):
         out["color"] = str(add["color"]).upper()
     if add.get("width_pct") is not None and float(add["width_pct"]) < 84:   # the text's width brought in: it wraps sooner
         out["width_pct"] = round(max(15.0, float(add["width_pct"])), 1)
+    out.update(text_more(add, out["style"]))
     return out
+
+
+TEXT_ANIMS, TEXT_ALIGNS = ("fade", "pop", "slide"), ("left", "right")   # Texts.tsx labelMove; none and centre are left out
+
+
+def text_more(add, style):
+    """The inspector's extras on a text (Texts.tsx Label): rotation (degrees), opacity (0-1), anim, align and text_color
+    (the type on a box look), each kept only when it is not today's look, so older rows render byte-identical."""
+    out = {}
+    if add.get("rotation") not in (None, "") and round(float(add["rotation"]) % 360, 1) not in (0, 360):
+        out["rotation"] = round((float(add["rotation"]) + 180) % 360 - 180, 1)
+    if add.get("opacity") not in (None, "") and float(add["opacity"]) < 1:
+        out["opacity"] = round(max(0.05, float(add["opacity"])), 2)
+    for k, ok in (("anim", TEXT_ANIMS), ("align", TEXT_ALIGNS)):
+        if add.get(k) and add[k] not in ("none", "center"):
+            if add[k] not in ok:
+                raise ValueError(f"{k} is one of {', '.join(ok)}.")
+            out[k] = add[k]
+    if add.get("text_color") and style in ("box", "block"):
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(add["text_color"])):
+            raise ValueError("A colour is #RRGGBB.")
+        out["text_color"] = str(add["text_color"]).upper()
+    return out
+
+
+TEXT_KEYS = ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct", "rotation", "opacity", "anim", "align", "text_color")
 
 
 def put_texts(folder, notes):
@@ -1143,7 +1170,7 @@ def said_in(transcript, a, b):
 def typed_labels(folder):
     """texts.json as plan.json's "label" texts (plan.py typed_texts does the same when Claude plans)."""
     f = Path(folder) / "texts.json"
-    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct")
+    keep = ("text", "start", "end", *TEXT_KEYS)
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import laned, read_ov   # the Text lanes (overrides.json lanes): a hidden one's texts out, a later one on top
     return [{"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}}
@@ -1187,6 +1214,9 @@ def cards_pending(folder, d):
             **{a: o[a] for a, b in (("start", "s"), ("end", "e")) if a in o and abs(float(o[a]) - c[b]) > 0.01}}
         if p:
             out.append({"key": k, **p})
+        if not o.get("deleted") and any(o.get(a) is not None for a in ("rotation", "opacity")):   # the inspector's look: the page
+            # starts from it (the live plan draws it; screen_items has no such fields)
+            (out[-1] if p else out.append({"key": k}) or out[-1]).update({a: o[a] for a in ("rotation", "opacity") if o.get(a) is not None})
     return out
 
 
@@ -1232,10 +1262,12 @@ def cards_added(folder, d):
         if a["key"] in shown or o.get("deleted"):
             continue
         c = {**a, **{k: o[k] for k in ("box", "start", "end") if k in o}}
-        vid = assets.kind_of(c["src"]) == "video"
+        src = c.get("src") or ((c.get("anim") or {}).get("props") or {}).get("src") or ""
+        vid = assets.kind_of(src) == "video"
         out.append({"s": c["start"], "e": c["end"], "box": c["box"], "key": a["key"], "added": True,
-                    "label": f"your {'clip' if vid else 'picture'} {Path(c['src']).name}",
-                    "pic": "/media-file/" + quote(c["src"]) + ("?thumb=1" if vid else ""), **({} if vid else {"src": c["src"]})})
+                    "label": f"your {'clip' if vid else 'picture'} {Path(src).name}" if src else "the copy",
+                    **({"pic": "/media-file/" + quote(src) + ("?thumb=1" if vid else "")} if src.startswith(MEDIA_ROOTS) else {}),
+                    **({} if vid or not src else {"src": src})})
     return out
 
 
@@ -1280,10 +1312,11 @@ def live_sound(x):
     "in" for "dur" at "vol", a library sound as it is, both at "t" (plan.py placed_sounds levels and trims them into
     .sfx/ for the render). Quoted as the page's encodeURIComponent quotes, so the page's own copy is the same cue."""
     q = quote(str(x["sound"]), safe="!'()*")
+    fades = {k: x[k] for k in ("fade_in", "fade_out") if x.get(k)}   # the inspector's fades (preview/Sfx.tsx ramps the volume)
     if x.get("kind") == "clip":
-        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), "placed": x.get("id")}
+        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), **fades, "placed": x.get("id")}
     d = sound_shape(sfx_mod().library_dir() / str(x["sound"]), cap=sfx_mod().MAX_OWN_S).get("d")
-    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), "placed": x.get("id")}
+    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), **({"vol": x["vol"]} if "vol" in x else {}), "placed": x.get("id")}
 
 
 def live_video(folder, plan, plan_f):
@@ -1413,7 +1446,7 @@ def live_plan(folder, d):
         p = apply_overrides(p, folder, plan_f.name)
     from preview import laned, read_ov   # a muted Sounds lane leaves its placed sounds out, as plan.py placed_sounds does
     p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in laned(
-        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x], read_ov(folder), "snd", lambda x: x.get("id"))]
+        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x and not x.get("muted")], read_ov(folder), "snd", lambda x: x.get("id"))]
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
@@ -2874,17 +2907,29 @@ def make_handler(folder, token):
                 x = next((i for i in items if i.get("id") == body.get("placed")), None)
                 if not x:
                     return self.send(404, {"error": "That sound is gone already."})
-                was = {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}
+                SK = ("t", "in", "dur", "vol", "kind", "fade_in", "fade_out", "muted")
+                was = {k: x.get(k) for k in SK}
                 try:
                     x["t"] = round(max(0.0, float(body.get("t", x["t"]))), 2)
                     if x.get("kind") == "clip":
                         x["in"] = round(max(0.0, float(body.get("in", x.get("in", 0)))), 2)
                         x["dur"] = round(max(0.1, float(body.get("dur", x["dur"]))), 2)
+                        for k in ("fade_in", "fade_out"):   # the inspector: seconds; plan.py's 20 ms when left out
+                            if k in body:
+                                x[k] = round(min(x["dur"] / 2, max(0.0, float(body[k] or 0))), 2)
+                                if x[k] <= 0.02:
+                                    x.pop(k)
+                    if "vol" in body or x.get("kind") == "clip":   # a library sound's level too (plan.py gains its cue)
                         x["vol"] = round(min(2.0, max(0.0, float(body.get("vol", x.get("vol", 1))))), 2)
+                        if x.get("kind") != "clip" and x["vol"] == 1:
+                            x.pop("vol")
+                    if "muted" in body:
+                        x.pop("muted", None)
+                        x.update({"muted": True} if body["muted"] else {})
                 except (TypeError, ValueError):
                     return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
                 save(folder / "sounds.json", {"items": items})
-                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}, Path(x["sound"]).stem)
+                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in SK}, Path(x["sound"]).stem)
                 line = f"add {Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
                                           "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"], layer=True)
@@ -3024,6 +3069,12 @@ def make_handler(folder, token):
                                 raise ValueError
                             change.update(start=s, end=e)
                             what = f"Retime ({fmt(s)}-{fmt(e)})" if "box" not in change else what
+                        if "rotation" in body:   # the inspector and the rotate handle: degrees, None back to upright
+                            r = round((float(body["rotation"] or 0) + 180) % 360 - 180, 1)
+                            change["rotation"] = r or None
+                        if "opacity" in body:
+                            o = round(min(1.0, max(0.05, float(body["opacity"] if body["opacity"] is not None else 1))), 2)
+                            change["opacity"] = o if o < 1 else None
                         if not change:
                             raise ValueError
                     t, te = float(body["t"]), float(body["t_end"])
@@ -3130,6 +3181,33 @@ def make_handler(folder, token):
                             (folder / n).write_bytes(b)
                 bake_soon(folder)
                 return self.send(200, {"ok": True})
+            if path == "/card/dup":   # Alt-drag on the video: a copy of a card at a new box, an added card like a dropped picture
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits") or not Path(d.get("plan") or "-").is_file():
+                    return self.send(409, {"error": "Cards are copied on the edit, before it is approved."})
+                try:
+                    box = [round(float(v), 1) for v in body["box"]]
+                    if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        raise ValueError
+                    sys.path.insert(0, str(EDIT_PY.parent))
+                    from preview import apply_overrides
+                    c = next(c for c in apply_overrides(load(Path(d["plan"])), folder, Path(d["plan"]).name)["cards"] if card_key(c) == body["key"])
+                except (KeyError, TypeError, ValueError, StopIteration):
+                    return self.send(400, {"error": "card/dup takes the key of a card in this draft and box [x, y, w, h]"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                added = ov.setdefault("added_cards", [])
+                n = 1 + max([int(m.group(1)) for a in added for m in [re.match(r"media(\d+)@", a["key"])] if m] or [0])
+                key = f"media{n}@{c['start']:.3f}"
+                added.append({"key": key, **{k: v for k, v in c.items() if k not in ("override", "_key", "lane", "z")}, "box": box})
+                save(ovf, ov)
+                log_edit(folder, "card.add", key, None, {"copy_of": body["key"], "box": box}, "a copy")
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True, "key": key, "start": c["start"], "end": c["end"]})
+                return self.comment({"t": c["start"], "t_end": c["end"], "text": f"Copy the card {body['key']} to {box} as shown on the page: "
+                                     f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
             if path == "/timeline/cut":   # the timeline's Video row: {splits: [t], gone: [[a, b]]} on the edit's clock.
                 # The page skips the gone pieces at once; one note tells Claude the words to cut from the next draft
                 d = load(rj)
@@ -3197,8 +3275,8 @@ def make_handler(folder, token):
                 if not text:
                     return self.send(400, {"error": "Type the text first."})
                 try:
-                    new = {k: v for k, v in x.items() if k not in ("font", "color", "width_pct")}   # text_look sets them again when kept
-                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct") if k in body}})}
+                    new = {k: v for k, v in x.items() if k not in TEXT_KEYS[4:]}   # text_look sets them again when kept
+                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in TEXT_KEYS if k in body}})}
                     if body.get("start") is not None:
                         new["start"] = round(max(0.0, float(body["start"])), 2)
                         new["end"] = round(max(new["start"] + 0.1, float(body.get("end") or new["start"] + TEXT_HOLD_S)), 2)
@@ -3211,6 +3289,8 @@ def make_handler(folder, token):
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)
                 what = [w for w, k in (("words", "text"), ("look", "style"), ("place", "x_pct"), ("place", "y_pct"),
                                        ("size", "size_pct"), ("font", "font"), ("colour", "color"), ("width", "width_pct"), ("time", "start"),
+                                       ("rotation", "rotation"), ("opacity", "opacity"), ("animation", "anim"), ("alignment", "align"),
+                                       ("colour", "text_color"),
                                        ("time", "end")) if new.get(k) != x.get(k)]
                 return tell(f'Change the on-screen text "{x["text"]}" ({", ".join(dict.fromkeys(what)) or "no change"}): '
                             f'texts.json has it now as "{text}". Plan again so it shows.', new)
@@ -5666,6 +5746,20 @@ def demo():
     assert (row["font"], row["color"], row["start"], row["end"]) == ("Anton", "#FF3B30", 5.0, 7.5), row
     post("/text/edit", {"id": nt["id"], "font": "TikTok Sans", "color": "#FFFFFF"})   # back to the default: the keys go
     assert not {"font", "color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    # the inspector's extras: kept only off today's look, laid into the live plan's label, back to none drops the keys
+    post("/text/edit", {"id": nt["id"], "style": "box", "rotation": 370, "opacity": 0.5, "anim": "pop", "align": "left", "text_color": "#ffd60a"})
+    row = load(folder / "texts.json")["items"][-1]
+    assert {k: row[k] for k in ("rotation", "opacity", "anim", "align", "text_color")} == \
+        {"rotation": 10.0, "opacity": 0.5, "anim": "pop", "align": "left", "text_color": "#FFD60A"}, row
+    assert typed_labels(folder)[-1]["anim"] == "pop" and typed_labels(folder)[-1]["rotation"] == 10.0, typed_labels(folder)
+    post("/text/edit", {"id": nt["id"], "style": "plain", "rotation": 0, "opacity": 1, "anim": "none", "align": "center"})
+    assert not {"rotation", "opacity", "anim", "align", "text_color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    for bad in ({"anim": "spin"}, {"align": "middle"}, {"opacity": "x"}):
+        try:
+            post("/text/edit", {"id": nt["id"], **bad})
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
     bad = urllib.request.Request(base + "/text/edit?t=" + tok, json.dumps({"id": nt["id"], "font": "Comic Sans"}).encode(), method="POST")
     try:
         urllib.request.urlopen(bad)
@@ -5763,6 +5857,13 @@ def demo():
         post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
         clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
         assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip
+        post("/sfx/move", {"placed": clip["id"], "fade_in": 0.3, "fade_out": 9, "muted": True})   # the inspector: fades held to half its length
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert (clip["fade_in"], clip["fade_out"], clip["muted"]) == (0.3, 0.5, True), clip
+        assert live_sound(clip)["fade_in"] == 0.3 and live_sound({"t": 1, "sound": "pop.wav", "vol": 0.5})["vol"] == 0.5
+        post("/sfx/move", {"placed": clip["id"], "fade_in": 0, "fade_out": 0.01, "muted": False})
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert not {"fade_in", "fade_out", "muted"} & set(clip), clip
         sm = post("/sfx/remove", {"t": 3, "placed": clip["id"], "src": "my song.wav"})
         assert sm["lines"] == ["remove pop at 0:03.5"], sm   # dropped, moved and removed: still one line
         post("/delete", {"id": sa["id"]})   # the sounds note, so the next one starts clean
@@ -5852,6 +5953,11 @@ def demo():
     assert pend == [{"key": k0, "box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}], pend
     post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "box": c0["box"], "start": c0["s"], "end": c0["e"]})   # an undo: back where the video has it
     assert json.loads(get("/state").read())["cards_pending"] == [], "back in place is not pending"
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "rotation": -370, "opacity": 0.4})   # the inspector: kept, and in /state
+    assert {k: load(folder / "overrides.json")["cards"][k0][k] for k in ("rotation", "opacity")} == {"rotation": -10.0, "opacity": 0.4}
+    assert json.loads(get("/state").read())["cards_pending"] == [{"key": k0, "rotation": -10.0, "opacity": 0.4}]
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "rotation": 0, "opacity": 1})   # upright and solid again: None, which apply_overrides drops
+    assert json.loads(get("/state").read())["cards_pending"] == [], "upright again is not pending"
     for bad in ({"start": -1, "end": 2}, {"start": 3, "end": 3.1}, {"start": 3}, {"start": "x", "end": 4}, {}):
         try:
             post("/card/edit", {"key": k0, "t": 1, "t_end": 2, **bad})

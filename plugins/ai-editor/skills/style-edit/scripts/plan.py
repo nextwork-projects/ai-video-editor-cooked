@@ -812,9 +812,14 @@ def placed_sounds(plan, edit_dir):
     import sfx
     fps = plan.get("fps") or 30
     from preview import laned, read_ov   # a muted Sounds lane on the timeline (overrides.json lanes) leaves its sounds out
+    from preview import gained   # a library sound turned up or down on the page's inspector (sounds.json vol)
     for x in laned(json.loads(f.read_text(encoding="utf-8")).get("items") or [], read_ov(edit_dir), "snd", lambda x: x.get("id")):
+        if x.get("muted") or x.get("kind") != "clip" and x.get("vol") == 0:   # muted on the inspector: out of the video
+            continue
         try:   # a dropped audio file plays from its moment; a library sound lands its hit there
             src, att = (sfx.clip_cue(edit_dir, x), 0.0) if x.get("kind") == "clip" else sfx.own_cue(edit_dir, x["sound"])
+            if x.get("kind") != "clip" and x.get("vol", 1) != 1:
+                src = gained(edit_dir, src, round(20 * math.log10(float(x["vol"])), 1))
         except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as e:
             print(f"warning: a placed sound was skipped: {e}", file=sys.stderr)
             continue
@@ -832,7 +837,8 @@ def typed_texts(edit_dir):
     if not f or not f.exists():
         return []
     keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct")
-    extra = ("font", "color", "width_pct")   # set only when the user picked them (review.py text_look)
+    extra = ("font", "color", "width_pct", "rotation", "opacity", "anim", "align", "text_color")   # set only when the user picked
+    # them (review.py text_look, text_more)
     from preview import laned, read_ov   # the Text lanes: a hidden one's texts out, a later lane's drawn on top
     return [{"kind": "label", **{k: x[k] for k in keep}, **{k: x[k] for k in extra if x.get(k) is not None}}
             for x in laned(json.loads(f.read_text(encoding="utf-8")).get("items") or [], read_ov(edit_dir), "text", lambda x: x.get("id"))]

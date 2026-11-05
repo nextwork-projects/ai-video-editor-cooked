@@ -625,7 +625,14 @@ body.tside #tside{display:flex}
 .tl.ed i{position:absolute;width:10px;height:10px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.4);z-index:2}
 .tl.ed [data-h=nw]{left:-9px;top:-9px;cursor:nwse-resize}.tl.ed [data-h=ne]{right:-9px;top:-9px;cursor:nesw-resize}
 .tl.ed [data-h=sw]{left:-9px;bottom:-9px;cursor:nesw-resize}.tl.ed [data-h=se]{right:-9px;bottom:-9px;cursor:nwse-resize}
-.tl.ed [data-h=w],.tl.ed [data-h=e]{top:50%;width:6px;height:16px;margin-top:-8px;border-radius:3px;cursor:ew-resize}.tl.ed [data-h=w]{left:-7px}.tl.ed [data-h=e]{right:-7px}
+.tl.ed [data-h=n],.tl.ed [data-h=s]{left:50%;width:16px;height:6px;margin-left:-8px;border-radius:3px;cursor:ns-resize}.tl.ed [data-h=n]{top:-7px}.tl.ed [data-h=s]{bottom:-7px}
+.tl.ed [data-h=rot],.csel [data-h=rot]{left:50%;top:-30px;margin-left:-6px;border-radius:50%;cursor:grab}.tl.ed [data-h=rot]{top:-32px;margin-left:-5px}
+.csel [data-h=n]{left:50%;top:0;cursor:ns-resize}.csel [data-h=s]{left:50%;bottom:0;cursor:ns-resize}.csel [data-h=w]{left:0;top:50%;cursor:ew-resize}.csel [data-h=e]{right:0;top:50%;cursor:ew-resize}
+#guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}#guides .szone{position:absolute;left:5.56%;top:13.02%;width:81.48%;height:61.98%;outline:1px dashed rgba(255,255,255,.4)}
+#ibody{flex:1;overflow:auto;padding:12px 16px}.ihead{margin:0 0 4px;display:flex;flex-direction:column;gap:2px}.ihead b{font-size:14px;line-height:18px;color:var(--strong)}.ihead span{font-size:12px;color:var(--muted)}
+.tf>span{flex-shrink:0;width:84px;font-size:12px;color:var(--muted)}.tfv .inum{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+.tfv em{font-style:normal;font-size:12px;color:var(--muted);width:24px}.tfv output.wide{width:56px}.ifull{width:100%;height:36px;border-radius:8px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink)}.ifull:hover{border-color:var(--ink)}
+.isec{display:flex;flex-direction:column;gap:10px;padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}top:50%;width:6px;height:16px;margin-top:-8px;border-radius:3px;cursor:ew-resize}.tl.ed [data-h=w]{left:-7px}.tl.ed [data-h=e]{right:-7px}
 .ts-block{display:block}
 .tl.hit span{color:transparent!important;-webkit-text-stroke:0!important;background:none!important}   /* baked in the video: only the click target */
 .tpickrow{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:16px;color:var(--strong)}.tpickrow b{font-weight:600}
@@ -898,7 +905,7 @@ body.making #making{display:flex}
 </ol><div id="keys"></div></section>
 
 <main>
-<section id="tside" aria-label="Text"><div class="tsh"><b id="tsht">Text</b><button id="tplus" title="Add text (the default look)" aria-label="add text">+</button><button id="tclose" title="Close" aria-label="close the text panel">×</button></div><div id="tbody"></div><div id="cbody" hidden></div><div id="sbody" hidden></div><div id="mbody" hidden></div></section>
+<section id="tside" aria-label="Text"><div class="tsh"><b id="tsht">Text</b><button id="tplus" title="Add text (the default look)" aria-label="add text">+</button><button id="tclose" title="Close" aria-label="close the text panel">×</button></div><div id="tbody"></div><div id="cbody" hidden></div><div id="sbody" hidden></div><div id="mbody" hidden></div><div id="ibody" hidden></div></section>
 <div class="left">
  <div class="stagewrap">
  <div id="stagebar" role="status"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="4" cy="4.5" r="2.2"/><circle cx="4" cy="11.5" r="2.2"/><path d="M5.8 5.6L14 11.5M5.8 10.4L14 4.5"/></svg><span id="stagetext"></span></div>
@@ -909,7 +916,7 @@ body.making #making{display:flex}
   <div id="pair">
    <figure class="pl" id="p2"><figcaption id="cap2"></figcaption><div class="player"><video id="v2" preload="auto" muted playsinline></video><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
    <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><div id="live"></div><video id="v" preload="auto" playsinline></video>
-    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
+    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div class="hits" id="guides"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
@@ -1173,9 +1180,9 @@ function liveSwitch(){const on=liveWanted();if(on===LV.on)return;LV.on=on;docume
 function liveNow(){const p=JSON.parse(LV.raw),cs=p.captions||(p.captions={chunks:[]}),st=cs.style||(cs.style={}),c=(S&&S.captions_ui)||{};
   const open=tx&&tx.edit?String(tx.edit.id):null,lab=x=>({kind:'label',text:x.text,style:x.style,start:x._t?x._t[0]:x.start,end:x._t?x._t[1]:x.end,
     x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,...(x.font&&x.font!=='TikTok Sans'?{font:x.font}:{}),
-    ...(x.color&&x.color.toUpperCase()!=='#FFFFFF'?{color:x.color.toUpperCase()}:{}),...(x.width_pct!=null&&x.width_pct<84?{width_pct:x.width_pct}:{})});
+    ...(x.color&&x.color.toUpperCase()!=='#FFFFFF'?{color:x.color.toUpperCase()}:{}),...(x.width_pct!=null&&x.width_pct<84?{width_pct:x.width_pct}:{}),...txX(x,1)});
   const ts=textItems().filter(x=>String(x.id)!==open&&!laneOff('text',String(x.id))).map(lab);   // the page's texts for the plan's labels; the one open as it is now
-  if(tx&&(tx.word||'').trim())ts.push(lab({text:tx.word,style:tx.style,start:tx.start,end:tx.end,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w}));
+  if(tx&&(tx.word||'').trim())ts.push(lab({text:tx.word,style:tx.style,start:tx.start,end:tx.end,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,...txX(tx)}));
   p.texts=[...(p.texts||[]).filter(x=>x.kind!=='label'),...ts];
   Object.assign(st,c.look&&c.look!==st.style&&(c.looks||{})[c.look]||{},c.mine||{},capLive);   // the caption style as it is being slid
   const wm={...(S.cap_words||{})},ct=S.cap_times||{};   // retyped words (a line being typed onto its words, review.py caption_words), retimed pages
@@ -1184,11 +1191,12 @@ function liveNow(){const p=JSON.parse(LV.raw),cs=p.captions||(p.captions={chunks
   cs.chunks=(cs.chunks||[]).map(ch=>{const w0=(ch.words||[])[0],o=w0&&w0.start!=null&&ct[w0.start.toFixed(3)];
     const words=(ch.words||[]).map(w=>{const k=w.start!=null?w.start.toFixed(3):null;return k!=null&&k in wm?{...w,text:wm[k]}:w}).filter(w=>String(w.text).trim());
     return {...ch,...(o?{start:o[0],end:o[1]}:{}),words,text:words.map(w=>w.text).join(' ')}}).filter(ch=>ch.words.length);
-  const pd={};for(const q of S.cards_pending||[])pd[q.key]=q;if(csel)pd[csel.x.key]={...pd[csel.x.key],box:csel.box};   // cards moved, the one being dragged
-  p.cards=(p.cards||[]).filter(k=>!(pd[k._key]||{}).deleted).map(k=>{const o=pd[k._key];return o?{...k,...(o.box?{box:o.box}:{}),...(o.start!=null?{start:o.start}:{}),...(o.end!=null?{end:o.end}:{})}:k});
-  const enc=encodeURIComponent,snd=x=>x.kind==='clip'?{t:x.t,src:'/audio/'+enc(x.sound),from:x.in||0,dur:x.dur,vol:x.vol??1,placed:x.id}
-    :{t:x.t,src:'/sound-file?name='+enc(x.sound),...(x.d?{_d:x.d}:{}),placed:x.id};   // review.py live_sound
-  p.sfx=[...(p.sfx||[]).filter(q=>!q.placed),...(S.placed_sounds||[]).filter(x=>!laneOff('snd',x.id)).map(snd)];
+  const pd={};for(const q of S.cards_pending||[])pd[q.key]=q;if(csel)pd[csel.x.key]={...pd[csel.x.key],box:csel.box,rotation:csel.rot,opacity:csel.op,start:csel.s,end:csel.e};   // cards moved, the one being dragged
+  for(const[k,o]of Object.entries(IN.live))pd[k]={...pd[k],...o};   // the inspector's slider on several at once
+  p.cards=(p.cards||[]).filter(k=>!(pd[k._key]||{}).deleted).map(k=>{const o=pd[k._key];return o?{...k,...(o.box?{box:o.box}:{}),...(o.start!=null?{start:o.start}:{}),...(o.end!=null?{end:o.end}:{}),...(o.rotation!=null?{rotation:o.rotation}:{}),...(o.opacity!=null?{opacity:o.opacity}:{})}:k});
+  const enc=encodeURIComponent,fd=x=>({...(x.fade_in?{fade_in:x.fade_in}:{}),...(x.fade_out?{fade_out:x.fade_out}:{})}),snd=x=>x.kind==='clip'?{t:x.t,src:'/audio/'+enc(x.sound),from:x.in||0,dur:x.dur,vol:x.vol??1,...fd(x),placed:x.id}
+    :{t:x.t,src:'/sound-file?name='+enc(x.sound),...(x.d?{_d:x.d}:{}),...(x.vol!=null&&x.vol!==1?{vol:x.vol}:{}),placed:x.id};   // review.py live_sound
+  p.sfx=[...(p.sfx||[]).filter(q=>!q.placed),...(S.placed_sounds||[]).filter(x=>!laneOff('snd',x.id)&&!x.muted).map(snd)];
   return p}
 // a change on the page: the composition redrawn on the next frame (once per frame however many changes ask)
 function liveSync(){if(!LV.on||LV.raf)return;LV.raf=requestAnimationFrame(()=>{LV.raf=0;if(!LV.on)return;let p;try{p=liveNow()}catch(e){return console.warn(e)}
@@ -1698,7 +1706,7 @@ function liveAudio(){const inDraft=new Set(((data().items||{}).sfx||[]).map(x=>x
     else if(!a.paused)a.pause()}
   for(const id in LIVE)if(!keep.has(id)){LIVE[id].pause();delete LIVE[id]}}
 ['play','pause','seeked','timeupdate','ratechange','volumechange'].forEach(k=>v.addEventListener(k,liveAudio));
-function openSndEdit(el){const x=placed(ssel);if(!x)return;const P=$('sndpick'),tr=$('timeline').getBoundingClientRect(),r=el.getBoundingClientRect();
+function openSndEdit(el){const x=placed(ssel);if(!x)return;$('sndpick').hidden=true;return inspSoon();const P=$('sndpick'),tr=$('timeline').getBoundingClientRect(),r=el.getBoundingClientRect();
   P.innerHTML=`<div class="sedit"><b>${esc(x.sound.replace(/\.[a-z0-9]+$/i,''))}</b><span class="tsub">${fmtx(x.t)} · ${sndLen(x).toFixed(1)} s</span>
     ${x.kind==='clip'?`<div class="row">Volume<input type="range" id="svol" min="0" max="1" step="0.05" value="${x.vol??1}"><span id="svoln">${Math.round((x.vol??1)*100)}%</span></div>`:''}
     <div class="row"><button id="splayit">${PLAY} Play</button>${x.kind==='clip'?'<button id="ssplit" title="Split the song at the playhead (⌘B)">Split</button>':''}<span style="flex:1"></span><button id="srm">Remove</button></div>${x.kind==='clip'?'<span class="tsub">Drag an edge to trim. Alt-drag to slide which part plays.</span>':''}</div>`;
@@ -2620,20 +2628,23 @@ const cardsAll=()=>{const a=[...(((data().items||{}).cards)||[]),...((S&&S.cards
 // cards on a hidden lane: out of the plan (review.py /live/plan lane_off), still on the timeline, faded
 const offCards=()=>((LV.off||{}).cards||[]).filter(c=>c.start!=null&&c.end!=null).map(c=>({s:+c.start.toFixed(2),e:+c.end.toFixed(2),key:c.override||`${c.trigger_word||''}@${c.start.toFixed(3)}`,label:'the picture'+(c.trigger_word?` on "${c.trigger_word}"`:''),box:c.box||[0,0,100,100]}));
 const cpic=x=>x.pic||(x.src?'/card-img/'+x.src.split('/').map(encodeURIComponent).join('/'):'');
-function selectCard(x){if(!noteOk())return;v.pause();const p=(S.cards_pending||[]).find(p=>p.key===x.key&&p.box),b=p?p.box:x.box;
-  csel={x,box:b.slice(),orig:b.slice(),saved:!!p};drawCard()}
+function selectCard(x){if(!noteOk())return;v.pause();const p=(S.cards_pending||[]).find(p=>p.key===x.key&&p.box),b=p?p.box:x.box,q=cardLook(x.key);
+  csel={x,box:b.slice(),orig:b.slice(),saved:!!p,rot:q.rotation||0,op:q.opacity??1,s:q.start??x.s,e:q.end??x.e};drawCard()}
+// a card's rotation, opacity and time as the next bake has them: the page's pending change, else the live plan's card
+function cardLook(k){const p=(S.cards_pending||[]).find(p=>p.key===k)||{};let c={};try{c=(JSON.parse(LV.raw||'{}').cards||[]).find(c=>c._key===k)||{}}catch(e){}
+  return {rotation:p.rotation??c.rotation,opacity:p.opacity??c.opacity,start:p.start??c.start,end:p.end??c.end}}
 const cmoved=()=>!!csel&&csel.box.some((q,i)=>Math.abs(q-csel.orig[i])>.2);
-function drawCard(){const L=$('clayer');renderEdTracks();if(!csel){drawPending();return}
+function drawCard(){const L=$('clayer');renderEdTracks();inspSoon();if(!csel){drawPending();return}
   const[x,y,w,h]=csel.box,[ox,oy,ow,oh]=csel.x.box,mv=cmoved(),sh=csel.box.some((q,i)=>Math.abs(q-csel.x.box[i])>.2);   // sh: not where the video has it
   liveSync();L._s=null;L.innerHTML=(sh&&!LV.on?`<div class="cwas" style="left:${ox}%;top:${oy}%;width:${ow}%;height:${oh}%"><span>Was here</span></div>`:'')
-    +`<div class="csel" id="csel" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%">${cpic(csel.x)&&(sh||csel.x.added)&&!LV.on?`<img src="${cpic(csel.x)}" alt="">`:''}${['nw','ne','sw','se'].map(k=>`<i data-h="${k}"></i>`).join('')}</div>
+    +`<div class="csel" id="csel" style="left:${x}%;top:${y}%;width:${w}%;height:${h}%${csel.rot?`;transform:rotate(${csel.rot}deg)`:''}">${cpic(csel.x)&&(sh||csel.x.added)&&!LV.on?`<img src="${cpic(csel.x)}" alt="">`:''}${['nw','ne','sw','se','n','s','w','e','rot'].map(k=>`<i data-h="${k}"></i>`).join('')}</div>
     <div class="cbar"><button data-c="reset"${csel.saved||mv?'':' disabled'}>Reset</button><button data-c="note">Note</button><button data-c="del">Delete</button><button data-c="cancel" class="go">Done</button></div>`}
 // cards moved or deleted that the video does not show yet: their old spot dimmed, the picture at its new place
 function drawPending(){const L=$('clayer'),t=v.currentTime,cs=((data().items||{}).cards)||[],baking=S.bake&&/waiting|working/.test(S.bake.state||'');
   const h=LV.on?'':(S.cards_pending||[]).map(p=>{const c=cs.find(c=>c.key===p.key);if(!c||!(c.s<=t&&t<c.e)||!p.deleted&&!p.box)return '';   /* moved only in time: the Images row shows it */const[ox,oy,ow,oh]=c.box;
     return `<div class="cwas" style="left:${ox}%;top:${oy}%;width:${ow}%;height:${oh}%"><span>${p.deleted?'Deleted':baking?'Updating...':'Moved'}</span></div>`
       +(p.box&&c.src?`<div class="cnew" style="left:${p.box[0]}%;top:${p.box[1]}%;width:${p.box[2]}%;height:${p.box[3]}%"><img src="/card-img/${c.src.split('/').map(encodeURIComponent).join('/')}" alt=""></div>`:'')}).join('')
-    +((S&&S.cards_added)||[]).filter(c=>c.s<=t&&t<c.e).map(c=>`<div class="cnew cadd" style="left:${c.box[0]}%;top:${c.box[1]}%;width:${c.box[2]}%;height:${c.box[3]}%"><img src="${c.pic}" alt=""></div>`).join('');   // dropped on: shown until the bake has it
+    +((S&&S.cards_added)||[]).filter(c=>c.s<=t&&t<c.e&&c.pic).map(c=>`<div class="cnew cadd" style="left:${c.box[0]}%;top:${c.box[1]}%;width:${c.box[2]}%;height:${c.box[3]}%"><img src="${c.pic}" alt=""></div>`).join('');   // dropped on: shown until the bake has it
   if(L._s!==h){L._s=h;L.innerHTML=h}}
 async function cardSave(del,box){const c=csel;if(!c)return;const base={key:c.x.key,label:c.x.label,t:c.x.s,t_end:c.x.e},was=c.orig.slice(),nb=(box||c.box).slice();
   if(del){S.cards_pending=[...(S.cards_pending||[]).filter(q=>q.key!==c.x.key),{key:c.x.key,deleted:true}];liveSync()}   // gone from the frame before the server answers
@@ -2648,17 +2659,19 @@ $('clayer').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if
   else if(k==='reset'){csel.box=csel.x.box.slice();csel.saved=false;cardSave(false,csel.x.box)}
   else if(k==='note'){const x=csel.x;csel=null;drawCard();startNote(lead('cards',x),x.s,x.e,{k:'cards',text:x.label})}});
 $('clayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#csel');if(!el||!csel)return;e.preventDefault();el.setPointerCapture(e.pointerId);
-  const h=e.target.dataset.h,r=$('clayer').getBoundingClientRect(),b0=csel.box.slice(),x0=e.clientX,y0=e.clientY,keep=!!cpic(csel.x),ar=b0[3]/b0[2];
+  const h=e.target.dataset.h,r=$('clayer').getBoundingClientRect(),b0=csel.box.slice(),x0=e.clientX,y0=e.clientY,ar=b0[3]/b0[2],dup=e.altKey&&!h,lines=snapLines(csel.x.key);
   const cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
-  el.onpointermove=ev=>{const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;
-    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2)}
-    else{const l=h.includes('w'),t=h.includes('n');w=Math.max(4,b0[2]+(l?-dx:dx));ht=keep?w*ar:Math.max(4,b0[3]+(t?-dy:dy));
-      if(l)x=b0[0]+b0[2]-w;if(t)y=b0[1]+b0[3]-ht;[x,y,w,ht]=[x,y,w,ht].map(q=>Math.round(q*10)/10)}
+  if(h==='rot')return rotDrag(e,el,[r.left+(b0[0]+b0[2]/2)/100*r.width,r.top+(b0[1]+b0[3]/2)/100*r.height],csel.rot,a=>{csel.rot=a;el.style.transform=a?`rotate(${a}deg)`:'';liveSync()},a=>inspCommit('rotation',a));
+  el.onpointermove=ev=>{const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;guides(!!h||Math.abs(dx)+Math.abs(dy)>.3);
+    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r)}   // frame centre, the other items, the safe zone
+    else{const keep=ev.shiftKey||!!cpic(csel.x)&&h.length===2,l=h.includes('w'),t=h.includes('n'),hz=h!=='n'&&h!=='s',vt=h!=='w'&&h!=='e';   // a corner keeps a picture's shape, Shift any card's
+      w=hz?Math.max(4,b0[2]+(l?-dx:dx)):b0[2];ht=keep?w*ar:vt?Math.max(4,b0[3]+(t?-dy:dy)):b0[3];if(keep&&!hz){ht=Math.max(4,b0[3]+(t?-dy:dy));w=ht/ar}
+      if(l)x=b0[0]+b0[2]-w;else if(!hz)x=b0[0]+(b0[2]-w)/2;if(t)y=b0[1]+b0[3]-ht;else if(!vt)y=b0[1]+(b0[3]-ht)/2;[x,y,w,ht]=[x,y,w,ht].map(q=>Math.round(q*10)/10)}
     if(v.videoHeight>v.videoWidth){   // reels: inside the safe zone (x 60-940, y 250-1440 of 1080x1920)
-      const X0=5.6,X1=87,Y0=13,Y1=75;if(w>X1-X0){w=X1-X0;if(keep)ht=w*ar}if(ht>Y1-Y0){ht=Y1-Y0;if(keep)w=ht/ar}
+      const X0=5.6,X1=87,Y0=13,Y1=75,keep=!!h&&!!cpic(csel.x);if(w>X1-X0){w=X1-X0;if(keep)ht=w*ar}if(ht>Y1-Y0){ht=Y1-Y0;if(keep)w=ht/ar}
       x=Math.round(Math.min(X1-w,Math.max(X0,x))*10)/10;y=Math.round(Math.min(Y1-ht,Math.max(Y0,y))*10)/10}
-    csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync()};
-  el.onpointerup=()=>{el.onpointermove=null;if(cmoved())cardSave(false);else drawCard()}});   // let go: saved
+    csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync();inspVals()};
+  el.onpointerup=()=>{el.onpointermove=null;guides(false);if(dup&&cmoved())return cardDup();if(cmoved())cardSave(false);else drawCard()}});   // let go: saved; Alt: a copy there, the card stays
 document.addEventListener('keydown',e=>{if(!csel||/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||''))return;
   if(e.key==='Escape'){csel=null;drawCard()}if((e.key==='Delete'||e.key==='Backspace')&&!hoverClip()){e.preventDefault();cardSave(true)}if(e.key==='Enter'){e.preventDefault();csel=null;drawCard()}});
 $('mini').addEventListener('click',e=>{const m=e.target.closest('[data-mk]');if(!m)return;const x=((data().items||{})[m.dataset.mk]||[])[+m.dataset.i];
@@ -2739,8 +2752,8 @@ const editable=c=>!(S.sent&&!c.queued)&&c.round>=S.round;
 let tool=null;   // the left panel's tool: 'media', 'text', 'captions', 'sounds' or none
 function openTool(n){if(n!=='text'&&tx)setText(null);tool=n;tpanel=n==='text';document.body.classList.toggle('tside',!!n);
   $('railtext').classList.toggle('on',n==='text');$('railcap').classList.toggle('on',n==='captions');$('railsnd').classList.toggle('on',n==='sounds');$('railmed').classList.toggle('on',n==='media');
-  $('tsht').textContent={captions:'Captions',sounds:'Sounds',media:'Media'}[n]||'Text';
-  $('tplus').hidden=n!=='text';$('tbody').hidden=n!=='text';$('cbody').hidden=n!=='captions';$('sbody').hidden=n!=='sounds';$('mbody').hidden=n!=='media';
+  $('tsht').textContent={captions:'Captions',sounds:'Sounds',media:'Media',insp:'Properties'}[n]||'Text';
+  $('tplus').hidden=n!=='text';$('tbody').hidden=n!=='text';$('cbody').hidden=n!=='captions';$('sbody').hidden=n!=='sounds';$('mbody').hidden=n!=='media';$('ibody').hidden=n!=='insp';if(n!=='insp')IN.sig=null;
   if(n==='media')renderMedPanel();if(n==='text')renderTextPanel();if(n==='captions')renderCapPanel();if(n==='sounds')renderSndPanel();drawCapPrev()}
 function openPanel(on){openTool(on?'text':null)}
 function setText(style,edit){
@@ -2748,7 +2761,8 @@ function setText(style,edit){
   else{const[a,b]=noteSpan(),t0=edit?edit.start:a;
     tx={style,x:edit?edit.x_pct:(tx&&tx.x)||50,y:edit?edit.y_pct:(tx&&tx.y)||40,size:edit?edit.size_pct:(tx&&tx.size)||TEXT_SIZE,word:edit?edit.text:tword(),
         font:(edit?edit.font:tx&&tx.font)||'TikTok Sans',color:(edit?edit.color:tx&&tx.color)||'#FFFFFF',w:(edit?edit.width_pct:tx&&tx.w)||84,
-        start:t0,end:edit?edit.end:(b??Math.min(t0+3,v.duration||t0+3)),edit:edit||(tx&&tx.edit)||null};
+        start:t0,end:edit?edit.end:(b??Math.min(t0+3,v.duration||t0+3)),edit:edit||(tx&&tx.edit)||null,
+        ...Object.fromEntries(TXX.map(k=>[k,edit?edit[k]:tx&&tx[k]]))};   // the inspector's extras (Texts.tsx labelMove): rotation, opacity, anim, align, text_color
     if(!tpanel)openPanel(true);
     if(!(v.currentTime>=tx.start&&v.currentTime<tx.end))v.currentTime=tx.start+.05}
   document.body.classList.toggle('texting',!!tx);tsig=null;$('edtracks')._h=null;renderEdTracks();$('tbody')._tf=null;renderTextPanel();renderTexts();   // its clip shows picked
@@ -2773,11 +2787,12 @@ function renderTextPanel(){
     <div class="tf"><span>Size</span><div class="tfv"><input type="range" id="tsize" min="2" max="20" step="0.5" value="${tx.size}" aria-label="text size"><output id="tsizen" class="num">${tx.size}</output></div></div>
     <div class="tf"><span>Width</span><div class="tfv"><input type="range" id="twidth" min="15" max="84" step="1" value="${tx.w}" aria-label="text width"><output id="twidthn" class="num">${tx.w}%</output></div></div>
     <div class="tf"><span>Font</span><div class="tfv"><select id="tfont" aria-label="font">${TFONTS.map(f=>`<option value="${f}"${f===tx.font?' selected':''}>${f}</option>`).join('')}</select></div></div>
-    <div class="tf top"><span>${tx.style==='box'||tx.style==='block'?'Box':'Colour'}</span><div class="tfv col"><div class="tcols" id="tcols">${TCOLS.map(c=>`<button data-tc="${c}" style="background:${c}" title="${c}" aria-label="colour ${c}"${c===tx.color?' class="on"':''}></button>`).join('')}</div>
+    <div class="tf top"><span>${tx.style==='box'||tx.style==='block'?'Box colour':'Colour'}</span><div class="tfv col"><div class="tcols" id="tcols">${TCOLS.map(c=>`<button data-tc="${c}" style="background:${c}" title="${c}" aria-label="colour ${c}"${c===tx.color?' class="on"':''}></button>`).join('')}</div>
       <div class="tcustom"><label title="Any colour"><input type="color" id="tcol" value="${tx.color.toLowerCase()}" aria-label="any colour"><span></span></label><input id="thex" value="${tx.color}" maxlength="7" aria-label="colour as hex" spellcheck="false"></div></div></div>
+    ${txMore()}
     <div class="tfoot">${tx.edit?'<button id="tdel">Delete</button>':''}<span></span><button id="tcancel">Cancel</button><button id="tadd" ${tword()?'':'disabled'}>${tx.edit?'Save':'Add text'}</button></div>
     <p class="tsub">On the video: drag to move it, click to type, a corner sizes it, a side makes it narrower. Enter is a new line, ⌘ Enter saves.</p></div>`:''}
-  if(tx&&$('tspan'))$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end);
+  if(tx&&$('tspan'))$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end);if(tx)txMoreVals();
   const all=textItems(),on=x=>tx&&tx.edit&&String(tx.edit.id)===String(x.id);
   const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)} · Claude has it</span></div></div>`
     :`<div class="titem${on(x)?' on':''}" data-tedit="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}" title="Click to change it"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
@@ -2791,17 +2806,18 @@ function bakeLine(){const b=(S&&S.bake)||{},live=(S.texts||[]).some(x=>!(S.texts
     :live&&b.state==='off'?(b.why==='Claude has this draft'?'Claude adds it to the draft it is making.':'It goes into the video with the next render.'):'';
   return m?`<p class="tsub">${esc(m)}</p>`:''}
 // an open text saves itself: moved, resized or restyled when you let go, typed a moment after the last key. No Done, no note
-const txState=()=>({text:tword(),style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100});
+const txState=()=>({text:tword(),style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100,...txX(tx)});
 async function textAuto(){clearTimeout(textAuto.h);if(!tx||!tx.edit||tx.edit.fresh||!tword())return;const id=tx.edit.id,was=(S.texts||[]).find(x=>String(x.id)===String(id));if(!was)return;
-  const b=txState(),a=TXF(was),df={font:'TikTok Sans',color:'#FFFFFF',width_pct:84,size_pct:TEXT_SIZE,x_pct:50,y_pct:40},ks=Object.keys(b).filter(k=>b[k]!==(a[k]??df[k]));if(!ks.length)return;   // a click alone changes nothingObject.assign(was,b);   // the page has it now: a poll or a second save never undoes it
+  const b=txState(),a=TXF(was),df={font:'TikTok Sans',color:'#FFFFFF',width_pct:84,size_pct:TEXT_SIZE,x_pct:50,y_pct:40},ks=Object.keys(b).filter(k=>b[k]!==(a[k]??df[k]));if(!ks.length)return;   // a click alone changes nothing
+  Object.assign(was,b);   // the page has it now: a poll or a second save never undoes it
   const r=await post('/text/edit',{id,...b});if(!(r.id||r.ok))return toast(r.error||'That did not save.');
-  const words=ks.length===1&&ks[0]==='text';edPush('change text',()=>edSave('/text/edit',{id,...a}),()=>edSave('/text/edit',{id,...b}),words?'txt:'+id:null);if(!words)EH.u[EH.u.length-1].look=true}
+  const words=ks.length===1&&ks[0]==='text';edPush('change text',()=>edSave('/text/edit',{id,...a}),()=>edSave('/text/edit',{id,...b}),words?'txt:'+id:'txl:'+id+':'+ks.join());if(!words)EH.u[EH.u.length-1].look=true}   // one entry per field, coalesced while a slider is worked
 const textSoon=ms=>{clearTimeout(textAuto.h);textAuto.h=setTimeout(textAuto,ms)};
 document.addEventListener('pointerup',e=>{if(tx&&e.target.closest('#tedit,#tside,.eitem.txt'))textSoon(250)});
 document.addEventListener('input',e=>{if(tx&&e.target.closest('#tedit,#tside'))textSoon(600)});document.addEventListener('change',e=>{if(tx&&e.target.closest('#tside'))textSoon(100)});
 function editText(id,fresh){const x=textItems().find(x=>String(x.id)===String(id)&&!!x.fresh===!!fresh);if(!x)return;
-  inT=outT=null;renderBar();setText(x.style,{id:x.id,fresh:x.fresh,text:x.text,x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end})}
-const TXF=x=>({text:x.text,style:x.style,x_pct:x.x_pct,y_pct:x.y_pct,size_pct:x.size_pct,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end});
+  inT=outT=null;renderBar();setText(x.style,{id:x.id,fresh:x.fresh,text:x.text,x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end,...txX(x)})}
+const TXF=x=>({text:x.text,style:x.style,x_pct:x.x_pct,y_pct:x.y_pct,size_pct:x.size_pct,font:x.font,color:x.color,width_pct:x.width_pct,start:x.start,end:x.end,...txX(x)});
 async function delText(id,fresh){const was=fresh?null:(S.texts||[]).find(x=>String(x.id)===String(id));if(!fresh){S.texts=(S.texts||[]).filter(x=>String(x.id)!==String(id));liveSync()}const r=fresh?await post('/delete',{id:+id}):await post('/text/delete',{id});
   if(tx&&tx.edit&&String(tx.edit.id)===String(id))setText(null);toast(r.error||'Text deleted');
   if(was&&!r.error){let cur=id;edPush('delete text',async()=>{const a=await post('/text/add',TXF(was));if(!(a.id||a.ok))throw new Error(a.error||'');cur=a.text_id||a.id;await load()},()=>edSave('/text/delete',{id:cur}))}
@@ -3036,7 +3052,7 @@ $('mbody').addEventListener('dragstart',e=>{const r=e.target.closest('[data-msrc
 $('mbody').addEventListener('dragleave',e=>{if(!$('mbody').contains(e.relatedTarget)){const d=$('mdrop');if(d)d.classList.remove('on')}});
 $('mbody').addEventListener('drop',e=>{if(!e.dataTransfer.files.length)return;e.preventDefault();const d=$('mdrop');if(d)d.classList.remove('on');medUpload(e.dataTransfer.files)});
 async function saveText(){const text=tword();if(!tx||!text)return;
-  const look={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w},ed=tx.edit,t={start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100};
+  const look={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,...txX(tx)},ed=tx.edit,t={start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100};
   if(ed&&!ed.fresh){await textAuto();inT=outT=null;renderBar();setText(null);return load()}   // it saves itself: this only lets go
   let r;
   if(!ed)r=await post('/text/add',{text,...look,...t});
@@ -3056,12 +3072,13 @@ function renderTexts(){
     ;
   if(html!==tsig){tsig=html;L.innerHTML=html}
   drawEdit(fs);liveSync()}
-const tlStyle=(a,fs)=>`left:${a.x_pct}%;top:${a.y_pct}%;font-size:${fs(a.size_pct)}px;max-width:${a.width_pct||84}%;width:max-content;font-family:'${esc(a.font||'TikTok Sans')}',system-ui,sans-serif`;
-const tsCol=a=>{const c=a.color||'#FFFFFF';return a.style==='box'||a.style==='block'?`background:${c};color:${inkOn(c)}`:`color:${c}`};
+const tlStyle=(a,fs)=>`left:${a.x_pct}%;top:${a.y_pct}%;font-size:${fs(a.size_pct)}px;max-width:${a.width_pct||84}%;width:max-content;font-family:'${esc(a.font||'TikTok Sans')}',system-ui,sans-serif`
+  +(a.rotation?`;transform:translate(-50%,-50%) rotate(${a.rotation}deg)`:'')+(a.align?`;text-align:${a.align}`:'')+(a.opacity!=null&&a.opacity<1&&!LV.on?`;opacity:${a.opacity}`:'');
+const tsCol=a=>{const c=a.color||'#FFFFFF';return a.style==='box'||a.style==='block'?`background:${c};color:${a.text_color||inkOn(c)}`:`color:${c}`};
 // the text being edited: built once per edit and restyled in place, so the caret stays where the user types
 function drawEdit(fs){const E=$('tedit');if(!tx){if(E.firstChild)E.innerHTML='';return}
-  let el=$('tprev');if(!el){E.innerHTML=`<div class="tl ed" id="tprev"><span contenteditable="plaintext-only" spellcheck="false" aria-label="the text"></span>${['nw','ne','sw','se','w','e'].map(h=>`<i data-h="${h}"></i>`).join('')}</div>`;el=$('tprev')}
-  const a={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w},sp=el.firstChild;
+  let el=$('tprev');if(!el){E.innerHTML=`<div class="tl ed" id="tprev"><span contenteditable="plaintext-only" spellcheck="false" aria-label="the text"></span>${['nw','ne','sw','se','w','e','n','s','rot'].map(h=>`<i data-h="${h}"></i>`).join('')}</div>`;el=$('tprev')}
+  const a={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,...txX(tx,1)},sp=el.firstChild;
   el.style.cssText=tlStyle(a,fs);sp.className='ts-'+tx.style;sp.style.cssText=tsCol(a);
   if(document.activeElement!==sp&&sp.textContent!==(tx.word||''))sp.textContent=tx.word||''}
 $('tedit').addEventListener('input',e=>{if(!tx||!e.target.isContentEditable)return;tx.word=e.target.innerText.replace(/\n$/,'');liveSync();
@@ -3078,16 +3095,21 @@ $('tedit').addEventListener('pointerdown',e=>{const el=e.target.closest('#tprev'
     const pre=ev=>{if(Math.abs(ev.clientX-e.clientX)+Math.abs(ev.clientY-e.clientY)<5)return;stop();getSelection().removeAllRanges();sp.blur();textDrag(e.clientX,e.clientY,ev)},
       stop=()=>{document.removeEventListener('pointermove',pre);document.removeEventListener('pointerup',stop)};
     document.addEventListener('pointermove',pre);document.addEventListener('pointerup',stop);return}
-  e.preventDefault();el.setPointerCapture(e.pointerId);const L=$('tlayer').getBoundingClientRect(),x0=e.clientX,y0=e.clientY;let moved=false;
-  const end=f=>{el.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)>3)moved=true;if(moved)f(ev)};el.onpointerup=ev=>{el.onpointermove=el.onpointerup=null;if(!moved&&!h)typeIn(sp,false,ev.clientX,ev.clientY)}};
+  e.preventDefault();el.setPointerCapture(e.pointerId);const L=$('tlayer').getBoundingClientRect(),x0=e.clientX,y0=e.clientY,ox=tx.x,oy=tx.y,dup=e.altKey&&!h&&tx.edit&&!tx.edit.fresh;let moved=false;
+  if(h==='rot'){const r=el.getBoundingClientRect();return rotDrag(e,el,[r.left+r.width/2,r.top+r.height/2],tx.rotation||0,a=>{tx.rotation=a;renderTexts();txMoreVals()},()=>textSoon(100))}
+  const end=f=>{el.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)>3)moved=true;if(moved)f(ev)};el.onpointerup=ev=>{el.onpointermove=el.onpointerup=null;guides(false);if(!moved&&!h)typeIn(sp,false,ev.clientX,ev.clientY);
+    if(dup&&moved){const nx=tx.x,ny=tx.y;tx.x=ox;tx.y=oy;renderTexts();post('/text/add',{...txState(),x_pct:nx,y_pct:ny}).then(r=>{if(!(r.id||r.ok))return toast(r.error||'That did not save.');   // Alt: a copy where it was let go
+      let cur=r.id;const b={...txState(),x_pct:nx,y_pct:ny};edPush(`"${b.text}" copied`,()=>edSave('/text/delete',{id:cur}),async()=>{const a=await post('/text/add',b);cur=a.id;await load()});toast('Copied.');load()})}}};
   if(h==='w'||h==='e'){const cx=L.left+tx.x/100*L.width;   // a side: the text's width, the box hugs what is left
     return end(ev=>{tx.w=Math.round(Math.min(84,Math.max(15,Math.abs(ev.clientX-cx)*2/L.width*100)));const z=$('twidth');if(z)z.value=tx.w;tnums();renderTexts()})}
   if(h){const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,s0=tx.size,d=ev=>Math.hypot(ev.clientX-cx,ev.clientY-cy),d0=Math.max(8,d(e));
-    return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner scales it from its centre
+    return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner, the top or the bottom scales it from its centre
   end(textMove(x0,y0))});
 // the text follows the mouse from where the press began; reels: inside the safe zone
 function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),vert=v.videoHeight>v.videoWidth,ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
-  return ev=>{tx.x=cl(ox+(ev.clientX-x0)/L.width*100,vert?20:12,vert?73:88);tx.y=cl(oy+(ev.clientY-y0)/L.height*100,vert?16:8,vert?72:92);renderTexts()}}
+  const tr=$('tprev')&&$('tprev').getBoundingClientRect(),hw=tr?tr.width/2/L.width*100:0,hh=tr?tr.height/2/L.height*100:0,lines=snapLines('t'+(tx.edit?tx.edit.id:''));
+  return ev=>{guides(true);let x=ox+(ev.clientX-x0)/L.width*100,y=oy+(ev.clientY-y0)/L.height*100;[x,y]=snapBox([x-hw,y-hh,hw*2,hh*2],lines,L).map((q,i)=>q+[hw,hh][i]);
+    tx.x=cl(x,vert?20:12,vert?73:88);tx.y=cl(y,vert?16:8,vert?72:92);renderTexts();txMoreVals()}}
 function textDrag(x0,y0,ev0){const f=textMove(x0,y0),up=()=>{document.removeEventListener('pointermove',f);document.removeEventListener('pointerup',up);textSoon(250)};
   f(ev0);document.addEventListener('pointermove',f);document.addEventListener('pointerup',up)}
 // a trial reel on screen (its version picked, after Make): the note goes to that trial on the Trial reels tab, at this moment
@@ -3148,6 +3170,142 @@ function themeIcon(){const d=isDark();document.querySelectorAll('.themebtn').for
 document.querySelectorAll('.themebtn').forEach(b=>b.onclick=e=>{e.stopPropagation();const t=isDark()?'light':'dark';document.documentElement.dataset.theme=t;themeAt=Date.now();
   fetch('/theme',{method:'POST',body:JSON.stringify({theme:t})});themeIcon()});
 OS.addEventListener('change',themeIcon);themeIcon();
+// the inspector: picking anything (on the timeline or the video) shows its properties in the left panel, the one place to
+// edit it (CapCut's right panel, on the left like Tella's tools). A text's is the Text panel itself; an image, a sound, a
+// video piece and several picked at once get Properties. Every field plays live while it moves and saves when let go,
+// through the routes the hand edits use (/card/edit, /sfx/move, /text/edit), one undo per field.
+const TXX=['rotation','opacity','anim','align','text_color'];
+const txX=(o,clean)=>{const r={rotation:+o.rotation||0,opacity:o.opacity??1,anim:o.anim||'none',align:o.align||'center',text_color:o.text_color||''};if(!clean)return r;   // clean: only what is not today's look (Texts.tsx Label)
+  return Object.fromEntries(Object.entries(r).filter(([k,x])=>k==='rotation'?x:k==='opacity'?x<1:k==='anim'?x!=='none':k==='align'?x!=='center':x&&/box|block/.test(o.style||'')))};
+const IN={sig:null,prev:null,live:{},g:{x:[],y:[]},gon:false,was:{}};
+const FW=()=>v.videoWidth||1080,FH=()=>v.videoHeight||1920,r1=n=>Math.round(n*10)/10,r2=n=>Math.round(n*100)/100;
+const ANIMS=[['none','None'],['fade','Fade'],['pop','Pop'],['slide','Slide up']],ALIGNS=[['center','Centre'],['left','Left'],['right','Right']];
+const TINKS=[['','Black or white'],['#FFFFFF','White'],['#000000','Black'],['#FFD60A','Yellow'],['#FF3B30','Red'],['#0A84FF','Blue']];
+const fRng=(id,l,v,min,max,step)=>`<div class="tf"><span>${l}</span><div class="tfv"><input type="range" id="${id}" min="${min}" max="${max}" step="${step}" value="${v}" aria-label="${l.toLowerCase()}"><output id="${id}n" class="num wide"></output></div></div>`;
+const fSel=(id,l,v,o)=>`<div class="tf"><span>${l}</span><div class="tfv"><select id="${id}" aria-label="${l.toLowerCase()}">${o.map(([k,n])=>`<option value="${k}"${k===v?' selected':''}>${n}</option>`).join('')}</select></div></div>`;
+const fNum=(id,l,v,step,u)=>`<div class="tf"><span>${l}</span><div class="tfv"><input type="number" class="inum" id="${id}" step="${step}" value="${v}" aria-label="${l.toLowerCase()}"><em>${u}</em></div></div>`;
+const fOut={rot:x=>Math.round(x)+'°',op:x=>Math.round(x)+'%',sc:x=>Math.round(x)+'%',vol:x=>+x?(20*Math.log10(x/100)).toFixed(1)+' dB':'Off',fi:x=>(+x).toFixed(2)+' s',fo:x=>(+x).toFixed(2)+' s'};
+function setF(id,x){const e=$(id);if(e&&document.activeElement!==e)e.value=x;const o=$(id+'n'),f=fOut[id.replace(/^[it]/,'')];if(o&&f)o.textContent=f(x)}   // a value drawn in, the one being typed left alone
+// the Text panel's inspector fields (texts.json extras, review.py text_more)
+const txMore=()=>`<div class="isec">${fNum('txx','Position X',Math.round(tx.x/100*FW()),1,'px')}${fNum('txy','Position Y',Math.round(tx.y/100*FH()),1,'px')}
+  ${fRng('trot','Rotation',tx.rotation||0,-180,180,1)}${fRng('top','Opacity',Math.round((tx.opacity??1)*100),5,100,1)}
+  ${fSel('talign','Alignment',tx.align||'center',ALIGNS)}${fSel('tanim','Animation',tx.anim||'none',ANIMS)}
+  ${/box|block/.test(tx.style)?fSel('ttcol','Text colour',tx.text_color||'',TINKS):''}
+  ${fNum('tst','Start',r2(tx.start),.1,'s')}${fNum('ten','End',r2(tx.end),.1,'s')}</div>`;
+function txMoreVals(){if(!tx||!$('txx'))return;setF('txx',Math.round(tx.x/100*FW()));setF('txy',Math.round(tx.y/100*FH()));setF('trot',tx.rotation||0);setF('top',Math.round((tx.opacity??1)*100));setF('tst',r2(tx.start));setF('ten',r2(tx.end))}
+$('tbody').addEventListener('input',e=>{if(!tx)return;const id=e.target.id,x=e.target.value;
+  if(id==='txx')tx.x=r1(Math.min(100,Math.max(0,x/FW()*100)));else if(id==='txy')tx.y=r1(Math.min(100,Math.max(0,x/FH()*100)));
+  else if(id==='trot')tx.rotation=+x;else if(id==='top')tx.opacity=x/100;else if(id==='talign')tx.align=x;else if(id==='tanim')tx.anim=x;else if(id==='ttcol')tx.text_color=x;
+  else if(id==='tst'&&x!==''){tx.start=Math.max(0,+x);if(tx.end<=tx.start+.1)tx.end=tx.start+1}else if(id==='ten'&&+x>tx.start+.1)tx.end=+x;else return;
+  setF(id,x);renderTexts();if(id==='tst'||id==='ten')$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end)});
+// what the inspector shows: several picked, an image, a sound or a piece of the video (a text has the Text panel)
+function inspTarget(){if(!S||!view||view.stage!=='edit')return null;if(msel.size>1)return {k:'multi',ids:[...msel]};
+  return csel?{k:'card'}:ssel&&placed(ssel)?{k:'snd'}:vsel!=null?{k:'vid'}:null}
+const inspSoon=()=>{if(!IN.raf)IN.raf=requestAnimationFrame(()=>{IN.raf=0;inspSync()})};
+{const f=renderEdTracks;renderEdTracks=function(){f.apply(this,arguments);inspSoon()}}   // every pick redraws the rows: the inspector follows
+function inspSync(){const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
+  if(!t||tx&&t.k!=='multi'){if(tool==='insp')openTool(IN.prev);return}
+  if(tool!=='insp'){IN.prev=tool==='text'?null:tool;openTool('insp')}
+  if(IN.sig!==sig){IN.sig=sig;renderInsp(t)}else inspVals()}
+const mparts=k=>{const i=k.indexOf('|');return [k.slice(0,i),k.slice(i+1)]};
+// a field each kind has, for several picked: only those all of them share
+const MF={text:['rot','op'],img:['rot','op'],snd:['vol','mute']};
+function renderInsp(t){const B=$('ibody');let h='';IN.was={};
+  if(t.k==='card'){const c=csel,[x,y,w,ht]=c.box;
+    h=`<p class="ihead"><b>${esc(c.x.label.replace(/^./,m=>m.toUpperCase()))}</b><span>Image · ${fmtx(c.s)} to ${fmtx(c.e)}</span></p>
+      ${fNum('ix','Position X',Math.round((x+w/2)/100*FW()),1,'px')}${fNum('iy','Position Y',Math.round((y+ht/2)/100*FH()),1,'px')}
+      ${fRng('isc','Scale',Math.round(w/c.x.box[2]*100),10,300,1)}${fRng('irot','Rotation',c.rot,-180,180,1)}${fRng('iop','Opacity',Math.round(c.op*100),5,100,1)}
+      ${fNum('is','Start',r2(c.s),.1,'s')}${fNum('ie','End',r2(c.e),.1,'s')}<button class="ifull" id="idel">Delete</button>`}
+  else if(t.k==='snd'){const x=placed(ssel),cl=x.kind==='clip',vol=(x.vol??1)*100;
+    h=`<p class="ihead"><b>${esc(x.sound.replace(/\.[a-z0-9]+$/i,''))}</b><span>${cl?'Audio':'Sound'} · ${fmtx(x.t)} · ${sndLen(x).toFixed(1)} s</span></p>
+      ${fRng('ivol','Volume',Math.round(vol),0,200,1)}${cl?fRng('ifi','Fade in',x.fade_in||0,0,Math.min(5,x.dur/2),.05)+fRng('ifo','Fade out',x.fade_out||0,0,Math.min(5,x.dur/2),.05):''}
+      ${fNum('ist','Start',r2(x.t),.1,'s')}${cl?fNum('iin','Trim in',r2(x.in||0),.1,'s')+fNum('iout','Trim out',r2((x.in||0)+x.dur),.1,'s'):''}
+      ${fSel('imute','Mute',x.muted?'1':'',[['','Off'],['1','On']])}
+      <div class="tfv"><button id="iplay">Play</button>${cl?'<button id="isplit" title="Split at the playhead (⌘B)">Split</button>':''}</div><button class="ifull" id="idel">Remove</button>`}
+  else if(t.k==='vid'){const p=vpieces().find(q=>Math.abs(q.a-vsel)<.01)||{a:vsel,b:vsel};
+    h=`<p class="ihead"><b>Video piece</b><span>${fmtx(p.a)} to ${fmtx(p.b)} · ${(p.b-p.a).toFixed(1)} s</span></p><button class="ifull" id="idel">Cut this piece</button>`}
+  else{const ks=t.ids.map(k=>mparts(k)[0]),fs=(MF[ks[0]]||[]).filter(f=>ks.every(k=>(MF[k]||[]).includes(f))),one=insItem(t.ids[0]);
+    h=`<p class="ihead"><b>${t.ids.length} picked</b><span>A change goes on all of them</span></p>`
+      +(fs.includes('rot')?fRng('irot','Rotation',one.rot,-180,180,1):'')+(fs.includes('op')?fRng('iop','Opacity',Math.round(one.op*100),5,100,1):'')
+      +(fs.includes('vol')?fRng('ivol','Volume',Math.round(one.vol*100),0,200,1):'')+(fs.includes('mute')?fSel('imute','Mute',one.mute?'1':'',[['','Off'],['1','On']]):'')
+      +(fs.length?'':'<p class="tsub">These have no setting in common. Pick one to change it.</p>')+`<button class="ifull" id="idel">Delete all ${t.ids.length}</button>`}
+  B.innerHTML=`<div class="tnew">${h}</div>`;inspVals()}
+// one picked item of several: its look now, and how to set a field on it live
+function insItem(k){const[row,id]=mparts(k);
+  if(row==='img'){const q=cardLook(id),o=IN.live[id]||{};return {rot:o.rotation??q.rotation??0,op:o.opacity??q.opacity??1}}
+  if(row==='text'){const x=(S.texts||[]).find(x=>String(x.id)===id)||{};return {rot:x.rotation||0,op:x.opacity??1,x}}
+  const x=placed(id)||{};return {vol:x.vol??1,mute:!!x.muted,x}}
+function inspVals(){const t=inspTarget();if(!t||tool!=='insp')return;
+  if(t.k==='card'){const c=csel,[x,y,w,ht]=c.box;setF('ix',Math.round((x+w/2)/100*FW()));setF('iy',Math.round((y+ht/2)/100*FH()));setF('isc',Math.round(w/c.x.box[2]*100));setF('irot',c.rot);setF('iop',Math.round(c.op*100));setF('is',r2(c.s));setF('ie',r2(c.e))}
+  else if(t.k==='snd'){const x=placed(ssel);setF('ivol',Math.round((x.vol??1)*100));setF('ifi',x.fade_in||0);setF('ifo',x.fade_out||0);setF('ist',r2(x.t));setF('iin',r2(x.in||0));setF('iout',r2((x.in||0)+(x.dur||0)))}
+  else if(t.k==='multi'){const one=insItem(t.ids[0]);if(one.rot!=null){setF('irot',one.rot);setF('iop',Math.round(one.op*100))}else setF('ivol',Math.round(one.vol*100))}}
+const cardLive=()=>{const s2=$('csel');if(s2){const[x,y,w,h]=csel.box;Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:h+'%',transform:csel.rot?`rotate(${csel.rot}deg)`:''})}liveSync()};
+// a field moved: drawn live at once (the composition plays it), saved when let go
+$('ibody').addEventListener('input',e=>{const id=e.target.id,n=+e.target.value,t=inspTarget();if(!t)return;setF(id,e.target.value);
+  if(t.k==='card'){const c=csel,b=c.box;if(!(id in IN.was))IN.was[id]={box:b.slice(),rot:c.rot,op:c.op,s:c.s,e:c.e};
+    if(id==='ix')b[0]=r1(n/FW()*100-b[2]/2);else if(id==='iy')b[1]=r1(n/FH()*100-b[3]/2);
+    else if(id==='isc'){const cx=b[0]+b[2]/2,cy=b[1]+b[3]/2,w=Math.max(3,c.x.box[2]*n/100),h=w*c.x.box[3]/c.x.box[2];csel.box=[r1(cx-w/2),r1(cy-h/2),r1(w),r1(h)]}
+    else if(id==='irot')c.rot=n;else if(id==='iop')c.op=n/100;else if(id==='is'&&e.target.value!==''){const d=c.e-c.s;c.s=Math.max(0,n);c.e=c.s+d}else if(id==='ie'&&n>c.s+.2)c.e=n;
+    return cardLive()}
+  if(t.k==='snd'){const x=placed(ssel);if(!(id in IN.was))IN.was[id]={t:x.t,in:x.in,dur:x.dur,vol:x.vol,fade_in:x.fade_in,fade_out:x.fade_out,muted:x.muted};
+    if(id==='ivol')x.vol=n/100;else if(id==='ifi')x.fade_in=n;else if(id==='ifo')x.fade_out=n;else if(id==='ist'&&e.target.value!=='')x.t=Math.max(0,n);else if(id==='imute')x.muted=!!e.target.value;
+    else if(id==='iin'&&n>=0&&n<(x.in||0)+x.dur-.2){x.dur=r2(x.dur+(x.in||0)-n);x.in=n}else if(id==='iout'&&n>(x.in||0)+.2&&n<=(x.d||1e9))x.dur=r2(n-(x.in||0));
+    liveAudio();return liveSync()}
+  if(t.k==='multi')for(const k of t.ids){const[row,key]=mparts(k),it=insItem(k);
+    if(row==='img')IN.live[key]={...IN.live[key],...(id==='irot'?{rotation:n}:id==='iop'?{opacity:n/100}:{})};
+    else if(row==='text'&&it.x.id!=null){if(id==='irot')it.x.rotation=n;if(id==='iop')it.x.opacity=n/100}
+    else if(row==='snd'&&it.x.id){if(id==='ivol')it.x.vol=n/100;if(id==='imute')it.x.muted=!!e.target.value;liveAudio()}}
+  liveSync()});
+$('ibody').addEventListener('change',e=>{if(e.target.id)inspCommit(e.target.id)});
+$('ibody').addEventListener('keydown',e=>e.stopPropagation());   // typing a number never plays, seeks or deletes
+async function inspCommit(id){const t=inspTarget();if(!t)return;
+  if(t.k==='card'){const c=csel,w0=IN.was[id];delete IN.was[id];if(!w0&&id!=='rotation')return;
+    if(id==='ix'||id==='iy'||id==='isc'){c.orig=w0.box;return cardSave(false)}   // a move or a resize: the drag's own save
+    const base={key:c.x.key,label:c.x.label,t:c.x.s,t_end:c.x.e},[a,b,what]=id==='irot'||id==='rotation'?[{rotation:w0?w0.rot:IN.rot0},{rotation:c.rot},'image turned']
+      :id==='iop'?[{opacity:w0.op},{opacity:c.op},'image opacity']:[{start:r2(w0.s),end:r2(w0.e)},{start:r2(c.s),end:r2(c.e)},'image moved'];
+    const r=await post('/card/edit',{...base,...b});if(!(r.id||r.ok))return toast(r.error||'That did not save.');
+    edPush(what,()=>edSave('/card/edit',{...base,...a}),()=>edSave('/card/edit',{...base,...b}),'ci:'+c.x.key+':'+what);$('edtracks')._h=null;return load()}
+  if(t.k==='snd'){const x=placed(ssel),w0=IN.was[id];delete IN.was[id];if(!w0)return;
+    const b={placed:x.id,t:r2(x.t),...(x.kind==='clip'?{in:r2(x.in||0),dur:r2(x.dur),fade_in:x.fade_in||0,fade_out:x.fade_out||0}:{}),vol:x.vol??1,muted:!!x.muted},
+      a={placed:x.id,t:w0.t,...(x.kind==='clip'?{in:w0.in||0,dur:w0.dur,fade_in:w0.fade_in||0,fade_out:w0.fade_out||0}:{}),vol:w0.vol??1,muted:!!w0.muted};
+    const r=await post('/sfx/move',b);if(!(r.id||r.ok))return toast(r.error||'That did not save.');
+    edPush({ivol:'volume',ifi:'fade in',ifo:'fade out',imute:x.muted?'muted':'unmuted'}[id]||'sound moved',()=>edSave('/sfx/move',a),()=>edSave('/sfx/move',b),'si:'+x.id+':'+id);$('edtracks')._h=null;return load()}
+  if(t.k==='multi'){const n0=EH.u.length,val=$(id)&&$(id).value;
+    for(const k of t.ids){const[row,key]=mparts(k),it=insItem(k);
+      if(row==='img'){const c=cardsAll().find(c=>c.key===key);if(!c)continue;const q=cardLook(key),base={key,label:c.label,t:c.s,t_end:c.e},b=IN.live[key]||{},a={rotation:q.rotation||0,opacity:q.opacity??1};
+        if((await post('/card/edit',{...base,...b})).ok)edPush('images changed',()=>edSave('/card/edit',{...base,...a}),()=>edSave('/card/edit',{...base,...b}))}
+      else if(row==='text'&&it.x.id!=null){const b={id:it.x.id,rotation:it.x.rotation||0,opacity:it.x.opacity??1},a={id:it.x.id,...TXF(it.x)};await post('/text/edit',b);edPush('texts changed',()=>edSave('/text/edit',a),()=>edSave('/text/edit',b))}
+      else if(row==='snd'&&it.x.id){const b={placed:key,vol:it.x.vol??1,muted:!!it.x.muted};await post('/sfx/move',b);edPush('sounds changed',()=>edSave('/sfx/move',{placed:key,vol:1,muted:false}),()=>edSave('/sfx/move',b))}}
+    edGroup(`${t.ids.length} changed`,n0);IN.live={};$('edtracks')._h=null;return load()}}
+$('ibody').addEventListener('click',e=>{const t=inspTarget();if(!t)return;const b=e.target.closest('button');if(!b)return;
+  if(b.id==='idel'){if(t.k==='card')return cardSave(true);if(t.k==='snd')return delSnd(placed(ssel));if(t.k==='vid')return cutPiece(vsel);return mselDel()}
+  if(b.id==='iplay'){const x=placed(ssel);v.currentTime=Math.max(0,x.t-.3);v.play();return}
+  if(b.id==='isplit')return sndSplit(placed(ssel),v.currentTime)});
+// the rotate handle: turns about the centre; snaps upright and to quarter turns, Shift by 15 degrees
+function rotDrag(e,el,c,a0,live,done){const ang=ev=>Math.atan2(ev.clientY-c[1],ev.clientX-c[0])*180/Math.PI,s0=ang(e);let a=a0;IN.rot0=a0;
+  el.onpointermove=ev=>{a=a0+ang(ev)-s0;a=((a+180)%360+360)%360-180;if(ev.shiftKey)a=Math.round(a/15)*15;else for(const q of [-180,-90,0,90,180])if(Math.abs(a-q)<3)a=q;a=Math.round(a);live(a);inspVals()};
+  el.onpointerup=()=>{el.onpointermove=el.onpointerup=null;if(a!==a0)done(a)}}
+// snap lines while moving, % of the frame: its centre lines, the other items' edges and centres up now, and on 9:16 the reels safe zone
+function snapLines(self){const t=v.currentTime,L={x:[50],y:[50]};
+  if(FH()>FW()){L.x.push(5.56,87.04);L.y.push(13.02,75)}
+  for(const c of cardsAll()){if(c.key===self||!(c.s<=t&&t<c.e))continue;const p=(S.cards_pending||[]).find(p=>p.key===c.key&&p.box),[x,y,w,h]=p?p.box:c.box;L.x.push(x,x+w/2,x+w);L.y.push(y,y+h/2,y+h)}
+  for(const x of textItems())if('t'+x.id!==self&&x.start<=t&&t<x.end){L.x.push(x.x_pct??50);L.y.push(x.y_pct??40)}
+  return L}
+function snapBox(b,L,r){const th=[6/r.width*100,6/r.height*100];IN.g={x:[],y:[]};const out=[b[0],b[1]];
+  [['x',0,2],['y',1,3]].forEach(([k,i,j],n)=>{let best=null;for(const q of [b[i],b[i]+b[j]/2,b[i]+b[j]])for(const l of L[k]){const d=l-q;if(Math.abs(d)<th[n]&&(!best||Math.abs(d)<Math.abs(best.d)))best={d,l}}
+    if(best){out[n]=b[i]+best.d;IN.g[k]=[best.l]}});drawGuides();return out}
+function guides(on){if(IN.gon===on)return;IN.gon=on;if(!on)IN.g={x:[],y:[]};drawGuides()}
+function drawGuides(){const G=$('guides');G.innerHTML=!IN.gon?'':(FH()>FW()?'<div class="szone"></div>':'')+IN.g.x.map(x=>`<div class="sgl" style="left:${x}%;top:0;width:1px;height:100%"></div>`).join('')+IN.g.y.map(y=>`<div class="sgl" style="top:${y}%;left:0;height:1px;width:100%"></div>`).join('')}
+// Alt-drag a card: a copy lands where it was let go (review.py /card/dup), the card stays
+async function cardDup(){const c=csel,nb=c.box.slice();c.box=c.orig.slice();cardLive();const r=await post('/card/dup',{key:c.x.key,box:nb});
+  if(!r.key)return toast(r.error||'That did not save.');let cur=r.key;edPush('image copied',()=>edSave('/card/edit',{key:cur,label:'the copy',t:r.start,t_end:r.end,deleted:true}),async()=>{const a=await post('/card/dup',{key:c.x.key,box:nb});cur=a.key;await load()});
+  toast('Copied.');$('edtracks')._h=null;await load()}
+// arrow keys nudge the picked card or text 1 px (Shift 10) while the video has focus; saved a moment after the last one
+let vidFocus=false;document.addEventListener('pointerdown',e=>{vidFocus=!!e.target.closest('#p1')},true);
+document.addEventListener('keydown',e=>{if(!vidFocus||!/^Arrow(Left|Right|Up|Down)$/.test(e.key)||e.metaKey||e.ctrlKey||e.altKey)return;const a=document.activeElement;
+  if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;const n=e.shiftKey?10:1,dx=(e.key==='ArrowRight')-(e.key==='ArrowLeft'),dy=(e.key==='ArrowDown')-(e.key==='ArrowUp');
+  if(csel){e.preventDefault();e.stopImmediatePropagation();const b=csel.box;b[0]=r2(b[0]+dx*n/FW()*100);b[1]=r2(b[1]+dy*n/FH()*100);cardLive();inspVals();clearTimeout(IN.nt);IN.nt=setTimeout(()=>{if(csel&&cmoved())cardSave(false)},400);return}
+  if(tx&&tx.edit){e.preventDefault();e.stopImmediatePropagation();tx.x=r2(tx.x+dx*n/FW()*100);tx.y=r2(tx.y+dy*n/FH()*100);renderTexts();txMoreVals();textSoon(400)}},true);
 load();setInterval(load,3000);
 
 // the transcript folds to its header; the player takes the room. Kept in this browser
