@@ -2282,6 +2282,9 @@ def make_handler(folder, token):
                     d["style_sample"] = False
                 if isinstance(d.get("learn"), dict):   # "Teach <style>": its name now, even renamed after the approve
                     d["learn"]["style"] = d["style_name"]
+                    if d["learn"].get("state") == "reading" and start_learn_job(folder, stuck=True):   # stuck: nobody came
+                        d["learn"]["job"] = {"at": time.time()}
+                d["teach"] = teach_state(folder)   # Teach anywhere: where a rule can go, at every stage and round
                 d["assets"] = assets.load(folder)   # "Anything to add?": the images and links added to this video
                 try:
                     d["skills"] = video_skills(folder)   # the skills this video ran, runs now and will run
@@ -2495,6 +2498,23 @@ def make_handler(folder, token):
                 except (TypeError, ValueError):
                     msg = None
                 return self.send(200, {"msg": msg}) if msg else self.send(409, {"error": "nothing to undo"})
+            if path == "/teach/rule":   # Teach anywhere: one rule saved now, no Claude, with a receipt Undo takes out
+                return self.send(*teach_rule(folder, body))
+            if path == "/teach/style":   # a new style from this video, at any stage
+                try:
+                    ns_ = new_style_from(folder, body.get("name"))
+                except ValueError as e:
+                    return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
+                teach_choices(folder, fresh=True)
+                return self.send(200, {"ok": True, "id": ns_["id"], "name": ns_["name"]})
+            if path == "/learn" and body.get("retry"):   # Claude could not read the notes: Try again
+                def rt(d):
+                    lr = d.get("learn") or {}
+                    if lr.get("state") != "failed":
+                        return False
+                    lr.update(state="reading", why=None, job=None)
+                    return True
+                return self.send(200, {"ok": start_learn_job(folder)}) if update(rj, rt) else self.send(409, {"error": "nothing to retry"})
             if path == "/learn":   # the learn panel: the ticked rules and where each goes, or Not now. `wait` hands them on
                 def lc(d):
                     lr = d.get("learn") or {}
@@ -3045,7 +3065,7 @@ def make_handler(folder, token):
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
                         d["learn"] = {"state": "reading" if session_notes(d) or pats else "none", "style": style, "styles": choices,
-                                      "skills": skills, "edits": pats}
+                                      "skills": skills, "edits": pats, "at": time.time()}
                     elif body["type"] == "approve" and d["stage"] == "cut":
                         prepared_steps(folder, d)
                     return True
@@ -3053,6 +3073,8 @@ def make_handler(folder, token):
                     return self.send(409, {"error": "Claude is applying your transcript changes."})
                 if body["type"] == "send" and load(rj).get("stills"):   # notes on the stills: that render is not the one
                     drop_spec(folder)
+                if body["type"] == "approve" and not busy(folder):   # no Claude to read the notes: cooked. reads them itself
+                    start_learn_job(folder)
                 with contextlib.suppress(Exception):   # the notes are saved either way
                     reopen(folder, rj)   # no Claude on this edit any more: a new one takes the notes
                 return self.send(200, {})
@@ -4076,6 +4098,128 @@ def skill_choices():
         return []
 
 
+_TEACH = {}   # folder -> (at, styles, skills): /state asks every poll, the skill folders are read at most every 15 s
+
+
+def teach_choices(folder, fresh=False):
+    """The styles (style_choices) and skills (skill_choices) a rule can go to, at any stage."""
+    k = str(folder)
+    if fresh or time.time() - _TEACH.get(k, (0,))[0] > 15:
+        _TEACH[k] = (time.time(), style_choices(folder), skill_choices())
+    return _TEACH[k][1], _TEACH[k][2]
+
+
+def teach_state(folder):
+    """/state "teach": where a rule can be saved now, {"targets": [{id, name, kind, here?, mine?, about?}], "style"}."""
+    styles, skills = teach_choices(folder)
+    t = [{"id": x["id"], "name": x["name"], "kind": "style", **{k: True for k in ("here", "mine") if x.get(k)}} for x in styles]
+    t += [{"id": x["id"], "name": x["name"], "kind": "skill", **({"about": x["about"]} if x.get("about") else {})} for x in skills]
+    return {"targets": t, "style": style_label(folder)}
+
+
+SECTION_WORDS = (("captions", r"\b(captions?|fonts?|words?)\b"), ("cut", r"\b(cut|pause|retake|jump)"),
+                 ("sound", r"\b(sound|music|sfx|song|volume)"), ("layout", r"\b(layout|position|safe|centre|center|size|box)"))
+
+
+def guess_section(text):
+    """A rule's section from its words (POST /teach/rule with no section): visuals when nothing matches."""
+    return next((sec for sec, rx in SECTION_WORDS if re.search(rx, text, re.I)), "visuals")
+
+
+def teach_rule(folder, body):
+    """POST /teach/rule: one rule saved now, no Claude, with a receipt Undo takes out again. (code, reply)."""
+    text = " ".join(str(body.get("text") or "").split()).rstrip(".")
+    if not text or len(text) > 300:
+        return 400, {"error": "Write the rule in one line."}
+    sec = str(body.get("section") or "").lower() or guess_section(text)
+    st = body.get("set") or None   # a taste setting, only when the caller knows it maps (key.path=value)
+    if sec not in SECTIONS or st is not None and (not isinstance(st, str) or "=" not in st):
+        return 400, {"error": f"section is one of {', '.join(SECTIONS)}"}
+    rj = folder / "review.json"
+    note = body.get("note")
+    if note is not None and not any(c["id"] == note for c in load(rj)["comments"]):
+        return 400, {"error": "That note is gone."}
+    styles, skills = teach_choices(folder)
+    to = body.get("to")   # "" is My style; left out, this video's style
+    if to == "new":
+        try:
+            dest = new_style_from(folder, body.get("name"))
+        except ValueError as e:
+            return 409, {"error": str(e) or "That name is taken. Pick another."}
+        teach_choices(folder, fresh=True)
+    else:
+        dest = next((x for x in styles + skills if x["id"] == str(to)), None) if to is not None else next((x for x in styles if x.get("here")), None)
+        if not dest:
+            return 400, {"error": "Pick a style or a skill from the list."}
+    d = load(rj)
+    try:
+        x = save_rule(folder, {"rule": text, "section": sec, "set": st}, dest, f"from a note on {d.get('name') or folder.name}")
+    except SystemExit as e:
+        return 409, {"error": str(e)}
+
+    def f(d):
+        r = receipt(d, *x, note=note, src="teach")
+        for c in d["comments"]:
+            if c["id"] == note:   # learn_prompt reads it as saved: the final approve does not offer it again
+                c["taste"], c["receipt"] = x[4] if x[3] == "settings" else "skill", r["id"]
+        return r
+    r = update(rj, f)
+    return 200, {"ok": True, "msg": f"Saved to {x[0]}: {x[1]}.", "receipt": r["id"], "label": x[0], "status": x[2]}
+
+
+LEARN_STUCK_S, LEARN_JOB_S = 600, 1800   # reading this long with nobody listening: cooked. reads it; a job's time
+
+
+def start_learn_job(folder, stuck=False):
+    """No Claude for the final approve's learn step: cooked. runs it itself (learn_job) in its own process. stuck: only a
+    draft "reading" for LEARN_STUCK_S with nothing listening. Never twice within LEARN_JOB_S. True when one started."""
+    rj = folder / "review.json"
+    if listening(folder) or not rj.exists():
+        return False
+
+    def f(d):
+        lr = d.get("learn") or {}
+        if lr.get("state") != "reading" or time.time() - (lr.get("job") or {}).get("at", 0) < LEARN_JOB_S \
+                or stuck and time.time() - lr.get("at", 0) < LEARN_STUCK_S:
+            return False
+        lr["job"] = {"at": time.time()}
+        return True
+    if not update(rj, f):
+        return False
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), str(folder), "learn", "--job"], cwd=str(folder),
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return True
+
+
+def learn_job(folder, cli=None):
+    """The learn step on the user's Claude Code CLI, headless (`claude -p`, the plan allowance, never an API key), in the
+    library: it posts the rules with learn --propose, so the page reaches "proposed" by itself. No CLI, or it stopped
+    before posting: state "failed" with why, and the page offers Try again. cli: $AI_EDITOR_CLAUDE, else `claude`."""
+    import launcher
+    rj = folder / "review.json"
+    cli = os.environ.get("AI_EDITOR_CLAUDE") or shutil.which("claude") if cli is None else cli
+    why = None
+    if (load(rj).get("learn") or {}).get("state") != "reading":
+        return
+    if not cli:
+        why = "Claude Code is not installed here, so Claude could not read your notes."
+    else:
+        try:
+            cmd = launcher.plan(claude=cli, prompt=learn_prompt(folder, load(rj), job=True))
+            with open(folder / "review" / "learn-job.log", "w", encoding="utf-8") as log:
+                p = subprocess.run(cmd[:-1] + ["-p", cmd[-1]], cwd=str(folder.parent.parent), stdin=subprocess.DEVNULL,
+                                   stdout=log, stderr=subprocess.STDOUT, timeout=LEARN_JOB_S - 60)
+            why = None if p.returncode == 0 else f"Claude stopped with an error (exit {p.returncode})."
+        except Exception as e:   # noqa: BLE001  never left on "reading": the page offers Try again
+            why = "Claude took too long reading your notes." if isinstance(e, subprocess.TimeoutExpired) else f"Claude Code did not start: {e}"
+
+    def f(d):
+        lr = d.get("learn") or {}
+        if lr.get("state") == "reading":   # it never posted: say so, never an empty list
+            lr.update(state="failed", why=why or "Claude finished without posting any rules.")
+    update(rj, f)
+
+
 def style_label(folder):
     """What the learn panel calls the style the edit used: its name on the home page, else My style."""
     try:
@@ -4101,11 +4245,15 @@ def disposition(name):
     return f"attachment; filename=\"{plain}\"; filename*=UTF-8''{quote(name)}"
 
 
-def learn_prompt(folder, d):
-    """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes."""
+def learn_prompt(folder, d, job=False):
+    """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes.
+    job: the prompt for learn_job's headless Claude (no chat, no `wait`)."""
     if d["learn"]["state"] == "none":
         return "LEARN: no notes or edits this session, so nothing to learn. The page says so; say nothing about it."
-    st = d["learn"]["style"]
+    if not job and d["learn"].get("job"):
+        return ("LEARN: cooked. is reading this session's notes on its own and the page offers the rules. Say nothing about "
+                "it; if `wait` returns with the user's pick, save it as it says.")
+    st = d["learn"].get("style") or style_label(folder)
     lines = [f"LEARN: the video is approved. Turn this session's notes, your replies and the user's hands-on edits (below) "
              f"into at most 8 one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
              f"first 5 s\". Leave out one-off fixes (a word cut at 0:12) and notes already saved as rules. Post them "
@@ -4113,8 +4261,10 @@ def learn_prompt(folder, d):
              f"  python3 {Path(__file__).resolve()} {folder} learn --propose "
              f"'[{{\"rule\": \"...\", \"section\": \"cut|captions|visuals|sound|layout\", \"set\": \"captions.size_pct=4.5\"}}]'",
              "  (or a path to a .json file holding that list). \"set\" only when a taste setting maps (the taste "
-             "skill's table). Then run `wait` again: it returns with the rules the user ticked. The skill-improver "
-             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin).",
+             "skill's table). " + ("You run on your own with no chat: post them, then stop. Never run `wait`. " if job else
+             "Then run `wait` again: it returns with the rules the user ticked. Also use what the user told you in this chat "
+             "about the edit. ") + "The skill-improver skill has the steps (one-offs stay with the video, sharpen an old rule "
+             "rather than add a twin).",
              "Give every rule a \"to\": where it belongs, one id from the list below. A rule about this kind of video "
              "goes to this video's style; a rule for every video to My style; a rule about what one of the user's skills "
              "does (trial reels, a talking head, a thumbnail) to that skill. The page shows your pick; the user can change it."]
@@ -4142,7 +4292,7 @@ def learn_prompt(folder, d):
                      "exactly, so the next draft changes:")
         lines += [f"  - {x['line']} [{x['section']}]" + (f" [set {x['set']}]" if x.get("set") else "") for x in lr["edits"]]
     for c in sorted(session_notes(d), key=lambda c: (c["stage"] != "cut", c["round"], c["t"])):
-        saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else ""
+        saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else " [saved as rule in a skill]" if c.get("taste") == "skill" else ""
         keep = " [the user asked to keep this as a rule: propose it]" if c.get("keep") and not saved else ""
         lines.append(f"#{c['id']} {stage_name(c['stage'])} r{c['round']}: {c['text']}"
                      + (f" -> reply: {c['reply']}" if c.get("reply") else "") + saved + keep)
@@ -4198,35 +4348,36 @@ def learn_propose(folder, raw):
     print(f"{len(out)} rule{'s' if len(out) != 1 else ''} on the page" + ("; run `wait` for the user's pick" if out else ""))
 
 
+def save_rule(folder, r, dest, why):
+    """One rule into its place (learn_done, POST /teach/rule): a skill's SKILL.md (skillrules.add) for a skill pick, or
+    this video's style when it runs a skill; else a style's overrides, rules and skill (styleskill.learn).
+    r: {rule, section, set?, why?, replace?}. Returns (label, rule, status, kind, ref) for receipt(). SystemExit when
+    the skill is not in the user's skill folders."""
+    from ai_editor import skillrules, styleskill, taste
+    sp0 = edit_style(folder)
+    tg = skillrules.target(folder)
+    if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
+        md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], shown_style(sp0))
+        if not md:
+            sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
+        status, line = skillrules.add(md, r["rule"], r.get("why") or why, r.get("replace"), edit=str(folder))
+        return label, skillrules.rule_of(line), status, "skill", md
+    sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
+    setting, _, raw = (r.get("set") or "").partition("=")
+    status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
+                                 edit=folder, source="review")
+    return shown_style(sp0) if dest.get("here") else dest["name"], x["rule"], status, "settings", x["id"]
+
+
 def learn_done(folder, summary):
     """Save the ticked rules into the edit's style (one creator style, else My style) and show it on the page."""
-    from ai_editor import styleskill, taste
     lr = load(folder / "review.json").get("learn") or {}
     if lr.get("state") != "chosen":
         sys.exit("nothing ticked to save: run `wait` for the user's pick first")
-    sp0 = edit_style(folder)
-    style0 = shown_style(sp0)
-    from ai_editor import skillrules
-    tg = skillrules.target(folder)
     saved, names = [], []   # (style label, rule, status, kind, ref) for the receipts; every place saved to
     for r in (lr["rules"][i] for i in lr["chosen"]):
-        dest = r.get("dest") or {"here": True}
-        if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
-            md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], style0)
-            if not md:
-                sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
-            status, line = skillrules.add(md, r["rule"], r.get("why") or f"from the notes on {folder.name}",
-                                          r.get("replace"), edit=str(folder))
-            saved.append((label, skillrules.rule_of(line), status, "skill", md))
-            print(f"{status}: {line} ({md})")
-        else:   # a style: its overrides, rules and skill (styleskill.learn)
-            sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
-            label = style0 if dest.get("here") else dest["name"]
-            setting, _, raw = (r.get("set") or "").partition("=")
-            status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
-                                         edit=folder, source="review")
-            saved.append((label, x["rule"], status, "settings", x["id"]))
-            print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
+        saved.append(save_rule(folder, r, r.get("dest") or {"here": True}, f"from the notes on {folder.name}"))
+        print(f"{saved[-1][2]}: {saved[-1][1]} ({saved[-1][0]})")
         if saved[-1][0] not in names:
             names.append(saved[-1][0])
     style = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
@@ -4689,12 +4840,114 @@ def demo_learn_edits(tmp):
     assert [(e["change"], e["stage"], e["round"], e["from"], e["to"]) for e in edit_events(f)] == [("captions.size_pct", "edit", 2, 3.6, 4.3)]
 
 
+def demo_teach(folder, tmp, get, post, c3, tsk):
+    """Teach anywhere: /state "teach" at any stage, POST /teach/rule (a skill, My style, a new style; a note marked
+    saved; Undo), POST /teach/style, and the learn job that reads the notes when no Claude is on the video."""
+    from ai_editor import taste
+    rj = folder / "review.json"
+    teach_choices(folder, fresh=True)
+    te = json.loads(get("/state").read())["teach"]
+    assert te["style"] == "@alice" and te["targets"][0]["kind"] == "style" and te["targets"][0].get("here"), te
+    assert {"id": "skill:trial-notes", "name": "Trial notes", "kind": "skill", "about": "trial reels of a posted reel"} in te["targets"], te
+    assert [guess_section(t) for t in ("Captions one size smaller", "Shorter pauses", "Music quieter", "Center the logo", "More b-roll")] \
+        == ["captions", "cut", "sound", "layout", "visuals"]
+    nc = len(load(rj)["comments"])
+    for bad, code in (({"text": " "}, 400), ({"text": "x", "to": "/no/style.json"}, 400), ({"text": "x", "section": "colour"}, 400),
+                      ({"text": "x", "note": 99999}, 400), ({"text": "x", "to": "new", "name": " "}, 409)):
+        try:
+            post("/teach/rule", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == code, (bad, e.code)
+    tr = post("/teach/rule", {"text": "Hooks under 3 s.", "to": "skill:trial-notes", "note": c3["id"]})
+    assert tr == {"ok": True, "msg": "Saved to Trial notes skill: Hooks under 3 s.", "receipt": tr["receipt"], "label": "Trial notes skill",
+                  "status": "added"}, tr
+    assert "- Hooks under 3 s. Why: from a note on " in tsk.read_text(encoding="utf-8"), tsk.read_text(encoding="utf-8")
+    d = load(rj)
+    c = next(c for c in d["comments"] if c["id"] == c3["id"])
+    assert c["taste"] == "skill" and c["receipt"] == tr["receipt"] and len(d["comments"]) == nc, c   # no note for Claude
+    assert f"#{c3['id']} " in learn_prompt(folder, d) and "[saved as rule in a skill]" in learn_prompt(folder, d)
+    assert post("/undo", {"id": tr["receipt"]})["msg"] == "Removed from Trial notes skill."
+    assert "Hooks under 3 s" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
+    mine = next(x for x in te["targets"] if x.get("mine"))
+    tm = post("/teach/rule", {"text": "Fewer zooms in the first 5 s", "to": mine["id"]})
+    r = next(r for r in taste.load_rules() if r["rule"] == "Fewer zooms in the first 5 s")
+    assert tm["label"] == "My style" and r["section"] == "Visuals" and r["scope"] == "all" and tm["receipt"] == load(rj)["receipts"][-1]["id"], tm
+    assert post("/undo", {"id": tm["receipt"]})["msg"] == "Removed from My style." and not any(
+        x["rule"] == "Fewer zooms in the first 5 s" for x in taste.load_rules())
+    old_lib = os.environ.get("AI_EDITOR_LIBRARY")
+    os.environ["AI_EDITOR_LIBRARY"] = str(tmp / "lib")
+    try:   # "new": a style made from this video, the rule in it; /teach/style: a style now, any stage; both listed at once
+        tn = post("/teach/rule", {"text": "Big yellow captions", "to": "new", "name": "Shorts"})
+        r = next(r for r in taste.load_rules() if r["rule"] == "Big yellow captions")
+        assert tn["label"] == "Shorts" and r["section"] == "Captions" and r["scope"] == "style:own-shorts", (tn, r)
+        ts2 = post("/teach/style", {"name": "Podcasts"})
+        assert ts2["ok"] and ts2["name"] == "Podcasts" and Path(ts2["id"]).is_file(), ts2
+        names = [x["name"] for x in json.loads(get("/state").read())["teach"]["targets"]]
+        assert "Shorts" in names and "Podcasts" in names, names
+        try:
+            post("/teach/style", {"name": ""})
+            raise AssertionError("a nameless style")
+        except urllib.error.HTTPError as e:
+            assert e.code == 409
+    finally:
+        os.environ.pop("AI_EDITOR_LIBRARY", None) if old_lib is None else os.environ.update(AI_EDITOR_LIBRARY=old_lib)
+    # no Claude on the video: cooked. runs the learn step on the Claude Code CLI (a stub here), headless, in the library
+    fake, argf = tmp / "bin" / "claude", tmp / "bin" / "args.json"
+    fake.parent.mkdir(exist_ok=True)
+    fake.write_text(f"#!{sys.executable}\nimport json, os, subprocess, sys\n"
+                    f"open({str(argf)!r}, 'w').write(json.dumps({{'argv': sys.argv[1:], 'cwd': os.getcwd()}}))\n"
+                    f"subprocess.run([sys.executable, {str(Path(__file__).resolve())!r}, {str(folder)!r}, 'learn', '--propose', "
+                    f"json.dumps([{{'rule': 'Shorter hooks', 'section': 'cut'}}])], check=True, stdout=subprocess.DEVNULL)\n", encoding="utf-8")
+    fake.chmod(0o755)
+    reading = lambda **k: update(rj, lambda d: d["learn"].update(state="reading", rules=[], job=None, why=None, **k))
+    reading()
+    learn_job(folder, cli=str(fake))
+    lr, a = load(rj)["learn"], json.loads(argf.read_text(encoding="utf-8"))
+    assert lr["state"] == "proposed" and [x["rule"] for x in lr["rules"]] == ["Shorter hooks"], lr
+    assert a["argv"][-2] == "-p" and "You run on your own with no chat" in a["argv"][-1] and "learn --propose" in a["argv"][-1], a
+    assert "Also use what the user told you in this chat" not in a["argv"][-1] and Path(a["cwd"]).resolve() == folder.parent.parent.resolve(), a
+    assert "Also use what the user told you in this chat about the edit" in learn_prompt(folder, load(rj))
+    reading()
+    learn_job(folder, cli="")   # no Claude Code: the page says so plainly, never an empty list
+    lr = load(rj)["learn"]
+    assert lr["state"] == "failed" and "not installed" in lr["why"] and not lr["rules"], lr
+    reading()
+    learn_job(folder, cli=shutil.which("true") or "true")   # it ran but posted nothing
+    assert load(rj)["learn"]["state"] == "failed" and "without posting" in load(rj)["learn"]["why"]
+
+    def proposed():
+        for _ in range(200):
+            if load(rj)["learn"]["state"] == "proposed":
+                return True
+            time.sleep(0.05)
+    keep = os.environ.get("AI_EDITOR_CLAUDE")
+    os.environ["AI_EDITOR_CLAUDE"] = str(fake)
+    try:
+        assert post("/learn", {"retry": True}) == {"ok": True} and proposed(), load(rj)["learn"]   # Try again: its own process
+        try:
+            post("/learn", {"retry": True})
+            raise AssertionError("retry with nothing failed")
+        except urllib.error.HTTPError as e:
+            assert e.code == 409
+        reading(at=time.time())
+        assert not json.loads(get("/state").read())["learn"].get("job"), "reading a moment: Claude may still come"
+        assert "cooked. is reading" not in learn_prompt(folder, load(rj))
+        reading(at=time.time() - LEARN_STUCK_S - 5)   # stuck in reading with nobody listening: picked up
+        assert json.loads(get("/state").read())["learn"]["job"] and proposed(), load(rj)["learn"]
+        assert learn_prompt(folder, load(rj)).startswith("LEARN: cooked. is reading")
+        assert not start_learn_job(folder) and not start_learn_job(folder, stuck=True)
+    finally:
+        os.environ["AI_EDITOR_CLAUDE"] = keep
+
+
 def demo():
     import contextlib
     import io
     import tempfile
     tmp = Path(tempfile.mkdtemp(prefix="review_demo_"))
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")   # start records the folder in the library index there
+    os.environ.setdefault("AI_EDITOR_CLAUDE", shutil.which("true") or "true")   # a learn job never runs the real Claude Code here
     demo_timings(tmp)
     demo_learn_edits(tmp)
     demo_bake(tmp)
@@ -5648,6 +5901,7 @@ def demo():
     assert ts_["kind"] == "skill" and ts_["style"] == "Trial notes skill", ts_
     post("/undo", {"id": ts_["id"]})   # a rule a save added to a skill comes out of that skill
     assert "Keep the pauses short" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
+    demo_teach(folder, tmp, get, post, c3, tsk)
     if old_skills is None:
         os.environ.pop("AI_EDITOR_SKILLS", None)
     else:
@@ -6108,6 +6362,7 @@ def main():
     s.add_argument("--none", action="store_true", help="no note in this round is a preference")
     s.add_argument("--propose", metavar="JSON", help="after the final approve: candidate rules for the page's learn panel")
     s.add_argument("--done", nargs="?", const="", metavar="SUMMARY", help="save the rules the user ticked into the style")
+    s.add_argument("--job", action="store_true", help="cooked.'s own learn step on the Claude Code CLI (no Claude on the video)")
     s = sp.add_parser("trials", help="the Trial reels tab: Claude's plan for re-cuts of an approved reel")
     g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--propose", metavar="JSON",
@@ -6164,7 +6419,7 @@ def main():
     elif a.cmd == "final":
         cmd_final(folder)
     elif a.cmd == "learn":
-        cmd_learn(a, folder)
+        learn_job(folder) if a.job else cmd_learn(a, folder)
     elif a.cmd == "trials":
         trials_reply(folder, a.reply) if a.reply else trials_propose(folder, a.propose)
 
