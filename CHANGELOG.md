@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.37, creator-teardown 2.7.37 (2026-11-05)
+- Every draft edits live, not only cooked.'s own plan renders. A finished video from any skill plays in the live player with your texts, sounds and lanes on top, so a change shows at once.
+- Hand edits on those drafts go into the video by themselves: texts, sounds and video cuts render onto the draft in the background, the cut pieces come out, and nothing becomes a note for Claude. The draft Claude made stays as the base, so nothing is drawn twice.
+- A cut piece plays without it straight away, and its toast says so.
+
 ## ai-editor 2.7.36, creator-teardown 2.7.36 (2026-11-03)
 - The timeline has lanes. Images, Text and Sounds each get a lane per overlap, so nothing sits on top of anything else. Drag an item up or down to move it to another lane, or below the last one to make a new lane. A later lane draws on top in the video.
 - Each lane has hide (mute for sounds) and lock. A hidden lane leaves the video and comes back when you show it. A locked lane cannot be picked or moved.

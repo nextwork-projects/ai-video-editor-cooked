@@ -1382,8 +1382,9 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
         `<div class="etrack${i?'':' l1'}${off?' lhid':''}${s.locked?' llock':''}" data-row="${kind}" data-lane="${i}">${h}</div>`)});
     add(`<div class="ehd newl" data-row="${kind}"></div>`,`<div class="etrack newl" data-row="${kind}" data-lane="${p.n}">Drop here for a new lane</div>`)};
   add(`<div class="ehd"><span>Video</span><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div>`,`<div class="etrack" data-row="vid">${vids}${vsps}</div>`);
-  lanes('img',imgs);lanes('text',texts,`<button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button>`);
-  add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[],T)}</div>`);
+  const lay=!!S.layer;   // a layer draft (its MP4 under the user's layers): no Images, its captions are burned in, so those rows only show when they hold something
+  if(!lay||imgs.length)lanes('img',imgs);lanes('text',texts,`<button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button>`);
+  if(!lay||(it.captions||[]).length)add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[],T)}</div>`);
   lanes('snd',snds,`<button id="addsnd" title="Add one of your sounds at the playhead" aria-label="add a sound at the playhead">+</button>`);
   const h=`<div class="edwrap"><div class="edleft">${L.join('')}</div>
     <div class="edright">
@@ -1488,7 +1489,7 @@ function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.
   setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
 function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
   const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
-  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
+  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now.'+(S.layer?'':' Submit feedback and the next draft is cut.'))}
 // the transcript cuts on the edit too: Delete puts the words' time (first word's start to the last one's end, edit
 // clock) in the Video row's gone ranges, so the row, the skip and Claude's note follow; Delete on struck words puts them back
 const edTxOk=()=>!alt&&!!S&&!!view&&view.stage==='edit'&&noteOk()&&!cmp;
@@ -2627,7 +2628,7 @@ function renderTextPanel(){
   if($('trows')._h!==h){$('trows')._h=h;$('trows').innerHTML=h}}
 // where the typed texts are: drawn on the page at once, then put into the video file by a patch render (review.py bake)
 function bakeLine(){const b=(S&&S.bake)||{},live=(S.texts||[]).some(x=>!(S.texts_baked||[]).includes(x.id));
-  const m=b.state==='waiting'||b.state==='working'?'Putting your changes into the video...':b.state==='failed'?`It shows here but did not go into the video: ${b.why}. Claude adds it with the next draft.`
+  const m=b.state==='waiting'||b.state==='working'?'Putting your changes into the video...':b.state==='failed'?(S.layer?'It plays here but did not go into the video.':`It shows here but did not go into the video: ${b.why}. Claude adds it with the next draft.`)
     :live&&b.state==='off'?(b.why==='Claude has this draft'?'Claude adds it to the draft it is making.':'It goes into the video with the next render.'):'';
   return m?`<p class="tsub">${esc(m)}</p>`:''}
 // an open text saves itself: moved, resized or restyled when you let go, typed a moment after the last key. No Done, no note
