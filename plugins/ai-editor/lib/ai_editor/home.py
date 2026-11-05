@@ -84,6 +84,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import askhook  # noqa: E402
+import shortcuts  # noqa: E402
 import assets  # noqa: E402
 import brandkit  # noqa: E402
 import broll  # noqa: E402
@@ -2084,6 +2085,8 @@ def make_handler(token):
             path = unquote(urlsplit(self.path).path)
             if askhook.route(self, "GET", path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):   # Claude's questions
                 return
+            if shortcuts.route(self, "GET", path):   # the keyboard shortcuts, Settings edits them (shortcuts.py)
+                return
             if brandkit.route(self, "GET", path, parse_qs(urlsplit(self.path).query)):   # the Brand page
                 return
             if path == "/":
@@ -2108,7 +2111,7 @@ def make_handler(token):
                 d["getting_started"] = getting_started(d)
                 import launcher   # a Claude of its own per video only where a terminal window can be opened
                 d["new_claude"] = bool(launcher.terminal(d["root"], ["claude"], platform.system()))
-                d["page"] = f'{live.page_version(HTML, HTML.with_name("ask.js"))}-{my_version()}'   # the tab reloads when this changes (an update too)
+                d["page"] = f'{live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)}-{my_version()}'   # the tab reloads when this changes (an update too)
                 lk = d.get("lookup") or {}
                 if lk.get("handle"):
                     lk["listing"] = listing(d["root"], lk["handle"])
@@ -2285,6 +2288,8 @@ def make_handler(token):
             except ValueError:
                 return self.send(400, {"error": "not json"})
             if askhook.route(self, "POST", path, {}, body):
+                return
+            if shortcuts.route(self, "POST", path, {}, body):
                 return
             if brandkit.route(self, "POST", path, {}, body):
                 return
@@ -3281,6 +3286,17 @@ def demo():
         raise AssertionError("a connect link without a key")
     except urllib.error.HTTPError as e:
         assert e.code == 400
+    # the keyboard shortcuts (shortcuts.py): Settings edits the same keys.json every review page reads
+    assert b'src="/shortcuts.js"' in HTML.read_bytes() and b"KM_TABLE" in urllib.request.urlopen(base + "/shortcuts.js?t=" + tok).read()
+    assert get("/keys") == {"keys": {}} and post("/keys", {"action": "play", "combo": "Shift+Space"})["keys"] == {"play": ["Shift+Space"]}
+    assert json.loads((Path(os.environ["AI_EDITOR_HOME"]) / "keys.json").read_text()) == {"play": ["Shift+Space"]}
+    for bad in ({"action": "nope", "combo": "K"}, {"action": "play", "combo": "Mod+W"}, {"reset": "nope"}):
+        try:
+            post("/keys", bad)
+            raise AssertionError(f"took {bad}")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+    assert post("/keys", {"reset": "play"})["keys"] == {} and post("/keys", {"reset_all": True})["keys"] == {} and get("/keys") == {"keys": {}}
     # Claude's question (askhook.py): the hook posts it, the showing page polls it and answers, the hook clears it
     assert b'src="/ask.js"' in HTML.read_bytes() and b"askq" in urllib.request.urlopen(base + "/ask.js?t=" + tok).read()
     assert askhook.live() == []   # served, but no page has polled yet
@@ -4272,7 +4288,7 @@ def demo():
     assert is_output(root / "edits" / "x" / "render.mp4") and is_output(tmp / "v-edit2.mp4") and is_output(root / "edits" / "x" / "review" / "a.mp4")
     assert is_output(ed / "anything.mp4", [ed]) and not is_output(root / "videos" / "drop.mp4", [ed])
     assert all("raw" in v for v in get("/recent")["videos"])
-    assert get("/state")["page"] == f'{live.page_version(HTML, HTML.with_name("ask.js"))}-{my_version()}', "the tab's reload key"
+    assert get("/state")["page"] == f'{live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)}-{my_version()}', "the tab's reload key"
     # hide or trash a listed clip, remove an edit: only what the page listed, to the Trash (faked here), never a folder
     assert library.trash_cmd("/a b/x.mov", "Darwin")[-1] == "/a b/x.mov" and "item 1 of argv" in " ".join(library.trash_cmd("x", "Darwin"))
     assert library.trash_cmd("C:/x y.mp4", "Windows")[-1] == "C:/x y.mp4" and library.trash_cmd("/x", "Linux") == ["gio", "trash", "/x"]

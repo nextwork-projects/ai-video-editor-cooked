@@ -1030,6 +1030,10 @@ body:has(.smprow) .sb-smp{display:none}   /* the page offers the sample itself: 
 .bk-ed{width:100%;min-height:440px;padding:14px 16px;border:1px solid var(--ring);border-radius:12px;background:var(--inbg);color:var(--ink);font:13px/20px var(--mono);resize:vertical;outline:0}
 .bk-in{width:100%;padding:10px 12px;border:1px solid var(--ring);border-radius:10px;background:var(--inbg);color:var(--ink);font:14px/20px system-ui,sans-serif;outline:0;resize:vertical}
 .bk-drop{min-height:180px;flex:none}
+/* Settings, Keyboard shortcuts: the review page's shortcut editor (shortcuts.js) in a dialog */
+#kmdlg{width:min(600px,calc(100vw - 32px));max-height:calc(100vh - 64px);padding:20px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);box-shadow:0 8px 30px rgba(0,0,0,.25)}
+#kmdlg::backdrop{background:rgba(0,0,0,.4)}
+#kmdlg .kmh{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}#kmdlg .kmh b{font-size:17px;line-height:22px;font-weight:600}
 </style>
 </head>
 <body>
@@ -2710,10 +2714,14 @@ function stLook(){
   const sw={light:'<i style="background:#FAFAF9"></i>',dark:'<i style="background:#161413"></i>',system:'<i style="background:linear-gradient(135deg,#FAFAF9 50%,#161413 50%)"></i>'};
   return `<div class="scd" style="flex-direction:row;align-items:center;justify-content:space-between;padding:16px 20px"><b style="font-size:17px;line-height:22px">Theme</b><div class="seg3">${['light','dark','system'].map(t=>`<button class="${cur===t?'on':''}" onclick="stTheme('${t}')">${sw[t]}${t[0].toUpperCase()+t.slice(1)}</button>`).join('')}</div></div>`;
 }
+// the editor's keyboard shortcuts: the same editor as the review page's "?" sheet, saved for every video (shortcuts.py)
+function stKeys(){
+  return `<div class="scd" style="flex-direction:row;align-items:center;justify-content:space-between;padding:16px 20px"><div style="min-width:0"><b style="font-size:17px;line-height:22px">Keyboard shortcuts</b><div class="t2" style="white-space:normal">The keys the video editor uses. Every open video picks up a change.</div></div><button class="b2 s" onclick="kmOpen()">Edit</button></div>`}
+function kmOpen(){document.getElementById('kmdlg').showModal()}
 function vSettings(){
   return `<div class="pgc"><div class="ph"><h1>Settings</h1><p>Keys, updates, where your videos live, and the look.</p></div><div class="sgrid">
     <div class="scol"><div class="scd" style="gap:16px"><div class="hd"><b>Keys</b><span class="st-lock">${ic('lock',14)}Saved on this computer only</span></div>${KEYS.map(stKey).join('')}${stModal()}</div>${stPost()}</div>
-    <div class="scol">${stUpdate()}${stSupport()}${stFolder()}${stLook()}${stAlerts()}
+    <div class="scol">${stUpdate()}${stSupport()}${stFolder()}${stLook()}${stKeys()}${stAlerts()}
       <div class="scd"><label class="srow" style="cursor:pointer"><div><div>Recent clips</div><div class="t2">From Movies, Desktop and Downloads</div></div><input type="checkbox" class="st-check" ${R&&R.scan_home?'checked':''} onchange="scanHome(this.checked)"></label>
         ${toolsRow()}</div></div></div></div>`;
 }
@@ -2896,6 +2904,9 @@ try{const k=JSON.parse(sessionStorage.getItem('ave-home-keep')||'null');sessionS
 window.addEventListener('dragover',e=>e.preventDefault());window.addEventListener('drop',e=>e.preventDefault());
 load().then(loadRecent).then(loadBroll);setInterval(load,1500);setInterval(loadLib,4000);
 </script>
+<dialog id="kmdlg" aria-label="keyboard shortcuts"><div class="kmh"><b>Keyboard shortcuts</b><button class="b2 s" onclick="this.closest('dialog').close()">Done</button></div><div id="kmbody"></div></dialog>
+<script src="/shortcuts.js"></script><script>KM.editor(document.getElementById('kmbody'));
+document.getElementById('kmdlg').addEventListener('cancel',e=>{if(KM.recording())e.preventDefault()})   // Esc while recording cancels the recording, not the dialog</script>
 <script src="/ask.js"></script>
 </body>
 </html>

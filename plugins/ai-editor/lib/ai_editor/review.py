@@ -114,6 +114,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))   # `from ai_editor import ...` (styleskill, taste)
 import askhook  # noqa: E402
+import shortcuts  # noqa: E402
 import assets  # noqa: E402
 import live  # noqa: E402
 
@@ -2420,6 +2421,8 @@ def make_handler(folder, token):
             q = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
             if askhook.route(self, "GET", path, q):   # Claude's questions (askhook.py)
                 return
+            if shortcuts.route(self, "GET", path, q):   # the keyboard shortcuts (shortcuts.py)
+                return
             if path == "/":
                 return self.send(200, themed(HTML.read_bytes()), "text/html; charset=utf-8", cookie=True)
             if path == "/state":
@@ -2452,7 +2455,7 @@ def make_handler(folder, token):
                 d["layer"] = layer_of(folder, d) is not None   # plays base_video with the hand edits as layers (layer_plan)
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
-                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"))   # the tab reloads when this changes
+                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
                 d["home"] = home_url()   # the Home button: back to the editor's window, or how to start it
@@ -2649,6 +2652,8 @@ def make_handler(folder, token):
                 return self.send(400, {"error": "not json"})
             path = urlsplit(self.path).path
             if askhook.route(self, "POST", path, {}, body):
+                return
+            if shortcuts.route(self, "POST", path, {}, body):
                 return
             if path == "/theme":   # the toggle: one choice for the window and every review page
                 try:
@@ -5483,6 +5488,20 @@ def demo():
     OPEN = webbrowser.open
     r = get("/")
     assert b"review" in r.read() and "HttpOnly" in r.headers["Set-Cookie"]
+    # the keyboard shortcuts (shortcuts.py): one table in shortcuts.js, the user's changes in $AI_EDITOR_HOME/keys.json
+    assert '<script src="/shortcuts.js">' in HTML.read_text(encoding="utf-8") and b"KM_TABLE" in get("/shortcuts.js").read()
+    assert json.loads(get("/keys").read()) == {"keys": {}} and post("/keys", {"action": "split", "combo": "Mod+K"}) == {"keys": {"split": ["Mod+K"]}}
+    assert get("/shortcuts.js").read().startswith(b'const KM_USER={"split": ["Mod+K"]};'), "the page's first key press already has it"
+    assert json.loads((tmp / "home" / "keys.json").read_text()) == {"split": ["Mod+K"]}, "only the changed action"
+    for bad in ({"action": "nope", "combo": "K"}, {"action": "split", "combo": "Mod+Q"}, {"action": "split", "combo": "k"}, {"action": "cancel", "combo": "K"}):
+        try:
+            post("/keys", bad)
+            raise AssertionError(f"took {bad}")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400 and json.loads(e.read())["error"]
+    assert post("/keys", {"action": "fit", "combo": []})["keys"] == {"split": ["Mod+K"], "fit": []}
+    assert post("/keys", {"reset": "split"})["keys"] == {"fit": []} and post("/keys", {"reset_all": True})["keys"] == {}
+    assert post("/keys", {"replace": {"split": ["Mod+K", "Mod+B"]}})["keys"] == {"split": ["Mod+K", "Mod+B"]} and post("/keys", {"reset_all": True})
     # Claude's question (askhook.py): posted, polled by the showing page, answered in its own words, cleared
     assert '<script src="/ask.js">' in HTML.read_text(encoding="utf-8") and b"askq" in get("/ask.js").read()
     qs = [{"question": "Keep the intro?", "header": "Intro", "options": [{"label": "Keep", "description": ""}], "multiSelect": False}]
