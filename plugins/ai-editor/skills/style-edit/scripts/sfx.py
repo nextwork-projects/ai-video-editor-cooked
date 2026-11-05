@@ -174,9 +174,10 @@ def clip_cue(edit_dir, x):
     out = edit_dir / ".sfx" / f"clip-{''.join(ch for ch in str(x['id']) if ch.isalnum())}.wav"
     out.parent.mkdir(parents=True, exist_ok=True)
     nch = min(2, channels(edit_dir / "cut.mp4")) if (edit_dir / "cut.mp4").exists() else 2
-    fo = max(0.0, d - 0.02)
+    fi, fd = (max(0.02, min(d / 2, float(x.get(k) or 0))) for k in ("fade_in", "fade_out"))   # the page's fades, 20 ms at least
+    fo = max(0.0, d - fd)
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-ss", f"{a:.3f}", "-t", f"{d:.3f}", "-i", str(f),
-                    "-af", f"volume={vol:.3f},afade=t=in:d=0.02,afade=t=out:st={fo:.3f}:d=0.02", "-ar", str(SR), "-ac", str(nch),
+                    "-af", f"volume={vol:.3f},afade=t=in:d={fi:g},afade=t=out:st={fo:.3f}:d={fd:g}", "-ar", str(SR), "-ac", str(nch),
                     str(out)], check=True)
     return out.relative_to(edit_dir).as_posix()
 

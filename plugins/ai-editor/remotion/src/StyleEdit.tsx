@@ -55,6 +55,8 @@ export type Card = {
   ground?: Ground; // scene only: ground | ink | accent (default: those in turn, scene by scene)
   layer?: "behind"; // above the footage, under the speaker's cutout (matte.py): tucks behind the head and shoulders
   key?: [number, number, number, number]; // behind: the region plan.py keeps clear of the head, % of the frame
+  rotation?: number; // the review page's inspector: degrees about the box's centre (default 0)
+  opacity?: number; // the review page's inspector: 0-1 (default 1)
 };
 // The speaker cut out of the cut (matte.py): a folder of RGBA PNGs (000000.png = frame `from`), frames from..to of the cut.
 type Cutout = { src: string; from: number; to: number }; // src/<frame of the cut>.png, frames from..to (matte.py)
@@ -236,6 +238,8 @@ export const CardView: React.FC<{ card: Card; t: number; prev?: Card; next?: Car
     transform += ` scale(${1 - 0.06 * q})`;
     opacity *= 1 - q;
   }
+  if (card.rotation) transform = `${transform === "none" ? "" : transform + " "}rotate(${card.rotation}deg)`;
+  opacity *= card.opacity ?? 1;
   return (
     <div style={{ position: "absolute", left: `${x}%`, top: `${y}%`, width: `${w}%`, height: `${h}%`, display: "flex", alignItems: "center",
       justifyContent: "center", transform, opacity, clipPath }}>

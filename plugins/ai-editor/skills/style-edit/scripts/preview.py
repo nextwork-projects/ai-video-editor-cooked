@@ -125,7 +125,7 @@ def apply_overrides(plan, edit_dir, plan_name=None):
         o = (ov.get("cards") or {}).get(a["key"]) or {}
         if a["key"] not in have and not o.get("deleted"):   # once: a second apply finds it by its override
             card = {k: v for k, v in a.items() if k != "key"}
-            card.update({k: v for k, v in o.items() if k in ("box", "start", "end")}, override=a["key"])   # moved before it was baked
+            card.update({k: v for k, v in o.items() if k in ("box", "start", "end", "rotation", "opacity") and v is not None}, override=a["key"])   # moved before it was baked
             plan["cards"].append(card)
             plan["cards"].sort(key=lambda c: c["start"])
     for key, o in (ov.get("cards") or {}).items():
