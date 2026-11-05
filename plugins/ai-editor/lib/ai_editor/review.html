@@ -1405,7 +1405,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
   const step=tstep(TT/zm,10),ticks=[];for(let t=0;t<TT;t+=step)ticks.push(t);
-  const texts=textItems().map(x=>({k:String(x.id),a:x.start,b:x.end,h:`<div class="eitem txt${x.fresh?' pend':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}" data-et="${esc(String(x.id))}" data-lkey="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(x.start)}–${fmtx(x.end)}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`}));
+  const texts=textItems().map(x=>({k:String(x.id),a:x.start,b:x.end,h:`<div class="eitem txt${x.fresh?' pend':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}" data-et="${esc(String(x.id))}" data-lkey="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(so(x.start))}–${fmtx(so(x.end))}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`}));
   const clip=(t0,d,cls,attrs,name,peaks,at,k)=>({k,a:t0,b:t0+Math.max(.3,d||0),h:`<div class="eitem snd${cls}" ${attrs} data-lkey="${esc(k)}" style="left:${pc(t0)}%;width:${Math.max(.3/TT*100,pc(t0+(d||.3))-pc(t0))}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`});
   const snds=[...(it.sfx||[]),...((LV.off||{}).sfx||[]).filter(c=>!(it.sfx||[]).some(x=>x.src===c.src&&Math.abs((x.start??x.t)-c.t)<.05)).map(c=>({t:+(c.event??c.t),start:c.t,d:c.d,src:c.src}))].map(x=>{const px=x.placed&&placed(x.placed),pc2=px&&px.kind==='clip';   // one the user placed, now in the draft: still its name and its handles
       return clip(x.start??x.t,x.d,(gone.has(x.t.toFixed(2))?' gone':'')+(pc2?' clip':'')+(px&&ssel===px.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,px?px.sound.replace(/\.[a-z0-9]+$/i,''):sname(x.src),x.peaks,x.t,x.placed||'t:'+(x.start??x.t).toFixed(2))}).concat(
@@ -1580,7 +1580,7 @@ $('undob').onclick=()=>edUndo();$('redob').onclick=()=>edUndo(true);
 $('tx').addEventListener('pointerdown',()=>txAt=performance.now(),true);
 // Cmd+Z, Shift+Cmd+Z: a slider or a colour keeps the focus after a change, so they do not count as typing
 const typingIn=t=>t.isContentEditable||t.tagName==='TEXTAREA'||t.tagName==='SELECT'||t.tagName==='INPUT'&&!/^(range|checkbox|color|radio|button)$/.test(t.type);
-document.addEventListener('keydown',e=>{if(!(e.metaKey||e.ctrlKey)||e.altKey||e.key.toLowerCase()!=='z'||document.body.classList.contains('edro'))return;
+document.addEventListener('keydown',e=>{if(!(e.metaKey||e.ctrlKey)||e.altKey||e.key.toLowerCase()!=='z'||document.body.classList.contains('edro')||ovOpen())return;
   if(typingIn(e.target)&&!(tx&&e.target.isContentEditable&&!e.shiftKey&&(EH.u[EH.u.length-1]||{}).look))return;   // the words of an open text undo as typing; its size and look here
   if(e.shiftKey?!EH.r.length:!EH.u.length||HIST.length&&txAt>edAt)return;e.preventDefault();e.stopImmediatePropagation();edUndo(e.shiftKey)},true);
 // a split line on the Video row: drag it to move it (the cut pieces on either side follow, so a cut gets longer or
@@ -2579,7 +2579,7 @@ function picked(){if(lastPick==='text'&&tx&&tx.edit&&!tx.edit.fresh){const x=(S.
 const KN={text:'text',card:'image',snd:'sound'};let CLIP=null;
 // a copy of a picked one at t (Cmd+V at the playhead, Cmd+D right after it), as long as it was; one undo
 async function pasteAt(P,t,verb){const r2=x=>Math.round(Math.max(0,x)*100)/100,x=P.x,len=P.b-P.a;t=r2(t);let r;
-  if(P.k==='text')r=await post('/text/add',{text:x.text,style:x.style,x_pct:x.x_pct,y_pct:x.y_pct,size_pct:x.size_pct,font:x.font,color:x.color,width_pct:x.width_pct,start:t,end:r2(t+len)});
+  if(P.k==='text')r=await post('/text/add',{...TXF(x),start:t,end:r2(t+len)});   // with its rotation, opacity, anim, align and type colour
   else if(P.k==='snd')r=await post('/sfx/add',{t,item:{...x,id:Math.random().toString(16).slice(2,10),t}});
   else{if(!x.src)return toast('This picture cannot be copied. Drop it on from Media instead.');r=await post('/media/add',{src:x.src,t,box:x.box});
     if(r.key)await post('/card/edit',{key:r.key,label:x.label,t:r.start,t_end:r.end,start:t,end:r2(t+len)})}
@@ -2597,7 +2597,7 @@ async function trimTo(P,q){const r2=x=>Math.round(x*100)/100,t=r2(v.currentTime)
 function tlKeys(e){const k=e.key,del=k==='Delete'||k==='Backspace',mod=e.metaKey||e.ctrlKey,P=picked(),lk=k.toLowerCase();
   if(mod&&!e.altKey&&!e.shiftKey&&lk==='c'&&P&&!String(getSelection())){e.preventDefault();CLIP=P;toast(`Copied the ${KN[P.k]}. ⌘V pastes it at the playhead.`);return true}
   if(mod&&!e.altKey&&!e.shiftKey&&lk==='v'&&CLIP){e.preventDefault();pasteAt(CLIP,v.currentTime,'paste');return true}
-  if(mod&&!e.altKey&&lk==='d'&&P){e.preventDefault();pasteAt(P,P.b,'duplicate');return true}
+  if(mod&&!e.altKey&&lk==='d'&&P){e.preventDefault();pasteAt(P,os(so(P.b)),'duplicate');return true}   // an end inside a cut piece: right after the join
   if(mod&&!e.altKey&&!e.shiftKey&&lk==='a'){const el=document.querySelector('#edtracks .etrack:not(.lhid):not(.llock) .eitem.sel[data-lkey]');if(!el)return false;e.preventDefault();
     el.parentElement.querySelectorAll('[data-lkey]').forEach(x=>{if(x.dataset.ek||x.dataset.et||x.dataset.sp2&&placed(x.dataset.sp2))msel.add(mkey(x))});renderEdTracks();toast(`${msel.size} picked. Drag one to move them all, Delete takes them out.`);return true}
   if(!mod&&!e.altKey&&(lk==='q'||lk==='w')&&P){e.preventDefault();trimTo(P,lk==='q');return true}
@@ -2792,10 +2792,10 @@ function renderTextPanel(){
     ${txMore()}
     <div class="tfoot">${tx.edit?'<button id="tdel">Delete</button>':''}<span></span><button id="tcancel">Cancel</button><button id="tadd" ${tword()?'':'disabled'}>${tx.edit?'Save':'Add text'}</button></div>
     <p class="tsub">On the video: drag to move it, click to type, a corner sizes it, a side makes it narrower. Enter is a new line, ⌘ Enter saves.</p></div>`:''}
-  if(tx&&$('tspan'))$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end);if(tx)txMoreVals();
+  if(tx&&$('tspan'))$('tspan').textContent=fmtx(so(tx.start))+' to '+fmtx(so(tx.end));if(tx)txMoreVals();
   const all=textItems(),on=x=>tx&&tx.edit&&String(tx.edit.id)===String(x.id);
-  const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)} · Claude has it</span></div></div>`
-    :`<div class="titem${on(x)?' on':''}" data-tedit="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}" title="Click to change it"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(x.start)}–${fmtx(x.end)}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
+  const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(so(x.start))}–${fmtx(so(x.end))} · Claude has it</span></div></div>`
+    :`<div class="titem${on(x)?' on':''}" data-tedit="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}" title="Click to change it"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(so(x.start))}–${fmtx(so(x.end))}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
   const nw=all.filter(x=>x.fresh),old=all.filter(x=>!x.fresh);
   const h=(nw.length?`<h4>Not sent yet</h4>${nw.map(row).join('')}`:'')+(old.length?`<h4>On the video</h4>${old.map(row).join('')}`:'')
     +(all.length||tx?'':'<p class="tsub">No text yet. Pick a look to add one. Click any text on the video to change it.</p>')+bakeLine();
@@ -3128,7 +3128,8 @@ $('send').onclick=sendOrStop;$('msend').onclick=sendOrStop;
 const approve=async()=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;render()}   // instant: the button and the steps turn before the server answers
   try{await post('/event',{type:'approve'});await load(true)}catch(e){}finally{approving=false;render()}};
 $('approve').onclick=approve;$('mapprove').onclick=approve;
-document.addEventListener('keydown',e=>{
+const ovOpen=()=>!!document.querySelector('dialog[open],[popover]:popover-open');   // a dialog or popover has the keys
+document.addEventListener('keydown',e=>{if(ovOpen())return;
   const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&txEditable()&&HIST.length){e.preventDefault();return txUndo()}
   if(!typing&&(e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey&&e.key.toLowerCase()==='z'&&edTxOk()&&EH.u.length){e.preventDefault();return edUndo()}
@@ -3191,13 +3192,13 @@ const txMore=()=>`<div class="isec">${fNum('txx','Position X',Math.round(tx.x/10
   ${fRng('trot','Rotation',tx.rotation||0,-180,180,1)}${fRng('top','Opacity',Math.round((tx.opacity??1)*100),5,100,1)}
   ${fSel('talign','Alignment',tx.align||'center',ALIGNS)}${fSel('tanim','Animation',tx.anim||'none',ANIMS)}
   ${/box|block/.test(tx.style)?fSel('ttcol','Text colour',tx.text_color||'',TINKS):''}
-  ${fNum('tst','Start',r2(tx.start),.1,'s')}${fNum('ten','End',r2(tx.end),.1,'s')}</div>`;
-function txMoreVals(){if(!tx||!$('txx'))return;setF('txx',Math.round(tx.x/100*FW()));setF('txy',Math.round(tx.y/100*FH()));setF('trot',tx.rotation||0);setF('top',Math.round((tx.opacity??1)*100));setF('tst',r2(tx.start));setF('ten',r2(tx.end))}
+  ${fNum('tst','Start',r2(so(tx.start)),.1,'s')}${fNum('ten','End',r2(so(tx.end)),.1,'s')}</div>`;
+function txMoreVals(){if(!tx||!$('txx'))return;setF('txx',Math.round(tx.x/100*FW()));setF('txy',Math.round(tx.y/100*FH()));setF('trot',tx.rotation||0);setF('top',Math.round((tx.opacity??1)*100));setF('tst',r2(so(tx.start)));setF('ten',r2(so(tx.end)))}
 $('tbody').addEventListener('input',e=>{if(!tx)return;const id=e.target.id,x=e.target.value;
   if(id==='txx')tx.x=r1(Math.min(100,Math.max(0,x/FW()*100)));else if(id==='txy')tx.y=r1(Math.min(100,Math.max(0,x/FH()*100)));
   else if(id==='trot')tx.rotation=+x;else if(id==='top')tx.opacity=x/100;else if(id==='talign')tx.align=x;else if(id==='tanim')tx.anim=x;else if(id==='ttcol')tx.text_color=x;
-  else if(id==='tst'&&x!==''){tx.start=Math.max(0,+x);if(tx.end<=tx.start+.1)tx.end=tx.start+1}else if(id==='ten'&&+x>tx.start+.1)tx.end=+x;else return;
-  setF(id,x);renderTexts();if(id==='tst'||id==='ten')$('tspan').textContent=fmtx(tx.start)+' to '+fmtx(tx.end)});
+  else if(id==='tst'&&x!==''){tx.start=r2(os(Math.max(0,+x)));if(tx.end<=tx.start+.1)tx.end=r2(os(so(tx.start)+1))}else if(id==='ten'&&os(+x)>tx.start+.1)tx.end=r2(os(+x));else return;   // typed on the timeline's clock
+  setF(id,x);renderTexts();if(id==='tst'||id==='ten')$('tspan').textContent=fmtx(so(tx.start))+' to '+fmtx(so(tx.end))});
 // what the inspector shows: several picked, an image, a sound or a piece of the video (a text has the Text panel)
 function inspTarget(){if(!S||!view||view.stage!=='edit')return null;if(msel.size>1)return {k:'multi',ids:[...msel]};
   return csel?{k:'card'}:ssel&&placed(ssel)?{k:'snd'}:vsel!=null?{k:'vid'}:null}
@@ -3212,18 +3213,18 @@ const mparts=k=>{const i=k.indexOf('|');return [k.slice(0,i),k.slice(i+1)]};
 const MF={text:['rot','op'],img:['rot','op'],snd:['vol','mute']};
 function renderInsp(t){const B=$('ibody');let h='';IN.was={};
   if(t.k==='card'){const c=csel,[x,y,w,ht]=c.box;
-    h=`<p class="ihead"><b>${esc(c.x.label.replace(/^./,m=>m.toUpperCase()))}</b><span>Image · ${fmtx(c.s)} to ${fmtx(c.e)}</span></p>
+    h=`<p class="ihead"><b>${esc(c.x.label.replace(/^./,m=>m.toUpperCase()))}</b><span>Image · ${fmtx(so(c.s))} to ${fmtx(so(c.e))}</span></p>
       ${fNum('ix','Position X',Math.round((x+w/2)/100*FW()),1,'px')}${fNum('iy','Position Y',Math.round((y+ht/2)/100*FH()),1,'px')}
       ${fRng('isc','Scale',Math.round(w/c.x.box[2]*100),10,300,1)}${fRng('irot','Rotation',c.rot,-180,180,1)}${fRng('iop','Opacity',Math.round(c.op*100),5,100,1)}
-      ${fNum('is','Start',r2(c.s),.1,'s')}${fNum('ie','End',r2(c.e),.1,'s')}<button class="ifull" id="idel">Delete</button>`}
+      ${fNum('is','Start',r2(so(c.s)),.1,'s')}${fNum('ie','End',r2(so(c.e)),.1,'s')}<button class="ifull" id="idel">Delete</button>`}
   else if(t.k==='snd'){const x=placed(ssel),cl=x.kind==='clip',vol=(x.vol??1)*100;
-    h=`<p class="ihead"><b>${esc(x.sound.replace(/\.[a-z0-9]+$/i,''))}</b><span>${cl?'Audio':'Sound'} · ${fmtx(x.t)} · ${sndLen(x).toFixed(1)} s</span></p>
+    h=`<p class="ihead"><b>${esc(x.sound.replace(/\.[a-z0-9]+$/i,''))}</b><span>${cl?'Audio':'Sound'} · ${fmtx(so(x.t))} · ${sndLen(x).toFixed(1)} s</span></p>
       ${fRng('ivol','Volume',Math.round(vol),0,200,1)}${cl?fRng('ifi','Fade in',x.fade_in||0,0,Math.min(5,x.dur/2),.05)+fRng('ifo','Fade out',x.fade_out||0,0,Math.min(5,x.dur/2),.05):''}
-      ${fNum('ist','Start',r2(x.t),.1,'s')}${cl?fNum('iin','Trim in',r2(x.in||0),.1,'s')+fNum('iout','Trim out',r2((x.in||0)+x.dur),.1,'s'):''}
+      ${fNum('ist','Start',r2(so(x.t)),.1,'s')}${cl?fNum('iin','Trim in',r2(x.in||0),.1,'s')+fNum('iout','Trim out',r2((x.in||0)+x.dur),.1,'s'):''}
       ${fSel('imute','Mute',x.muted?'1':'',[['','Off'],['1','On']])}
       <div class="tfv"><button id="iplay">Play</button>${cl?'<button id="isplit" title="Split at the playhead (⌘B)">Split</button>':''}</div><button class="ifull" id="idel">Remove</button>`}
   else if(t.k==='vid'){const p=vpieces().find(q=>Math.abs(q.a-vsel)<.01)||{a:vsel,b:vsel};
-    h=`<p class="ihead"><b>Video piece</b><span>${fmtx(p.a)} to ${fmtx(p.b)} · ${(p.b-p.a).toFixed(1)} s</span></p><button class="ifull" id="idel">Cut this piece</button>`}
+    h=`<p class="ihead"><b>Video piece</b><span>${fmtx(so(p.a))} to ${fmtx(so(p.b))} · ${(p.b-p.a).toFixed(1)} s</span></p><button class="ifull" id="idel">Cut this piece</button>`}
   else{const ks=t.ids.map(k=>mparts(k)[0]),fs=(MF[ks[0]]||[]).filter(f=>ks.every(k=>(MF[k]||[]).includes(f))),one=insItem(t.ids[0]);
     h=`<p class="ihead"><b>${t.ids.length} picked</b><span>A change goes on all of them</span></p>`
       +(fs.includes('rot')?fRng('irot','Rotation',one.rot,-180,180,1):'')+(fs.includes('op')?fRng('iop','Opacity',Math.round(one.op*100),5,100,1):'')
@@ -3236,8 +3237,8 @@ function insItem(k){const[row,id]=mparts(k);
   if(row==='text'){const x=(S.texts||[]).find(x=>String(x.id)===id)||{};return {rot:x.rotation||0,op:x.opacity??1,x}}
   const x=placed(id)||{};return {vol:x.vol??1,mute:!!x.muted,x}}
 function inspVals(){const t=inspTarget();if(!t||tool!=='insp')return;
-  if(t.k==='card'){const c=csel,[x,y,w,ht]=c.box;setF('ix',Math.round((x+w/2)/100*FW()));setF('iy',Math.round((y+ht/2)/100*FH()));setF('isc',Math.round(w/c.x.box[2]*100));setF('irot',c.rot);setF('iop',Math.round(c.op*100));setF('is',r2(c.s));setF('ie',r2(c.e))}
-  else if(t.k==='snd'){const x=placed(ssel);setF('ivol',Math.round((x.vol??1)*100));setF('ifi',x.fade_in||0);setF('ifo',x.fade_out||0);setF('ist',r2(x.t));setF('iin',r2(x.in||0));setF('iout',r2((x.in||0)+(x.dur||0)))}
+  if(t.k==='card'){const c=csel,[x,y,w,ht]=c.box;setF('ix',Math.round((x+w/2)/100*FW()));setF('iy',Math.round((y+ht/2)/100*FH()));setF('isc',Math.round(w/c.x.box[2]*100));setF('irot',c.rot);setF('iop',Math.round(c.op*100));setF('is',r2(so(c.s)));setF('ie',r2(so(c.e)))}
+  else if(t.k==='snd'){const x=placed(ssel);setF('ivol',Math.round((x.vol??1)*100));setF('ifi',x.fade_in||0);setF('ifo',x.fade_out||0);setF('ist',r2(so(x.t)));setF('iin',r2(x.in||0));setF('iout',r2((x.in||0)+(x.dur||0)))}
   else if(t.k==='multi'){const one=insItem(t.ids[0]);if(one.rot!=null){setF('irot',one.rot);setF('iop',Math.round(one.op*100))}else setF('ivol',Math.round(one.vol*100))}}
 const cardLive=()=>{const s2=$('csel');if(s2){const[x,y,w,h]=csel.box;Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:h+'%',transform:csel.rot?`rotate(${csel.rot}deg)`:''})}liveSync()};
 // a field moved: drawn live at once (the composition plays it), saved when let go
@@ -3245,10 +3246,10 @@ $('ibody').addEventListener('input',e=>{const id=e.target.id,n=+e.target.value,t
   if(t.k==='card'){const c=csel,b=c.box;if(!(id in IN.was))IN.was[id]={box:b.slice(),rot:c.rot,op:c.op,s:c.s,e:c.e};
     if(id==='ix')b[0]=r1(n/FW()*100-b[2]/2);else if(id==='iy')b[1]=r1(n/FH()*100-b[3]/2);
     else if(id==='isc'){const cx=b[0]+b[2]/2,cy=b[1]+b[3]/2,w=Math.max(3,c.x.box[2]*n/100),h=w*c.x.box[3]/c.x.box[2];csel.box=[r1(cx-w/2),r1(cy-h/2),r1(w),r1(h)]}
-    else if(id==='irot')c.rot=n;else if(id==='iop')c.op=n/100;else if(id==='is'&&e.target.value!==''){const d=c.e-c.s;c.s=Math.max(0,n);c.e=c.s+d}else if(id==='ie'&&n>c.s+.2)c.e=n;
+    else if(id==='irot')c.rot=n;else if(id==='iop')c.op=n/100;else if(id==='is'&&e.target.value!==''){const d=so(c.e)-so(c.s);c.s=r2(os(Math.max(0,n)));c.e=r2(os(so(c.s)+d))}else if(id==='ie'&&os(n)>c.s+.2)c.e=r2(os(n));   // typed on the timeline's clock, kept on the source's
     return cardLive()}
   if(t.k==='snd'){const x=placed(ssel);if(!(id in IN.was))IN.was[id]={t:x.t,in:x.in,dur:x.dur,vol:x.vol,fade_in:x.fade_in,fade_out:x.fade_out,muted:x.muted};
-    if(id==='ivol')x.vol=n/100;else if(id==='ifi')x.fade_in=n;else if(id==='ifo')x.fade_out=n;else if(id==='ist'&&e.target.value!=='')x.t=Math.max(0,n);else if(id==='imute')x.muted=!!e.target.value;
+    if(id==='ivol')x.vol=n/100;else if(id==='ifi')x.fade_in=n;else if(id==='ifo')x.fade_out=n;else if(id==='ist'&&e.target.value!=='')x.t=r2(os(Math.max(0,n)));else if(id==='imute')x.muted=!!e.target.value;
     else if(id==='iin'&&n>=0&&n<(x.in||0)+x.dur-.2){x.dur=r2(x.dur+(x.in||0)-n);x.in=n}else if(id==='iout'&&n>(x.in||0)+.2&&n<=(x.d||1e9))x.dur=r2(n-(x.in||0));
     liveAudio();return liveSync()}
   if(t.k==='multi')for(const k of t.ids){const[row,key]=mparts(k),it=insItem(k);
@@ -3302,7 +3303,7 @@ async function cardDup(){const c=csel,nb=c.box.slice();c.box=c.orig.slice();card
   toast('Copied.');$('edtracks')._h=null;await load()}
 // arrow keys nudge the picked card or text 1 px (Shift 10) while the video has focus; saved a moment after the last one
 let vidFocus=false;document.addEventListener('pointerdown',e=>{vidFocus=!!e.target.closest('#p1')},true);
-document.addEventListener('keydown',e=>{if(!vidFocus||!/^Arrow(Left|Right|Up|Down)$/.test(e.key)||e.metaKey||e.ctrlKey||e.altKey)return;const a=document.activeElement;
+document.addEventListener('keydown',e=>{if(!vidFocus||!/^Arrow(Left|Right|Up|Down)$/.test(e.key)||e.metaKey||e.ctrlKey||e.altKey||ovOpen())return;const a=document.activeElement;
   if(a&&(/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)||a.isContentEditable))return;const n=e.shiftKey?10:1,dx=(e.key==='ArrowRight')-(e.key==='ArrowLeft'),dy=(e.key==='ArrowDown')-(e.key==='ArrowUp');
   if(csel){e.preventDefault();e.stopImmediatePropagation();const b=csel.box;b[0]=r2(b[0]+dx*n/FW()*100);b[1]=r2(b[1]+dy*n/FH()*100);cardLive();inspVals();clearTimeout(IN.nt);IN.nt=setTimeout(()=>{if(csel&&cmoved())cardSave(false)},400);return}
   if(tx&&tx.edit){e.preventDefault();e.stopImmediatePropagation();tx.x=r2(tx.x+dx*n/FW()*100);tx.y=r2(tx.y+dy*n/FH()*100);renderTexts();txMoreVals();textSoon(400)}},true);
