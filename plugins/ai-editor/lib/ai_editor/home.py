@@ -3289,7 +3289,7 @@ def demo():
     # the keyboard shortcuts (shortcuts.py): Settings edits the same keys.json every review page reads
     assert b'src="/shortcuts.js"' in HTML.read_bytes() and b"KM_TABLE" in urllib.request.urlopen(base + "/shortcuts.js?t=" + tok).read()
     assert get("/keys") == {"keys": {}} and post("/keys", {"action": "play", "combo": "Shift+Space"})["keys"] == {"play": ["Shift+Space"]}
-    assert json.loads((Path(os.environ["AI_EDITOR_HOME"]) / "keys.json").read_text()) == {"play": ["Shift+Space"]}
+    assert json.loads((Path(os.environ["AI_EDITOR_HOME"]) / "keys.json").read_text(encoding="utf-8")) == {"play": ["Shift+Space"]}
     for bad in ({"action": "nope", "combo": "K"}, {"action": "play", "combo": "Mod+W"}, {"reset": "nope"}):
         try:
             post("/keys", bad)

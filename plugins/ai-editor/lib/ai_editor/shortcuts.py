@@ -134,7 +134,7 @@ def demo():
         os.environ["AI_EDITOR_HOME"] = tmp
         assert load() == {}
         assert change({"action": "split", "combo": "Mod+K"}) == {"split": ["Mod+K"]}
-        assert json.loads((Path(tmp) / "keys.json").read_text()) == {"split": ["Mod+K"]}, "only the changed action"
+        assert json.loads((Path(tmp) / "keys.json").read_text(encoding="utf-8")) == {"split": ["Mod+K"]}, "only the changed action"
         assert change({"action": "fit", "combo": []}) == {"split": ["Mod+K"], "fit": []}, "no key at all is a change"
         assert change({"action": "fit", "combo": ["Shift+Z"]}) == {"split": ["Mod+K"]}, "the default again drops it"
         for bad in ({"action": "nope", "combo": "K"}, {"action": "cancel", "combo": "K"}, {"action": "split", "combo": "k"},
@@ -147,8 +147,8 @@ def demo():
         assert load() == {"split": ["Mod+K"]}, "a refused change keeps the file"
         assert change({"reset": "split"}) == {}
         assert change({"replace": {"split": ["Mod+K", "Mod+B"], "fit": ["\\", "Shift+Z"]}})["fit"] == ["\\", "Shift+Z"]
-        assert change({"reset_all": True}) == {} and json.loads((Path(tmp) / "keys.json").read_text()) == {}
-        (Path(tmp) / "keys.json").write_text('{"split": ["Mod+K"], "gone": ["K"], "fit": ["bad key"]}')
+        assert change({"reset_all": True}) == {} and json.loads((Path(tmp) / "keys.json").read_text(encoding="utf-8")) == {}
+        (Path(tmp) / "keys.json").write_text('{"split": ["Mod+K"], "gone": ["K"], "fit": ["bad key"]}', encoding="utf-8")
         assert load() == {"split": ["Mod+K"]}, "unknown actions and bad combos in the file are ignored"
     print("shortcuts.py demo: ok")
 

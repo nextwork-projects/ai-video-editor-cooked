@@ -4474,8 +4474,10 @@ def learn_job(folder, cli=None):
     rj = folder / "review.json"
     cli = os.environ.get("AI_EDITOR_CLAUDE") or shutil.which("claude") if cli is None else cli
     why = None
-    if (load(rj).get("learn") or {}).get("state") != "reading":
+    lr0 = load(rj).get("learn") or {}
+    if lr0.get("state") != "reading":
         return
+    mine = lr0.get("job")   # a later read (Try again, a new approve) is not this job's to fail
     if not cli:
         why = "Claude Code is not installed here, so Claude could not read your notes."
     else:
@@ -4490,7 +4492,7 @@ def learn_job(folder, cli=None):
 
     def f(d):
         lr = d.get("learn") or {}
-        if lr.get("state") == "reading":   # it never posted: say so, never an empty list
+        if lr.get("state") == "reading" and lr.get("job") == mine:   # it never posted: say so, never an empty list
             lr.update(state="failed", why=why or "Claude finished without posting any rules.")
     update(rj, f)
 
@@ -5492,7 +5494,7 @@ def demo():
     assert '<script src="/shortcuts.js">' in HTML.read_text(encoding="utf-8") and b"KM_TABLE" in get("/shortcuts.js").read()
     assert json.loads(get("/keys").read()) == {"keys": {}} and post("/keys", {"action": "split", "combo": "Mod+K"}) == {"keys": {"split": ["Mod+K"]}}
     assert get("/shortcuts.js").read().startswith(b'const KM_USER={"split": ["Mod+K"]};'), "the page's first key press already has it"
-    assert json.loads((tmp / "home" / "keys.json").read_text()) == {"split": ["Mod+K"]}, "only the changed action"
+    assert json.loads((tmp / "home" / "keys.json").read_text(encoding="utf-8")) == {"split": ["Mod+K"]}, "only the changed action"
     for bad in ({"action": "nope", "combo": "K"}, {"action": "split", "combo": "Mod+Q"}, {"action": "split", "combo": "k"}, {"action": "cancel", "combo": "K"}):
         try:
             post("/keys", bad)
