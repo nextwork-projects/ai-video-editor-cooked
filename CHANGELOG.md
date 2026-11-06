@@ -12,6 +12,9 @@ What changed for every user, newest first.
 - Nothing stops at the reels safe zone any more. Moves and resizes go anywhere on the frame.
 - A click on empty space picks nothing: the black around the video, an empty timeline row, or the footage while something else is picked. Picking no longer highlights a text's words.
 - One editor for every video. Every draft opens in the scene editor by itself, a cooked. edit or a finished MP4 from another skill, and everything in it moves. A finished MP4 is one clip you can move, trim and crop, with the texts, sounds and cuts you already made on it kept as their own items.
+- Claude's work arrives as elements. When you send notes on a draft, Claude answers them on the scene: a screenshot is a picture, an animation is a clip with a see-through background, a text is a text, a sound is a sound. Each one shows up on the page within a few seconds, with no new render, and you can drag, resize, trim or delete it like anything else.
+- See what Claude changed. Its items carry a small Claude mark on the timeline until you touch them. The notes panel lists Claude's changes, each with Undo and Redo, and Cmd+Z takes a whole Claude change off in one step while your own edits since stay.
+- Claude edits trial reels too. A note on a version is answered on that version's own scene, with its own list of Claude's changes and its own undo.
 
 ## ai-editor 2.7.39, creator-teardown 2.7.39 (2026-11-05)
 - Export. Edit, then press Export: it renders exactly what the page shows and saves the video, with Show in Finder and Download. No feedback to Claude, no approve, and it works while Claude is busy (it exports what you see now). Exports also go to your library's exports folder, and home shows when a video was exported.

@@ -85,6 +85,53 @@ each line. `outline.width` is the CSS text stroke (half of it shows outside the 
   `POST /export {"alt"}` (saved as `<download name> - <alt>.mp4`, `/export`'s `alt` says which). The page swaps the
   scene when the version changes, with no reload, and keeps an undo history per version.
 
+## Claude edits the scene
+
+Claude's work on a scene arrives as items, never as a new render. `review.py wait` hands a send on a scene draft over with
+a `SCENE:` block that says so; Claude answers each note with:
+
+```bash
+python3 scene.py show <edit> [--at t]       # the items on screen then: ids, times, boxes; the words said around t
+python3 scene.py add <edit> text --text "Link in bio" --start 80 --end 82.5 [--x --y --w] [--json '{"box": {...}}'] --why "..."
+python3 scene.py add <edit> image|video|audio --src <file> --start t [--end t] [--x --y --w --h] [--track name] --why "..."
+python3 scene.py ops <edit> '<json ops>'|ops.json --why "<one line>"     # any op above
+python3 scene.py cards <edit> [--at t,t]    # plan.json's new cards (overlays, template-filler) as items
+python3 review.py <edit> round --scene       # the notes answered (resolve --reply), a round with no MP4
+```
+
+Every one of them takes `--alt <version>` for a note on a version (a trial reel, marked `[t1]` in `wait`): the command
+then reads and changes that version's `scene.<alt>.json`, and `round --scene --alt <version>` hands it back. The `SCENE:`
+block names the versions the notes were left on.
+
+- Each command is one change: with the page's server running it goes through `POST /scene/ops` with `"by": "claude"`
+  and `"why"` (the server's journal, the page draws it on its next 3 s poll with no reload); with no server it is
+  written to scene.json directly. A file outside the edit is copied into `media/` first.
+- Items Claude added or changed carry `by: "claude"`: a small Claude mark on their timeline clip. Any change from the
+  page clears it (`scene.touch`).
+- Every change is kept in `review/claude.json` (a version's in `review/claude.<alt>.json`, `scene.changes_of`): `n`, `why`,
+  `at` [stage, round], `t`, `items`, and the ops that undo (`back`) and redo (`fwd`) it. `/state`'s `claude_changes` lists
+  the draft's own and those of the round `round --scene` came from (`scene_from`), each with its `alt` (null: the main
+  draft); the notes panel shows the ones on the version on screen under **Claude's changes**, each with Undo or Redo, and
+  each is one Cmd+Z ("Claude: <why>") in that version's undo history. `POST /scene/claude {"n", "undo", "alt"}` applies
+  its own ops, so the user's edits since stay. `/state`'s `scene_v` is each version's scene stamp (`{"": main, "t1": ...}`):
+  the page fetches the scene it shows when its stamp changes.
+- `round --scene` opens the next round on the same video (or `cut.mp4` for the first edit) with the scene as the draft:
+  the scene files are snapshotted with the round's files, the round's versions stay on it, no MP4 is made. Export
+  renders it when the user wants the file.
+- Never `scene.py from-plan` again on a draft the user has edited: it rebuilds scene.json from plan.json and drops their
+  moves. After the first draft, every change is an op.
+
+## Animations are elements
+
+An animated graphic (a HyperFrames or motion clip, a Blender shot) is a `video` item with alpha, moved, scaled, cropped
+and trimmed like any other. The format is **VP9 WebM with alpha** (`yuva420p`; `hyperframes render <dir> --format webm`
+on a `background: transparent` page writes it, `ALPHA_MODE=1`). Checked 2026-11-06 on the sample take: the page's player
+(`mountScene`, Chrome's `<video>`) draws it transparent over the footage, and the export keeps the alpha because
+`SceneEdit.tsx` gives `OffthreadVideo` `transparent` for an asset with `alpha: true` (frames extracted as PNG).
+`probe` sets `alpha` (VP9's `alpha_mode` tag, or a `yuva`/`rgba`/`gbrap` pix_fmt). ProRes 4444 `.mov` has alpha but
+Chrome cannot play it: such an asset gets a VP9 alpha proxy (`.scene/<id>.webm`) that both the page and the export
+play. An H.264 MP4 has no alpha: a clip on its own ground is an opaque box.
+
 ## The AI's cuts are clips
 
 The footage is never one baked cut. The main video track holds one `video` item per piece the cut kept, all on
@@ -103,5 +150,6 @@ from the raw take's words through the same clips, so a restored piece gets its c
   or the cut's decisions), framing and grade on each clip, zooms as keys on the clips they fall in, each card as an image or video item, each text as a text item, captions as one captions item, every
   sound as an audio item.
 - Any other draft becomes a scene with its MP4 as clips on the bottom track and its hand edits as items (above).
+- A skill writes a scene, never a flattened MP4: SCENE-SKILLS.md (what changes in a house skill).
 - `scene.py` is also the helper skills call: `Scene(w, h, fps)`, `.video(src, ...)`, `.image(...)`,
   `.text(...)`, `.audio(...)`, `.captions(...)`, `.save(edit)`.

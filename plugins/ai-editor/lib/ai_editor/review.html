@@ -485,6 +485,7 @@ body.asidex aside{display:none}body:not(.asidex) .popen{background:var(--railon)
 .chg{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;margin:0 -8px;border-radius:8px;text-align:left;font-size:13px;line-height:20px;color:var(--ink2)}
 .chg:hover{background:var(--hover)}.chg .tchip{background:var(--chip)}
 .chg.back{color:var(--strong);font-weight:600}
+.ccl{align-items:center;cursor:pointer}.ccl>span:not(.tchip){flex:1}.ccl.off>span:not(.tchip){text-decoration:line-through;color:var(--muted)}.ccl .obtn{flex-shrink:0}
 .pfoot{flex-shrink:0;padding:16px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
 /* Anything to add?: the images and links added to this video (assets.json), each with a remove x */
 #adds{display:flex;flex-direction:column;gap:6px}
@@ -1122,7 +1123,7 @@ async function load(force){const sent=performance.now();
     view=cur();followNew=false;if(was&&was!==key(cur()))tab='notes'}   // follow a new round when it lands
   if(S.baked&&S.baked!==DATA._baked){DATA._baked=S.baked;delete DATA[key(S)]}   // a bake remade this round's data (cards moved)
   for(const r of S.rounds||[])if(!(key(r) in DATA)){DATA[key(r)]=null;fetch('/data?k='+key(r)).then(x=>x.json()).then(j=>{DATA[key(r)]=j;txSig='';render()}).catch(()=>{})}
-  setVideo();render();SC.check().then(on=>{if(!on)liveFetch()});   // a scene (review-scene.js) or the plan's live player
+  setVideo();render();SC.check().then(on=>{if(!on)liveFetch();else scClaude()});   // a scene (review-scene.js) or the plan's live player
   if(landing===2){landing=0;toast(S.stills?'The preview is ready':'The edit is ready')}
 }
 // Claude's words reach the page as written. Check output never should ("Render check: 1 FAIL left", "-12.7 LUFS",
@@ -1583,6 +1584,14 @@ const EH={u:[],r:[]};let edAt=0,txAt=0;
 let JQ=[];
 function edPush(what,undo,redo,key){const j=JQ.splice(0),l=EH.u[EH.u.length-1];if(key&&l&&l.key===key&&performance.now()-edAt<4000){l.redo=redo;l.j=[...(l.j||[]),...j]}else{EH.u.push({what,undo,redo,key,j});if(EH.u.length>60)EH.u.shift()}EH.r=[];edAt=performance.now();edBtns()}
 const jPush=what=>edPush(what,async()=>{},async()=>{});   // an edit undone by its journal alone
+// Claude's changes to the scene (scene.py ops, SCENE.md): drawn on the poll that sees scene.json change, each one Undo
+// ("Claude: <why>") that takes it off by its own ops (POST /scene/claude), so the user's edits since stay
+const CL={v:{},seen:new Set()},clMine=()=>(S.claude_changes||[]).filter(c=>(c.alt||'')===(alt||''));   // each version: its own scene, its own changes
+async function clUndo(n,undo){const r=await post('/scene/claude',{n,undo,alt:alt||null});if(!r.ok)throw new Error(r.error||'That did not save.');if(r.scene&&SC.on){SC.s=r.scene;SC.show()}}
+async function scClaude(){if(!SC.on)return;
+  const sv=(S.scene_v||{})[alt||''];if(sv!==CL.v[alt||'']&&!SC.busy&&!SC.drag&&!SC.edit){if((alt||'') in CL.v)await SC.fetch();CL.v[alt||'']=sv}
+  for(const c of clMine())if(!CL.seen.has((alt||'')+'|'+c.n)){CL.seen.add((alt||'')+'|'+c.n);if(!c.undone){EH.u.push({what:'Claude: '+c.why,undo:()=>clUndo(c.n,true),redo:()=>clUndo(c.n,false),j:[]});EH.r=[];edBtns()}}
+  const sig=JSON.stringify(clMine());if(sig!==CL.sig){CL.sig=sig;renderList()}}   // the list drew before the scene was on
 function edBtns(){const u=EH.u.at(-1),r=EH.r.at(-1);$('undob').disabled=!u;$('redob').disabled=!r;$('undob').title=u?`Undo ${u.what} (⌘Z)`:'Undo (⌘Z)';$('redob').title=r?`Redo ${r.what} (⇧⌘Z)`:'Redo (⇧⌘Z)'}
 const edSave=(path,b)=>post(path,b).then(r=>{if(!(r.ok||r.id))throw new Error(r.error||'');$('edtracks')._h=null;return load()});
 async function edUndo(redo){if(tx)await textAuto();const h=(redo?EH.r:EH.u).pop();if(!h)return;(redo?EH.u:EH.r).push(h);h.key=null;edAt=performance.now();edBtns();
@@ -1979,6 +1988,8 @@ function renderList(){
     if(vr.note&&!vr.back_to)h+=`<div class="sum"><p>${esc(vr.note)}</p></div>`;
     if(mine.length)h+=`<p class="sub">Your notes on ${dn(viewRound())}</p>`;
   }else if((vr.note||cc)&&!(isCur()&&p==='send'))h+=`<div class="claude"><div><b>Claude</b><p>${esc(vr.note||'')}${cc}</p></div></div>`;
+  const CC=isCur()&&SC.on?clMine():[];   // Claude's changes to the scene on this draft, each undoable
+  if(CC.length)h+=`<div class="chhead"><b>Claude's changes</b></div>`+CC.map(c=>`<div class="chg ccl${c.undone?' off':''}"${c.t!=null?` data-t="${c.t}" title="jump to ${fmt(c.t)}"`:''}>${c.t!=null?`<span class="tchip num">${fmt(c.t)}</span>`:''}<span>${esc(c.why)}</span><button class="obtn" data-cln="${c.n}" data-clu="${c.undone?0:1}">${c.undone?'Redo':'Undo'}</button></div>`).join('');
   h+=mine.map(noteHtml).join('');
   if(mine.length&&isCur()&&!p)h+=`<p class="unsent">${plural(mine.length,'note')} not sent yet. Press Submit feedback to Claude when you are done.</p>`;
   if(!mine.length&&!prev.length&&!(S.raw&&isCur())&&!(isCur()&&(makingEdit()||p==='approve')))h+=isCur()?'<div class="empty"><b>Your feedback</b>Pause where something is off and type what to change below. Each note is pinned to that moment. Claude sees nothing until you press Submit feedback to Claude.</div>':'<p class="empty2">No notes on this draft.</p>';
@@ -2209,6 +2220,8 @@ $('list').addEventListener('click',async e=>{
     sureBack=null;bk.disabled=true;const r=await fetch('/back',{method:'POST',body:JSON.stringify({round:n})}),j=await r.json().catch(()=>({}));
     if(!r.ok)return alert(j.error||'Could not go back');toast('Back to '+dn(roundOf(S.stage,+n)));tab='notes';followNew=true;return load(true)}
   const r=e.target.closest('.rnd');if(r){const[stage,n]=r.dataset.k.split('-');seekTo=mapT(v.currentTime,key(view),r.dataset.k);view={stage,round:+n};inT=outT=null;setVideo();render();return}
+  const cl=e.target.closest('[data-cln]');if(cl){e.stopPropagation();const undo=cl.dataset.clu==='1',c=clMine().find(c=>c.n===+cl.dataset.cln);cl.disabled=true;
+    try{await clUndo(c.n,undo);toast((undo?'Undone: ':'Redone: ')+'Claude: '+c.why+'.')}catch(x){toast(x.message)}return load(true)}
   const ch=e.target.closest('.chg[data-t]');if(ch){v.currentTime=+ch.dataset.t;return}
   const sc=e.target.closest('[data-scope]');
   if(sc){e.stopPropagation();const c=S.comments.find(c=>c.id===+sc.dataset.scope);

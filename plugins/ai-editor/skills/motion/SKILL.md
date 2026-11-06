@@ -96,6 +96,21 @@ python3 "$M" strips edits/<name>/render.mp4 --at <t1>,<t2>,<t3>,<t4> --out edits
 Each row runs 0.4 s before to 1.1 s after its time at 10 fps. Look for a part on one frame and gone, a blank
 frame between cards, a part that never moves while held, anything over the face, anything outside the box.
 
+## On a scene draft
+
+A clip is a `video` item the user moves, scales and trims (`lib/ai_editor/SCENE.md` "Animations are elements"). Make
+its page `background: transparent` (html, body and #root) when it sits over the footage, render it with alpha, and
+add it at its word, as `wait`'s `SCENE:` block says:
+
+```bash
+npx hyperframes render edits/<name>/motion/<id> --format webm -o edits/<name>/motion/<id>/renders/clip.webm
+python3 "${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/scene.py" add edits/<name> video --src edits/<name>/motion/<id>/renders/clip.webm \
+  --start <word time - 0.1> --x <centre x> --y <centre y> --w <width> --why "<the line it shows>"
+```
+
+VP9 WebM keeps the alpha in the page's player and in the export; an MP4 is an opaque box. A clip on its own card
+ground can stay MP4 (`place`, plan, then `scene.py cards --at <t>`). Never patch-render a scene draft.
+
 ## Notes on a clip
 
 A review-page note at a moment a clip is up ("make the counter bigger", "use blue"):

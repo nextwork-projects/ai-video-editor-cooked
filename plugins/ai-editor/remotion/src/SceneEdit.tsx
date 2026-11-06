@@ -11,7 +11,7 @@ import { ease, pickMotion, prog } from "./motion";
 import { resolveLook, useFonts } from "./look";
 
 type Key = [number, number, string?];
-export type Asset = { src: string; url?: string; proxy?: string; kind?: string; w?: number; h?: number; duration?: number };
+export type Asset = { src: string; url?: string; proxy?: string; kind?: string; w?: number; h?: number; duration?: number; alpha?: boolean };
 type Box = { color: string; pad?: number | [number, number]; radius?: number; block?: boolean };
 export type Item = {
   id: string; type: "video" | "image" | "text" | "shape" | "audio" | "captions" | "card"; start: number; end: number; name?: string;
@@ -96,7 +96,9 @@ const VideoItem: React.FC<{ it: Item; a?: Asset; W: number; H: number; muted: bo
   const props = { src: urlOf(a), trimBefore: Math.round((it.in ?? 0) * fps), playbackRate: it.speed ?? 1,
     volume: (it.volume ?? 1) <= 0 ? 0 : vol(it, fps, muted), muted: muted || (it.volume ?? 1) <= 0 };
   if (hidden) return muted || (it.volume ?? 1) <= 0 ? null : <Audio {...props} />;
-  return <Frame it={it} a={a} lt={frame / fps} W={W} H={H}>{(st) => <V {...props} style={st} pauseWhenBuffering={live()} />}</Frame>;
+  // a clip with alpha (VP9 WebM): the page's <video> keeps it; the export extracts its frames as PNG to keep it
+  const alpha = !live() && a?.alpha ? { transparent: true } : {};
+  return <Frame it={it} a={a} lt={frame / fps} W={W} H={H}>{(st) => <V {...props} {...alpha} style={st} pauseWhenBuffering={live()} />}</Frame>;
 };
 
 const ImageItem: React.FC<{ it: Item; a?: Asset; W: number; H: number }> = ({ it, a, W, H }) => {

@@ -7,7 +7,13 @@ live in the review page and for the export.
     python3 scene.py from-video <edit> [--video render.mp4]   any other draft: its MP4 as a video clip
     python3 scene.py render <edit> [--out file.mp4] [--draft] the export (Remotion, the Scene composition)
     python3 scene.py stills <edit> <out_dir> name=frame ...   frames of the scene as PNGs (the same bundle)
+    python3 scene.py show <edit> [--at t]                   the items (ids, times, boxes) and the words said, to target
+    python3 scene.py ops <edit> '<json ops>'|ops.json [--why "<one line>"]   Claude's change: POST /scene/ops's ops
+    python3 scene.py add <edit> text|image|video|shape|audio --start t [--end t] [--src file] [--text "..."]
+                     [--x --y --w --h] [--track name] [--json '{...}'] [--why "..."]   one item, as an op
+    python3 scene.py cards <edit> [--at t,t] [--plan plan.json] [--why "..."]   plan.json's new cards (overlays, motion) as items
     python3 scene.py demo                                   self-check
+    show, ops, add, cards and render take --alt <version>: that version's scene (scene.<alt>.json, a trial reel's)
 
 Skills write scenes with the helper: Scene(w, h, fps).video(src, start, end, ...), .image, .text, .shape, .audio,
 .captions, then .save(edit). Stdlib + ffmpeg (numpy, when there, finds a cut's sideways framing).
@@ -20,12 +26,17 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PLUGIN = HERE.parents[1]
 EDIT_PY = PLUGIN / "skills" / "style-edit" / "scripts" / "edit.py"
 NAME = "scene.json"
+CHANGES = Path("review") / "claude.json"   # Claude's changes, each with the ops that undo and redo it (SCENE.md); a version's: changes_of
 TYPES = {"video": "visual", "image": "visual", "text": "visual", "shape": "visual", "card": "visual", "audio": "audio", "captions": "captions"}
 ANIMS = {"none", "cut", "fade", "pop", "slide-up"}
 EASES = {"linear", "in", "out", "inout", "hold"}
@@ -53,9 +64,9 @@ def jsave(p, d):
 
 
 def probe(path):
-    """{w, h, duration, kind, codec, adur (its sound's length)} of a media file, rotation applied."""
-    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,duration:stream_side_data=rotation"
-                          ":format=duration", "-of", "json", str(path)], capture_output=True, text=True)
+    """{w, h, duration, kind, codec, adur (its sound's length), alpha (it has transparency)} of a media file, rotation applied."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,duration,pix_fmt:stream_tags"
+                          ":stream_side_data=rotation:format=duration", "-of", "json", str(path)], capture_output=True, text=True)
     if out.returncode:
         raise SceneError(f"ffprobe could not read {path}")
     d = json.loads(out.stdout)
@@ -68,7 +79,11 @@ def probe(path):
         w, h = h, w
     still = Path(path).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
     au = next((float(s["duration"]) for s in d.get("streams", []) if s.get("codec_type") == "audio" and s.get("duration")), None)
-    return {"kind": "image" if still else "video", "w": w, "h": h, "duration": 0 if still else dur, "codec": v.get("codec_name"), "adur": au}
+    # a clip with transparency: VP9/VP8 WebM tags it (the decoder reports yuv420p), ProRes 4444 and PNG video say it in pix_fmt
+    alpha = not still and (str({k.lower(): x for k, x in (v.get("tags") or {}).items()}.get("alpha_mode")) == "1"
+                           or (v.get("pix_fmt") or "").startswith(("yuva", "rgba", "argb", "bgra", "abgr", "gbrap", "ya")))
+    return {"kind": "image" if still else "video", "w": w, "h": h, "duration": 0 if still else dur, "codec": v.get("codec_name"), "adur": au,
+            **({"alpha": True} if alpha else {})}
 
 
 # ---------------------------------------------------------------- shape
@@ -187,6 +202,11 @@ def name_of(alt=None):
     return f"scene.{slug}.json" if slug == alt else f"scene.{slug}-{hashlib.sha1(str(alt).encode()).hexdigest()[:8]}.json"
 
 
+def changes_of(alt=None):
+    """Claude's change log of a version: review/claude.json for the main draft, review/claude.<alt>.json beside its scene."""
+    return CHANGES.with_name("claude" + name_of(alt)[len("scene"):])
+
+
 def load(edit, name=NAME):
     return validate(normalise(jload(Path(edit) / name)))
 
@@ -231,11 +251,22 @@ def ripple(sc, at, delta, skip=None):
                 it["end"] = round(max(it["start"] + fr, it["end"] + delta), 6)
 
 
-def apply(sc, ops, edit=None):
+def touch(it, by):
+    """Who changed the item last: by "claude" marks it (the timeline's Claude mark), the page (None) clears the mark,
+    "keep" (an undo or redo of Claude's change) leaves it."""
+    if by == "claude":
+        it["by"] = "claude"
+    elif by is None:
+        it.pop("by", None)
+
+
+def apply(sc, ops, edit=None, by=None):
     """The scene after ops (SCENE.md), in order. SceneError on a bad op; the scene passed in is never changed.
-    edit: the edit folder, so an added asset is probed (its size and length)."""
+    edit: the edit folder, so an added asset is probed (its size and length). by: touch()."""
     sc = normalise(copy.deepcopy(sc))
     fr = 1 / sc["fps"]
+    if not isinstance(ops, list):
+        raise SceneError("ops must be a list of ops")
     for op in ops:
         kind = op.get("op")
         if kind == "set":
@@ -246,12 +277,14 @@ def apply(sc, ops, edit=None):
             for k in ("id", "type"):
                 props.pop(k, None)
             it.update(props)
+            touch(it, by)
         elif kind == "add":
             tr = track_of(sc, op.get("track"))
             editable(tr)
             it = dict(op.get("item") or {})
             if it.get("id") and any(x["id"] == it["id"] for t in sc["tracks"] for x in t["items"]):
                 raise SceneError(f"item {it['id']} already exists")
+            touch(it, by)
             tr["items"].insert(op.get("index", len(tr["items"])), it)
             sc = normalise(sc)
         elif kind == "remove":
@@ -268,6 +301,7 @@ def apply(sc, ops, edit=None):
             if TYPES[it["type"]] != to["kind"]:
                 raise SceneError(f"a {it['type']} cannot go on {to['kind']} track {to['id']}")
             del tr["items"][i]
+            touch(it, by)
             to["items"].insert(op.get("index", len(to["items"])), it)
         elif kind == "track":
             tr = track_of(sc, op.get("track"))
@@ -289,6 +323,7 @@ def apply(sc, ops, edit=None):
             t = float(op.get("t", -1))
             if not it["start"] + fr - EPS <= t <= it["end"] - fr + EPS:
                 raise SceneError(f"split at {t}: outside item {it['id']} ({it['start']} to {it['end']})")
+            touch(it, by)
             b = copy.deepcopy(it)
             b["id"] = None
             it["end"], b["start"] = round(t, 6), round(t, 6)
@@ -308,6 +343,7 @@ def apply(sc, ops, edit=None):
             if it["end"] - it["start"] - by * (1 if edge == "start" else -1) < fr - EPS:
                 raise SceneError(f"trim by {by}: item {it['id']} would be shorter than a frame")
             sp, old_end = it.get("speed", 1), it["end"]
+            touch(it, by)
             if edge == "start":
                 if "in" in it and it["in"] + by * sp < -EPS:
                     raise SceneError(f"trim by {by}: item {it['id']} would start before its source")
@@ -333,6 +369,8 @@ def apply(sc, ops, edit=None):
                 if not (Path(edit) / src).is_file():
                     raise SceneError(f"asset {aid}: {src} is not in the edit")
                 a.update({k: v for k, v in probe(Path(edit) / src).items() if k not in ("codec", "adur")})
+                if needs_proxy({**a, "src": src.as_posix()}, sc["width"], sc["height"]):   # a seekable copy, alpha kept
+                    a["proxy"] = f".scene/{aid}.{'webm' if a.get('alpha') else 'mp4'}"
             sc["assets"][aid] = {**a, "src": src.as_posix()}
         else:
             raise SceneError(f"unknown op {kind!r}: set, add, remove, move, track, add_track, remove_track, split, trim or asset")
@@ -794,6 +832,11 @@ def proxy_cmd(src, out, a, W, H):
     f = min(1, max(W, H) / max(a["w"], a["h"]))
     w, h = round(a["w"] * f / 2) * 2, round(a["h"] * f / 2) * 2
     hw = ["-hwaccel", "videotoolbox"] if sys.platform == "darwin" else []
+    if a.get("alpha"):   # VP9 with alpha: the one transparent video Chrome plays (ProRes 4444 it does not)
+        dec = ["-c:v", "libvpx-vp9"] if Path(src).suffix.lower() == ".webm" else []   # ffmpeg's own VP9 decoder drops the alpha
+        return ["ffmpeg", "-v", "error", "-y", *dec, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf", f"scale={w}:{h}:flags=lanczos",
+                "-c:v", "libvpx-vp9", "-pix_fmt", "yuva420p", "-b:v", "0", "-crf", "24", "-row-mt", "1", "-g", "15", "-c:a", "libopus",
+                "-f", "webm", str(out)]
     return ["ffmpeg", "-v", "error", "-y", *hw, "-i", str(src), "-map", "0:v:0", "-map", "0:a:0?", "-vf",
             f"scale={w}:{h}:flags=lanczos,setsar=1", "-c:v", "libx264", "-crf", "17", "-preset", "veryfast", "-g", "15",
             "-keyint_min", "15", "-sc_threshold", "0", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(out)]
@@ -818,7 +861,7 @@ def ensure_proxies(edit, sc):
                 continue
             out = Path(edit) / a["proxy"]
             out.parent.mkdir(parents=True, exist_ok=True)
-            tmp = out.with_name(out.stem + ".part.mp4")
+            tmp = out.with_name(f"{out.stem}.part{os.getpid()}{out.suffix}")   # the page's server and a CLI may both make it
             print(f"preparing a {aid} copy the editor can seek: {out.name}", flush=True)
             subprocess.run(proxy_cmd(path_of(edit, a, False), tmp, a, sc["width"], sc["height"]), check=True)
             tmp.replace(out)
@@ -890,6 +933,255 @@ def stills(edit, outdir, pairs):
     subprocess.run(["node", str(rem / "render.mjs"), "stills", str(pub), str(pf), str(outdir), *pairs], cwd=rem, check=True)
 
 
+# ---------------------------------------------------------------- Claude's changes (SCENE.md, Claude edits the scene)
+def diff(a, b):
+    """The ops that turn scene a into scene b: what Undo and Redo of one change send."""
+    loc = lambda sc: {it["id"]: (tr["id"], i, it) for tr in sc["tracks"] for i, it in enumerate(tr["items"])}
+    A, B, ta, tb = loc(a), loc(b), {t["id"]: t for t in a["tracks"]}, {t["id"]: t for t in b["tracks"]}
+    ops = [{"op": "add_track", "track": {k: v for k, v in t.items() if k != "items"}, "index": i}
+           for i, t in enumerate(b["tracks"]) if t["id"] not in ta]
+    ops += [{"op": "asset", "id": k, "asset": v} for k, v in b["assets"].items() if a["assets"].get(k) != v]
+    ops += [{"op": "remove", "item": i} for i in A if i not in B]
+    for iid, (tid, i, it) in B.items():
+        if iid not in A:
+            ops.append({"op": "add", "track": tid, "item": it, "index": i})
+            continue
+        if A[iid][0] != tid:
+            ops.append({"op": "move", "item": iid, "track": tid, "index": i})
+        props = {k: it.get(k) for k in set(it) | set(A[iid][2]) if it.get(k) != A[iid][2].get(k)}
+        if props:
+            ops.append({"op": "set", "item": iid, "props": props})
+    for tid, t in tb.items():
+        props = {k: t.get(k) for k in set(t) | set(ta.get(tid, t)) if k != "items" and t.get(k) != ta.get(tid, t).get(k)}
+        if tid in ta and props:
+            ops.append({"op": "track", "track": tid, "props": props})
+    ops += [{"op": "remove_track", "track": t} for t in ta if t not in tb]
+    held = [t["id"] for t in a["tracks"] if magnet(a, t) and t["id"] in tb and any(A[i][0] == t["id"] for i in A if i not in B)]
+    return [{"op": "track", "track": t, "props": {"magnet": False}} for t in held] + ops + \
+        [{"op": "track", "track": t, "props": {"magnet": magnet(b, tb[t])}} for t in held]   # a remove here closes no gap
+
+
+def describe(ops, sc):
+    """A change in a few words, when Claude gave no --why: "added text 'Link in bio'"."""
+    out = []
+    for o in ops:
+        it = o.get("item") if isinstance(o.get("item"), dict) else next((x for t in sc["tracks"] for x in t["items"] if x["id"] == o.get("item")), {})
+        what = f"{it.get('type', 'item')} '{it.get('text') or it.get('name') or it.get('id')}'"
+        if o["op"] in ("add", "set", "remove", "trim", "split", "move"):
+            out.append({"add": "added", "remove": "removed"}.get(o["op"], "changed") + " " + what)
+    return ", ".join(dict.fromkeys(out)) or "changed the scene"
+
+
+def log_change(edit, before, after, why=None, alt=None):
+    """Claude's change, kept in review/claude.json (a version's: changes_of(alt)) with the round it was made on and the ops that undo (back) and redo
+    (fwd) it, so the page lists it under Claude's changes and Undo takes it off as one step. None when nothing changed."""
+    e = Path(edit)
+    fwd = diff(before, after)
+    if not fwd:
+        return None
+    try:
+        r = jload(e / "review.json")
+        at = [r.get("stage"), r.get("round")]
+    except (OSError, ValueError):
+        at = None
+    cf = e / changes_of(alt)
+    log = jload(cf) if cf.is_file() else []
+    ids = [o["item"]["id"] if isinstance(o.get("item"), dict) else o.get("item") for o in fwd if o.get("item")]
+    starts = [it["start"] for sc in (after, before) for t in sc["tracks"] for it in t["items"] if it["id"] in ids]
+    entry = {"n": 1 + max([x["n"] for x in log] or [0]), "why": why or describe(fwd, after), "at": at, "t": min(starts) if starts else None,
+             "items": list(dict.fromkeys(ids)), "fwd": fwd, "back": diff(after, before), "undone": False, "when": time.strftime("%Y-%m-%dT%H:%M:%S")}
+    jsave(cf, log + [entry])
+    return entry
+
+
+def undo_change(edit, n, undo=True, alt=None):
+    """Undo (or redo) Claude's change n (on version alt) by its own ops: the user's edits since stay. The scene after."""
+    e, cf, name = Path(edit), Path(edit) / changes_of(alt), name_of(alt)
+    log = jload(cf) if cf.is_file() else []
+    x = next((x for x in log if x["n"] == n), None)
+    if not x:
+        raise SceneError(f"no Claude change {n}")
+    sc = load(e, name)
+    if x["undone"] != bool(undo):
+        new = save(e, apply(sc, x["back" if undo else "fwd"], e, by="keep"), name)
+        x["fwd" if undo else "back"] = diff(new, sc)   # its opposite puts back exactly what this took (the user's moves since too)
+        x["undone"], sc = bool(undo), new
+        jsave(cf, log)
+    return sc
+
+
+def server(edit):
+    """The open page's server for this edit (review.py running), or None."""
+    try:
+        url = (Path(edit) / "review" / ".server").read_text(encoding="utf-8").strip()
+        st = json.loads(urllib.request.urlopen(url.replace("/?t=", "/state?t="), timeout=2).read())
+        return url if st.get("folder") == str(Path(edit).resolve()) else None
+    except (OSError, ValueError):
+        return None
+
+
+def claude_ops(edit, ops, why=None, alt=None):
+    """Claude's change to the scene (alt: that version's, scene.<alt>.json): through the open page's server when it runs
+    (one undo there, drawn on the page's next poll), else straight into the scene file. (scene, change)."""
+    url = server(edit)
+    if url:
+        base, tok = url.split("/?t=", 1)
+        req = urllib.request.Request(f"{base}/scene/ops?t={tok}", json.dumps({"ops": ops, "by": "claude", "why": why, "alt": alt}).encode(),
+                                     {"Content-Type": "application/json"}, method="POST")
+        try:
+            r = json.loads(urllib.request.urlopen(req, timeout=120).read())
+        except urllib.error.HTTPError as x:
+            raise SceneError(json.loads(x.read() or b"{}").get("error") or f"the page answered {x.code}")
+        return r["scene"], r.get("change")
+    before = load(edit, name_of(alt))
+    after = save(edit, apply(before, ops, edit, by="claude"), name_of(alt))
+    ensure_proxies(edit, after)
+    return after, log_change(edit, before, after, why, alt)
+
+
+def scene_of(edit, alt=None):
+    """scene.json (alt: the version's scene.<alt>.json), made by the open page when it is not there yet (the page's live
+    plan goes in)."""
+    name = name_of(alt)
+    if not (Path(edit) / name).is_file():
+        url = server(edit)
+        if url:
+            try:
+                q = f"&alt={urllib.parse.quote(alt)}" if alt else ""
+                urllib.request.urlopen(url.replace("/?t=", "/scene?t=") + q, timeout=120).read()
+            except OSError:
+                pass
+    if not (Path(edit) / name).is_file():
+        raise SceneError(f"no {name} in {edit}: this draft is not a scene (open it on the page, or scene.py from-plan)")
+    return load(edit, name)
+
+
+def to_scene(sc, asset, t):
+    """A time on an asset's clock (a raw take's word) as scene seconds, through the footage clips that show it."""
+    for tr in sc["tracks"]:
+        for it in tr["items"]:
+            if it["type"] == "video" and it.get("asset") == asset and it["in"] - EPS <= t < it["in"] + (it["end"] - it["start"]) * it.get("speed", 1):
+                return it["start"] + (t - it["in"]) / it.get("speed", 1)
+    return None
+
+
+def show(sc, at=None, name=NAME):
+    """What is on the scene (at a time): tracks bottom to top, each item's id, times and box, then the words said."""
+    out = [f"{name}: {sc['width']}x{sc['height']}, {sc['fps']} fps, {sc['duration']:.2f} s. Tracks, bottom to top:"]
+    box = lambda it: f"  x {it['x']:.0f} y {it['y']:.0f} w {it['w']:.0f}" + (f" h {it['h']:.0f}" if it["type"] != "text" else "") if "x" in it else ""
+    for tr in sc["tracks"]:
+        flags = [f for f in ("hidden", "muted", "locked") if tr.get(f)] + (["magnet"] if tr["kind"] == "visual" and magnet(sc, tr) else [])
+        its = [it for it in tr["items"] if at is None or it["start"] - EPS <= at < it["end"]]
+        out.append(f"  track {tr['id']} {tr['name']!r} ({tr['kind']}{', ' + ', '.join(flags) if flags else ''}): {len(tr['items'])} items"
+                   + (f", {len(its)} at {at:.2f} s" if at is not None else ""))
+        foot = tr.get("magnet", magnet(sc, tr)) and all(it["type"] == "video" for it in tr["items"]) and at is None and len(its) > 3
+        for it in its if not foot else []:
+            a = sc["assets"].get(it.get("asset") or "") or {}
+            what = it.get("text") or (Path(a["src"]).name if a.get("src") else "") or it.get("name") or ""
+            if it["type"] == "captions":
+                what = f"{len(it.get('words') or [])} words"
+            extra = (f"  in {it['in']:.2f}" if it["type"] in ("video", "audio") else "") + (" [locked]" if it.get("locked") else "") + \
+                    (" [by claude]" if it.get("by") == "claude" else "") + (f"  keys {', '.join(it['keys'])}" if it.get("keys") else "")
+            out.append(f"    {it['id']}  {it['type']} {what!r}  {it['start']:.2f}-{it['end']:.2f}{box(it)}{extra}")
+        if foot:
+            out.append(f"    footage clips {tr['items'][0]['id']}..{tr['items'][-1]['id']}, 0.00-{tr['items'][-1]['end']:.2f} (show --at t names the one then)")
+    cap = next((it for tr in sc["tracks"] for it in tr["items"] if it["type"] == "captions"), None)
+    if cap:
+        ws = [(to_scene(sc, cap["asset"], w["start"]) if cap.get("asset") else w["start"], w["w"]) for w in cap.get("words") or []]
+        ws = [(t, w) for t, w in ws if t is not None and (at is None or abs(t - at) <= 3)]
+        out.append(("Said around %.2f s:" % at if at is not None else "Said (scene seconds):") + " " + " ".join(f"[{t:.2f}] {w}" for t, w in ws))
+    return "\n".join(out)
+
+
+def cards_ops(edit, sc, plan, at=()):
+    """scene.py cards: plan.json's cards (the overlays skill, template-filler, a placed motion clip) that the scene does not
+    show yet, as items on its Cards track: the card on screen at each `at` time, or every new one."""
+    e, W, H = Path(edit), sc["width"], sc["height"]
+    have = {(round(it["card"].get("start", it["start"]), 2), it["card"].get("trigger_word")) for t in sc["tracks"] for it in t["items"]
+            if it["type"] == "card"} | {(round(it["start"], 2), it["name"]) for t in sc["tracks"] for it in t["items"]}
+    sizes = lambda src: (lambda i: [i["w"], i["h"]] if i.get("w") else None)(probe(e / src)) if (e / src).is_file() else None
+    ops, assets = [], dict(sc["assets"])
+    for c in plan.get("cards") or []:
+        if at and not any(c["start"] - EPS <= t < c["end"] for t in at) or (round(c["start"], 2), c.get("trigger_word")) in have:
+            continue
+        it = card_item(c, W, H, sizes)
+        if "src" in it:
+            src = it.pop("src")
+            aid = next((k for k, a in assets.items() if a.get("src") == src), None)
+            if not aid:
+                aid = "".join(ch if ch.isalnum() else "-" for ch in Path(src).stem.lower())[:24] or "a"
+                aid = next(f"{aid}-{n}" if n else aid for n in range(99) if (f"{aid}-{n}" if n else aid) not in assets)
+                assets[aid] = {"src": src}
+                ops.append({"op": "asset", "id": aid, "asset": {"src": src}})
+            it["asset"] = aid
+        it["name"] = c.get("trigger_word") or it["type"]
+        if it["type"] == "card":
+            it.update(look=plan.get("look"), motion=plan.get("motion"))
+        tr = next((t for t in sc["tracks"] if t["kind"] == "visual" and t["name"] == "Cards"), None)
+        if not tr:
+            kinds = [t["kind"] for t in sc["tracks"]]
+            tr = {"id": next(f"v{n}" for n in range(1, 999) if all(t["id"] != f"v{n}" for t in sc["tracks"]))}
+            ops.append({"op": "add_track", "track": {"id": tr["id"], "kind": "visual", "name": "Cards"}, "index": kinds.index("visual") + 1})
+            sc = {**sc, "tracks": sc["tracks"] + [{**tr, "kind": "visual", "name": "Cards", "items": []}]}
+        ops.append({"op": "add", "track": tr["id"], "item": it})
+    return ops
+
+
+def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=None, extra=None):
+    """scene.py add: the ops that put one item on the scene (its file copied into the edit's media/ when it is outside)."""
+    e, W, H = Path(edit), sc["width"], sc["height"]
+    if typ not in TYPES or typ == "captions" or (typ in ("video", "image", "audio")) != bool(src):
+        raise SceneError("add takes text (--text), shape, or image, video or audio with --src")
+    ops, it = [], {"type": typ, "start": round(float(start), 6), **{k: v for k, v in (geo or {}).items() if v is not None}, **(extra or {})}
+    if text is not None:
+        it["text"] = text
+    if src:
+        f = Path(src).expanduser().resolve()
+        if not f.is_file():
+            raise SceneError(f"no file {src}")
+        if e.resolve() not in f.parents:   # outside the edit: a copy in media/ (an APFS clone on a Mac)
+            (e / "media").mkdir(exist_ok=True)
+            dst = e / "media" / f.name
+            if not dst.exists() and (sys.platform != "darwin" or subprocess.run(["cp", "-c", str(f), str(dst)], capture_output=True).returncode):
+                shutil.copyfile(f, dst)
+            f = dst
+        rel_ = f.resolve().relative_to(e.resolve()).as_posix()
+        aid = next((k for k, a in sc["assets"].items() if a.get("src") == rel_), None)
+        if not aid:
+            base = "".join(c if c.isalnum() else "-" for c in f.stem.lower())[:24] or "a"
+            aid, n = base, 2
+            while aid in sc["assets"]:
+                aid, n = f"{base}-{n}", n + 1
+            ops.append({"op": "asset", "id": aid, "asset": {"src": rel_}})
+        info = probe(f)
+        it["asset"] = aid
+        if typ in ("image", "video") and "w" not in it and info.get("w"):   # as the page drops a picture: 70% wide or 40% high at most
+            k = min(W * 0.7 / info["w"], H * 0.4 / info["h"])
+            it.update(w=round(info["w"] * k, 2), h=round(info["h"] * k, 2))
+        elif typ in ("image", "video") and "h" not in it and info.get("w"):
+            it["h"] = round(it["w"] * info["h"] / info["w"], 2)
+        if end is None and info.get("duration"):
+            end = float(start) + info["duration"] / it.get("speed", 1) - it.get("in", 0)
+    if typ == "shape":
+        it.setdefault("w", round(W * 0.3))
+        it.setdefault("h", round(W * 0.3))
+    it["end"] = round(float(end) if end is not None else float(start) + 3, 6)
+    kind = TYPES[typ]
+    name = track or {"video": "Motion", "image": "Images", "text": "Text", "shape": "Shapes", "audio": "Sounds"}[typ]
+    tr = next((t for t in sc["tracks"] if t["kind"] == kind and name in (t["id"], t["name"])), None)
+    if not tr or (kind == "visual" and magnet(sc, tr) and typ != "video"):
+        if tr:   # never onto the footage
+            name += " 2"
+        ids = {t["id"] for t in sc["tracks"]}
+        tid = next(f"{kind[0]}{n}" for n in range(1, 999) if f"{kind[0]}{n}" not in ids)
+        kinds = [t["kind"] for t in sc["tracks"]]
+        idx = len(kinds) - kinds[::-1].index("visual") if kind == "visual" and "visual" in kinds else len(kinds)   # on top of the pictures
+        ops.append({"op": "add_track", "track": {"id": tid, "kind": kind, "name": name}, "index": idx})
+        tr = {"id": tid}
+    ops.append({"op": "add", "track": tr["id"], "item": it})
+    return ops
+
+
 # ---------------------------------------------------------------- self-check
 def demo():
     with tempfile.TemporaryDirectory() as d:
@@ -950,6 +1242,42 @@ def demo():
         assert "cut" not in vt[0] and vt[1]["cut"]["before"] == {"reason": "by hand", "words": "", "dur": 1} and vt[2]["cut"]["before"]["dur"] == 0.5
         assert not vt[0].get("locked") and v["duration"] == 4.5 and [t["name"] for t in v["tracks"]] == ["Video", "Text", "Text 2"]
         assert v["tracks"][2]["hidden"] and v["tracks"][1]["items"][0]["text"] == "Yo", v["tracks"]
+        # Claude's changes: marked by "claude", the page's touch clears it; diff undoes and redoes any change
+        back = apply(s4, diff(s4, sc), e)
+        assert [[{k: i.get(k) for k in ("id", "start", "end", "x", "in")} for i in t["items"]] for t in back["tracks"]] == \
+            [[{k: i.get(k) for k in ("id", "start", "end", "x", "in")} for i in t["items"]] for t in sc["tracks"]] and not back["tracks"][2]["hidden"]
+        assert [t["items"] for t in apply(sc, diff(sc, s4), e)["tracks"]] == [t["items"] for t in s4["tracks"]]
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x32", "-frames:v", "1", str(e.parent / "ce-shot.png")], check=True)
+        ops = add_op(e, sc, "image", 1, 2, src=e.parent / "ce-shot.png") + add_op(e, sc, "text", 3, 4, text="Link in bio", extra={"box": {"color": "#FFFFFF"}})
+        assert (e / "media" / "ce-shot.png").is_file() and ops[0] == {"op": "asset", "id": "ce-shot", "asset": {"src": "media/ce-shot.png"}}, ops
+        c1 = save(e, apply(sc, ops, e, by="claude"))
+        mine = [i for t in c1["tracks"] for i in t["items"] if i.get("by") == "claude"]
+        mine = sorted(mine, key=lambda i: i["type"])
+        assert [i["type"] for i in mine] == ["image", "text"] and mine[0]["w"] == 756, mine
+        assert [t["name"] for t in c1["tracks"]] == ["Video", "Text", "Images", "Captions"], "a new track on top of the pictures, under the captions"
+        ch = log_change(e, sc, c1, "Link in bio at the end")
+        assert ch["n"] == 1 and ch["why"] == "Link in bio at the end" and ch["t"] == 1 and set(ch["items"]) == {i["id"] for i in mine}
+        assert "[by claude]" in show(c1, 3.5) and "[0.20] one" in show(c1, 1)
+        moved = save(e, apply(c1, [{"op": "set", "item": mine[0]["id"], "props": {"y": 100}}], e))   # the user drags Claude's image
+        assert "by" not in next(i for t in moved["tracks"] for i in t["items"] if i["id"] == mine[0]["id"]), "the page's touch clears the mark"
+        u = undo_change(e, 1)
+        assert not any(i["id"] in ch["items"] for t in u["tracks"] for i in t["items"]) and jload(e / CHANGES)[0]["undone"]
+        r = undo_change(e, 1, undo=False)
+        img = next(i for t in r["tracks"] for i in t["items"] if i["id"] == mine[0]["id"])
+        assert img["y"] == 100, "redo puts back what undo took, the user's move too"
+        assert changes_of() == CHANGES and changes_of("t1").as_posix() == "review/claude.t1.json"
+        t1 = save(e, apply(sc, add_op(e, sc, "text", 5, 6, text="t1"), e, by="claude"), name_of("t1"))
+        ct = log_change(e, sc, t1, "t1 only", alt="t1")
+        assert ct["n"] == 1 and len(jload(e / CHANGES)) == 1 and (e / changes_of("t1")).is_file(), "a version keeps its own change log"
+        assert undo_change(e, 1, alt="t1") == load(e, name_of("t1")) and jload(e / changes_of("t1"))[0]["undone"]
+        assert not any(i.get("by") for t in load(e, name_of("t1"))["tracks"] for i in t["items"]) and not jload(e / CHANGES)[0]["undone"]
+        assert describe([{"op": "add", "item": {"type": "text", "text": "Hi"}}], sc) == "added text 'Hi'"
+        plan = {"width": 1080, "height": 1920, "cards": [{"start": 1, "end": 2, "box": [10, 10, 50, 20], "src": "media/ce-shot.png", "format": "plain",
+                                                          "trigger_word": "red"}]}
+        co = cards_ops(e, r, plan)
+        assert [o["op"] for o in co] == ["add_track", "add"] and co[1]["item"]["type"] == "image" and co[1]["item"]["name"] == "red", co
+        assert cards_ops(e, apply(r, co, e), plan) == [], "a card already on the scene is not added again"
+        assert probe(e / "take.mp4").get("alpha") is None
     print("scene demo ok")
 
 
@@ -958,6 +1286,8 @@ def main(a):
         return demo()
     if len(a) < 2:
         return print(__doc__)
+    alt = a[a.index("--alt") + 1] if "--alt" in a[:-1] else None   # a version (a trial reel): its own scene.<alt>.json
+    a = [x for i, x in enumerate(a) if "--alt" not in (x, a[i - 1] if i else None)] if alt else a
     cmd, e = a[0], Path(a[1])
     opt = lambda k, d=None: a[a.index(k) + 1] if k in a else d
     if cmd == "from-plan":
@@ -969,9 +1299,37 @@ def main(a):
         save(e, from_video(e, opt("--video", "render.mp4")))
         print(e / NAME)
     elif cmd == "render":
-        print(render(e, opt("--out"), "--draft" in a))
+        print(render(e, opt("--out"), "--draft" in a, name=name_of(alt)))
     elif cmd == "stills":
         stills(e, a[2], a[3:])
+    elif cmd == "show":
+        print(show(scene_of(e, alt), float(opt("--at")) if opt("--at") else None, name_of(alt)))
+    elif cmd in ("ops", "add", "cards"):
+        sc = scene_of(e, alt)
+        if cmd == "cards":
+            ops = cards_ops(e, sc, jload(e / opt("--plan", "plan.json")), [float(x) for x in opt("--at", "").split(",") if x])
+        elif cmd == "ops":
+            arg = a[2] if len(a) > 2 else ""
+            try:
+                ops = json.loads(Path(arg).read_text(encoding="utf-8") if arg and Path(arg).is_file() else arg)
+            except ValueError as x:
+                raise SceneError(f"ops: not JSON ({x})")
+            ops = ops.get("ops") if isinstance(ops, dict) else ops
+        else:
+            num = lambda k: float(opt(k)) if opt(k) is not None else None
+            try:
+                extra = json.loads(opt("--json", "{}"))
+            except ValueError as x:
+                raise SceneError(f"--json: not JSON ({x})")
+            if opt("--start") is None:
+                raise SceneError("add takes --start (scene seconds)")
+            ops = add_op(e, sc, a[2] if len(a) > 2 else "", num("--start"), num("--end"), opt("--src"), opt("--text"), opt("--track"),
+                         {k: num("--" + k) for k in ("x", "y", "w", "h")}, extra)
+        before = {it["id"] for t in sc["tracks"] for it in t["items"]}
+        after, ch = claude_ops(e, ops, opt("--why"), alt)
+        new = [f"{it['id']} ({it['type']})" for t in after["tracks"] for it in t["items"] if it["id"] not in before]
+        print(f"Claude change {ch['n']}: {ch['why']}" if ch else "nothing changed",
+              f"; added {', '.join(new)}" if new else "", "; the open page shows it on its next poll" if server(e) else "", sep="")
     else:
         print(__doc__)
 
