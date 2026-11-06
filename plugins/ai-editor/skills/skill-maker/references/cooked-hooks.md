@@ -34,14 +34,20 @@ A style.json with `"skill": "<name>"` makes cooked. run `/<name>` on `edits/<nam
 approved (home page: My styles > New style > Use your own skill). The list only shows skills whose name or
 first description sentence says video, edit, reel, clip or footage.
 
-## Hand the render back
+## Hand the draft back
 
-Put the finished video on the review page, then wait for the user's notes:
+**Write elements, not pixels.** Put the draft on the review page as a scene (below), then wait for the user's notes:
 
 ```bash
-python3 "<plugin>/lib/ai_editor/review.py" edits/<name> round --stage edit --video edits/<name>/render.mp4
+python3 "<plugin>/lib/ai_editor/scene.py" from-plan edits/<name>     # or the skill's own Scene(...).save(edit)
+python3 "<plugin>/lib/ai_editor/review.py" edits/<name> round --stage edit --scene
 python3 "<plugin>/lib/ai_editor/review.py" edits/<name> wait
 ```
+
+A note comes back with a `SCENE:` block: answer it with `scene.py show`, `add` and `ops` (each `--why`), then
+`round --scene`. Never re-render the draft or burn a title, frame, mask or mirror strip into the footage: each is an
+item. `<plugin>/lib/ai_editor/SCENE-SKILLS.md` lists what changes in a skill that renders today. A split, board,
+cover or cutout plan that `from-plan` refuses still renders: `round --stage edit --video edits/<name>/render.mp4`.
 
 ## Safe zone
 
@@ -64,7 +70,7 @@ What the skill puts on screen goes into `edits/<name>/scene.json` as items the u
 sys.path.insert(0, "<plugin>/lib/ai_editor"); import scene
 S = scene.Scene(1080, 1920, 30, edit=edit)
 S.video("cut.mp4", 0, 30)                                   # the footage, full frame
-S.video("motion/intro/render.mp4", 1, 4, x=540, y=600, w=800, h=450, radius=24, shadow={"blur": 40})  # a self-animated clip: one item
+S.video("motion/intro/renders/clip.webm", 1, 4, x=540, y=600, w=800, h=450)  # a self-animated clip with alpha (VP9 WebM): one item
 S.text("Fact or Hype?", 0, 4, y=300, size=44, color="#000000", box={"color": "#FFFFFF", "pad": [26, 8], "radius": 18, "block": True})
 S.save(edit)
 ```

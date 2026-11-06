@@ -10,6 +10,10 @@ style-edit        <-  style.json + cut.mp4 + words.json (+ optional images)
                   ->  edits/<name>/plan.json -> stills/ -> render.mp4
 ```
 
+**Write elements, not pixels.** What a skill puts on screen reaches the review page as items in
+`edits/<name>/scene.json` (`lib/ai_editor/SCENE.md`, `scene.py from-plan` or the `Scene` helper), never burned into an
+MP4: the user moves every one, and Claude's later fixes are scene ops. The render is the export.
+
 All paths are relative to the library (`library.py path`), or a project folder the user named.
 
 ## Tool home

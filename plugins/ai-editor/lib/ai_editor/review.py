@@ -1496,7 +1496,7 @@ def live_plan(folder, d):
     return p
 
 
-SCENE_LOCK, NO_SCENE = threading.Lock(), {}   # NO_SCENE: folder -> the plan from_plan could not convert
+SCENE_LOCK, NO_SCENE, PROXY_BUSY = threading.Lock(), {}, {}   # NO_SCENE: folder -> the plan from_plan could not convert
 CLASSIC = ".classic"   # in an edit: this video opens in the Classic editor (the ⋯ menu's switch)
 
 
@@ -1526,7 +1526,11 @@ def scene_for(folder, d):
         return None
     with SCENE_LOCK:
         if (folder / scene.NAME).exists():
-            return scene.load(folder)
+            sc = scene.load(folder)
+            if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()) and not PROXY_BUSY.get(str(folder)):
+                PROXY_BUSY[str(folder)] = threading.Thread(target=lambda: (scene.ensure_proxies(folder, sc), PROXY_BUSY.pop(str(folder), None)), daemon=True)
+                PROXY_BUSY[str(folder)].start()   # a copy lost (a clone, a cleanup): made again once
+            return sc
         try:
             lp = live_plan(folder, d)
         except Exception:   # noqa: BLE001  the live plan is a nicety: the plan file is the draft
@@ -1541,6 +1545,17 @@ def scene_for(folder, d):
     if any(a.get("proxy") for a in sc["assets"].values()):
         threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
     return sc
+
+
+def claude_changes(folder, d):
+    """Claude's changes to the scene on this draft (scene.py ops, review/claude.json): the ones made on it, and on the
+    round a `round --scene` came from. What the page lists and undoes: n, why, t, undone, items."""
+    try:
+        log = load(folder / scene.CHANGES)
+    except (OSError, ValueError):
+        return []
+    on = [x for x in ([d.get("stage"), d.get("round")], d.get("scene_from")) if x]
+    return [{k: x.get(k) for k in ("n", "why", "t", "undone", "items")} for x in log if isinstance(x, dict) and x.get("at") in on]
 
 
 def scene_out(folder, sc):
@@ -2728,6 +2743,8 @@ def make_handler(folder, token):
                 d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS, HTML.with_name("review-scene.js"))   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
                 d["scene"] = scene_mode(folder, d)   # the page edits the scene (SCENE.md)
+                d["scene_v"] = (folder / scene.NAME).stat().st_mtime_ns if d["scene"] and (folder / scene.NAME).exists() else None   # a change from Claude: the page fetches it
+                d["claude_changes"] = claude_changes(folder, d) if d["scene"] else []   # Claude's changes on this draft, each undoable
                 d["scene_able"] = scene_able(folder, d)   # the ⋯ menu's Classic editor switch shows
                 d["classic"] = (folder / CLASSIC).exists()
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
@@ -3461,15 +3478,26 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
                 return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
                                      f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
-            if path == "/scene/ops":   # the page's edit of the scene: ops applied in order, kept for Undo (j); no note for Claude
+            if path == "/scene/ops":   # the page's edit of the scene: ops applied in order, kept for Undo (j); no note for Claude.
+                # by "claude": scene.py ops, Claude's change (SCENE.md): its items marked, listed under Claude's changes
+                by = "claude" if body.get("by") == "claude" else None
                 try:
-                    sc = scene_for(folder, load(rj))
-                    if sc is None:
+                    sc0 = scene_for(folder, load(rj))
+                    if sc0 is None:
                         return self.send(409, {"error": "This video is in the Classic editor."})
-                    sc = scene.apply(sc, body.get("ops") or [], edit=folder)
-                    sc = scene.save(folder, sc)
+                    sc = scene.save(folder, scene.apply(sc0, body.get("ops") or [], edit=folder, by=by))
+                    ch = scene.log_change(folder, sc0, sc, body.get("why")) if by else None
                 except (scene.SceneError, TypeError, ValueError, AttributeError) as e:
                     return self.send(400, {"error": str(e)})
+                if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()):
+                    threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
+                return self.send(200, {"ok": True, "scene": scene_out(folder, sc), **({"change": ch} if by else {})})
+            if path == "/scene/claude":   # Undo or Redo of one of Claude's changes, by its own ops: {"n", "undo": true | false}
+                try:
+                    with JOURNAL_LOCK:
+                        sc = scene.undo_change(folder, int(body["n"]), bool(body.get("undo", True)))
+                except (scene.SceneError, KeyError, TypeError, ValueError) as e:
+                    return self.send(400, {"error": str(e) if isinstance(e, scene.SceneError) else "scene/claude takes n and undo"})
                 return self.send(200, {"ok": True, "scene": scene_out(folder, sc)})
             if path == "/scene/classic":   # the ⋯ menu's Classic editor switch, for this video: {"on": true | false}
                 (folder / CLASSIC).touch() if body.get("on") else (folder / CLASSIC).unlink(missing_ok=True)
@@ -4022,6 +4050,7 @@ def open_round(folder, video, stage=None, transcript=None, plan=None, note="", s
     """The next round: the new render kept, the edit's files snapshotted, notes queued meanwhile moved onto it.
     check(d) runs under the lock first and may refuse (raise ValueError) before anything changes."""
     def f(d):
+        d.pop("scene_from", None)   # set again by round --scene's check
         if check:
             check(d)
         prev = None if stage and stage != d["stage"] else next(
@@ -4095,8 +4124,23 @@ def cmd_round(a, folder):
                          f"  python3 {q} {shlex.quote(str(folder))} resolve {c['id']} fixed --reply \"<what you changed>\"   "
                          f"# {c['text'][:60]}" for c in unanswered)
                      + "\n  (wontfix --reply \"<why>\" when you left it as is)")
-    d = open_round(folder, a.video, a.stage, a.transcript, a.plan, a.note, getattr(a, "stills", False), a.name,
-                   getattr(a, "changed", None))
+    changed, check = getattr(a, "changed", None), None
+    if getattr(a, "scene", False):   # the draft is scene.json, no render: the page plays and edits it, Export renders it
+        if not (folder / scene.NAME).exists():
+            sys.exit("REFUSED: round --scene needs scene.json (scene.py from-plan edits/<name>); or render and use --video")
+        if a.stage == "edit" and d0["stage"] != "edit":   # the first edit: style-edit's plan as a scene, the cut as its video
+            a.video, frm = a.video or str(folder / "cut.mp4"), None
+        elif scene_mode(folder, d0):   # Claude answered the notes in the scene (scene.py ops): the same video, its scene
+            a.video, a.plan, a.stage, frm = d0["video"], a.plan or d0.get("plan"), None, [d0["stage"], d0["round"]]
+        else:
+            sys.exit("REFUSED: this draft opens in the Classic editor, not as a scene: render and use --video")
+
+        def check(d):
+            if frm:
+                d["scene_from"] = frm   # the next round: Claude's changes made on this one stay listed and undoable there
+    elif not a.video:
+        sys.exit("round takes --video <the new render>, or --scene when the notes were answered in scene.json")
+    d = open_round(folder, a.video, a.stage, a.transcript, a.plan, a.note, getattr(a, "stills", False), a.name, changed, check=check)
     still = [str(c["id"]) for c in d["comments"]
              if c["status"] == "open" and c["stage"] == d["stage"] and c["round"] < d["round"]]
     print(f"{stage_name(d['stage'], d.get('stills'))}, round {d['round']}" + (f"; still open: {', '.join(still)}" if still else ""))
@@ -4569,7 +4613,9 @@ def cmd_wait(folder, poll=1.0):
         print(f"#{c['id']} {span} ({c['t']}s){ver}{card}: {c['text']}{keep}\n    said: \"{c['words']}\""
               f"\n    frame: {folder / 'review' / c['frame']}"
               + "".join(f"\n    image: {folder / 'review' / x}" for x in c.get("images") or []))
-    typed = put_texts(folder, cs)
+    if e["type"] == "send" and cs and scene_mode(folder, d):
+        print(scene_handoff(folder))
+    typed = put_texts(folder, cs) if not scene_mode(folder, d) else 0
     if typed:
         print(f"texts: {folder / 'texts.json'} ({typed} on-screen text{'' if typed == 1 else 's'} the user typed with the Text tool, "
               "the notes marked [add text]. plan.py puts every one in plan.json as typed: plan again and render. "
@@ -4589,6 +4635,26 @@ def cmd_wait(folder, poll=1.0):
     elif cs:
         print(learn_hint(folder, [c["id"] for c in cs if c.get("keep")]))
     return e["type"]
+
+
+def scene_handoff(folder):
+    """What `wait` tells Claude when the draft is a scene: answer the notes as items the user can drag, never a render."""
+    sp, q = shlex.quote(str(Path(scene.__file__).resolve())), shlex.quote(str(folder))
+    return (f"SCENE: this draft is a scene ({folder / scene.NAME}). Every element on it is an item the user drags, resizes and "
+            f"undoes on the page. Answer the notes with scene changes, never a render: do not run edit.py render, plan.py or "
+            f"style-edit's render steps for this draft, and never burn anything into the footage.\n"
+            f"  look:   python3 {sp} show {q} --at <t>   (the items on screen then: ids, times, boxes; and the words said)\n"
+            f"  change: python3 {sp} add {q} text --text \"Link in bio\" --start <t> --end <t> [--x --y --w] "
+            f"[--json '{{\"box\": {{\"color\": \"#FFFFFF\", \"pad\": [24, 12], \"radius\": 12, \"block\": true}}, \"color\": \"#000000\"}}'] --why \"<one line>\"\n"
+            f"          python3 {sp} add {q} image|video|audio --src <file> --start <t> [--end <t>] [--x --y --w --h] --why \"<one line>\"\n"
+            f"          python3 {sp} ops {q} '<json ops>' --why \"<one line>\"   (set, add, remove, move, trim, split: SCENE.md)\n"
+            f"  An image or screenshot is an image item. An animated graphic (a motion clip, a HyperFrames or Blender shot) is a "
+            f"video with alpha: hyperframes render --format webm on a transparent ground (VP9 with alpha), added as a video item "
+            f"the user can move, scale, crop and trim. Text is a text item (anim, keys for motion). A sound is an audio item. A zoom "
+            f"is scale keys on the footage clip under it. Each command is one change on the page, marked Claude, undoable; the open "
+            f"page draws it within a few seconds. Fields and ops: {Path(scene.__file__).with_name('SCENE.md')}.\n"
+            f"  Then answer each note (resolve <id> fixed --reply \"<what you changed>\") and hand the draft back with no render:\n"
+            f"  python3 {shlex.quote(str(Path(__file__).resolve()))} {q} round --scene")
 
 
 def edits_text(folder, e):
@@ -5501,6 +5567,63 @@ def demo_layers(tmp):
     assert "base_video" not in d and d["video"] == str(f / "review" / "v-edit4.mp4") and layer_of(f, d) == Path(d["video"]), d
 
 
+def demo_claude_scene(tmp):
+    """Claude's work on a scene (SCENE.md, Claude edits the scene): wait hands over scene ops, scene.py ops goes through
+    the page's server as by "claude" (marked, listed, undone and redone by its own ops), round --scene makes no MP4."""
+    f, ui0 = (tmp / "claude-scene").resolve(), _ui_json().read_bytes() if _ui_json().exists() else None
+    (f / "review").mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    str(f / "render.mp4")], check=True)
+    (f / "plan.json").write_text(json.dumps({"fps": 30, "durationInFrames": 120, "width": 64, "height": 36, "texts": [], "cards": []}), encoding="utf-8")
+    clone(f / "render.mp4", f / "review" / "v-edit1.mp4")
+    save(f / "review.json", {"folder": str(f), "name": "claude-scene", "stage": "edit", "round": 1, "sent": True, "stills": False,
+                             "comments": [{"id": 1, "stage": "edit", "round": 1, "t": 3.0, "t_end": None, "text": "add Link in bio at the end",
+                                           "status": "open", "alt": None, "words": "", "frame": "x.jpg"}],
+                             "events": [{"type": "send", "stage": "edit", "round": 1, "at": now(), "handled": False}],
+                             "plan": str(f / "plan.json"), "video": str(f / "review" / "v-edit1.mp4")})
+    S = scene.Scene(64, 36, 30, edit=f)
+    S.video("render.mp4", 0, 4, track="Video")
+    S.save(f)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        cmd_wait(f, poll=0.05)
+    assert "SCENE: this draft is a scene" in out.getvalue() and "round --scene" in out.getvalue() and "never a render" in out.getvalue(), out.getvalue()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    (f / "review" / ".server").write_text(f"{base}/?t=tok", encoding="utf-8")
+    post = lambda p, b: json.loads(urllib.request.urlopen(urllib.request.Request(f"{base}{p}?t=tok", json.dumps(b).encode(), method="POST")).read())
+    state = lambda: json.loads(urllib.request.urlopen(f"{base}/state?t=tok").read())
+    v0 = state()["scene_v"]
+    sp = str(Path(scene.__file__).resolve())
+    r = subprocess.run([sys.executable, sp, "add", str(f), "text", "--text", "Link in bio", "--start", "3", "--end", "4", "--why", "Link in bio at the end"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "Claude change 1: Link in bio at the end" in r.stdout and "next poll" in r.stdout, r.stdout + r.stderr
+    st = state()
+    assert st["scene_v"] != v0 and [c["why"] for c in st["claude_changes"]] == ["Link in bio at the end"], st["claude_changes"]
+    it = next(i for t in scene.load(f)["tracks"] for i in t["items"] if i["type"] == "text")
+    assert it["by"] == "claude" and it["text"] == "Link in bio" and JOURNAL[str(f)], "marked, and in the page's journal"
+    assert post("/scene/claude", {"n": 1, "undo": True})["ok"] and not any(i["type"] == "text" for t in scene.load(f)["tracks"] for i in t["items"])
+    assert state()["claude_changes"][0]["undone"] and post("/scene/claude", {"n": 1, "undo": False})["ok"]
+    assert post("/scene/ops", {"ops": [{"op": "set", "item": it["id"], "props": {"y": 9}}]})["ok"]
+    it = next(i for t in scene.load(f)["tracks"] for i in t["items"] if i["id"] == it["id"])
+    assert it["y"] == 9 and "by" not in it, "the user's touch clears Claude's mark"
+    bad = subprocess.run([sys.executable, sp, "ops", str(f), '[{"op": "wat"}]'], capture_output=True, text=True)
+    assert bad.returncode and "unknown op" in bad.stderr, bad.stderr
+    rp = str(Path(__file__).resolve())
+    r = subprocess.run([sys.executable, rp, str(f), "round", "--scene"], capture_output=True, text=True)
+    assert r.returncode and "answer every note" in r.stderr, "the note is answered first"
+    subprocess.run([sys.executable, rp, str(f), "resolve", "1", "fixed", "--reply", "Added Link in bio"], check=True, capture_output=True)
+    mp4s = sorted(x.name for x in f.glob("*.mp4"))
+    r = subprocess.run([sys.executable, rp, str(f), "round", "--scene"], capture_output=True, text=True)
+    d = load(f / "review.json")
+    assert r.returncode == 0 and d["round"] == 2 and d["scene_from"] == ["edit", 1] and sorted(x.name for x in f.glob("*.mp4")) == mp4s, r.stderr
+    assert (f / "review" / "snap-edit2" / "scene.json").is_file(), "the round keeps the scene"
+    assert [c["n"] for c in state()["claude_changes"]] == [1], "Claude's changes stay undoable on the round after"
+    srv.shutdown()
+    _ui_json().write_bytes(ui0) if ui0 is not None else _ui_json().unlink(missing_ok=True)   # its /state counted it as a first video
+
+
 def demo_ripple(tmp):
     """The ripple timeline's server side: cuts keep the ripple choice; a plan draft's bake takes the cut pieces out of
     its render (render.cut.mp4), still plays live, and needs no note; every hand edit is journaled, and Undo and Redo
@@ -5722,6 +5845,7 @@ def demo():
     demo_live(tmp)
     demo_layers(tmp)
     demo_ripple(tmp)
+    demo_claude_scene(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
@@ -7143,7 +7267,8 @@ def main():
     sp.add_parser("wait")
     sp.add_parser("final", help="the cut is the finished video: no styled edit follows its approve")
     s = sp.add_parser("round")
-    s.add_argument("--video", required=True)
+    s.add_argument("--video", help="the new render (not with --scene)")
+    s.add_argument("--scene", action="store_true", help="the notes were answered in scene.json: a round with no new render")
     s.add_argument("--stage", choices=["cut", "edit"])
     s.add_argument("--stills", action="store_true", help="the stills before the render (edit.py storyboard): approve renders")
     s.add_argument("--transcript")
