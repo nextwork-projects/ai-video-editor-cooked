@@ -2,10 +2,13 @@
 // its plan from review.py /live/plan, so a change on the page is the frame on screen at once (CapCut's way), not an
 // overlay over a rendered MP4. window.CookedLive.mount(el, plan) returns a stand-in for the page's <video>: the
 // page's code (currentTime, paused, play, pause, events, requestVideoFrameCallback) runs on it unchanged.
+// window.CookedLive.mountScene(el, scene) is the same stand-in over the Scene composition (a scene.json, SCENE.md), with
+// .update(scene) to redraw at once; each asset plays from its url, else review.py's /scene/asset/<id>.
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { Player, PlayerRef } from "@remotion/player";
 import { StyleEdit } from "../src/StyleEdit";
+import { SceneDoc, SceneEdit } from "../src/SceneEdit";
 import { cues } from "./Sfx";
 
 type Plan = Record<string, unknown> & { width: number; height: number; fps: number; durationInFrames: number;
@@ -24,6 +27,7 @@ class Live extends EventTarget {
   pend: number | null = null;   // a seek or mute asked for before the Player is up
   mute = false;
   draw?: (p: Plan, rate: number) => void;
+  comp: React.FC<Record<string, unknown>> = StyleEdit as unknown as React.FC<Record<string, unknown>>;
   constructor(plan: Plan) { super(); this.plan = plan; }
   fire(t: string) { this.dispatchEvent(new Event(t)); }
   get fps() { return this.plan.fps; }
@@ -81,6 +85,8 @@ class Live extends EventTarget {
     this.fire("loadedmetadata");
     this.fire("loadeddata");
   }
+  /** A new scene: drawn at once, on the same frame and play state. */
+  update(scene: SceneDoc) { this.setPlan(scenePlan(scene)); }
   /** Playback so far: frames drawn, frames skipped, and the footage <video>'s own dropped count. */
   stats() {
     const q = [...(this.p?.getContainerNode()?.querySelectorAll("video") ?? [])].map((x) => x.getVideoPlaybackQuality());
@@ -95,19 +101,28 @@ const View: React.FC<{ live: Live }> = ({ live }) => {
   useEffect(() => { if (ref.current) live.attach(ref.current); }, [live]);
   const { plan, rate } = s;
   return (
-    <Player ref={ref} component={StyleEdit as unknown as React.FC<Record<string, unknown>>} inputProps={plan}
+    <Player ref={ref} component={live.comp} inputProps={plan}
       durationInFrames={plan.durationInFrames} compositionWidth={plan.width} compositionHeight={plan.height} fps={plan.fps}
       playbackRate={rate} numberOfSharedAudioTags={0} clickToPlay={false} spaceKeyToPlayOrPause={false}
       doubleClickToFullscreen={false} moveToBeginningWhenEnded={false} style={{ width: "100%", height: "100%" }} acknowledgeRemotionLicense />
   );
 };
 
-function mount(el: HTMLElement, plan: Plan) {
+/** A scene as the player's props: its frame count, and every asset on a URL the page serves (seek-friendly). */
+const scenePlan = (s: SceneDoc): Plan => ({ ...s, durationInFrames: Math.max(1, Math.round(s.duration * s.fps)), assets: Object.fromEntries(
+  Object.entries(s.assets ?? {}).map(([k, a]) => [k, { ...a, url: a.url ?? `/scene/asset/${encodeURIComponent(k)}` }])) } as unknown as Plan);
+
+function mountScene(el: HTMLElement, scene: SceneDoc) {
+  return mount(el, scenePlan(scene), SceneEdit as unknown as React.FC<Record<string, unknown>>);
+}
+
+function mount(el: HTMLElement, plan: Plan, comp?: React.FC<Record<string, unknown>>) {
   const live = new Live(plan);
+  if (comp) live.comp = comp;
   live.setPlan(plan);
   el.addEventListener("click", () => live.fire("click"));
   createRoot(el).render(<View live={live} />);
   return live;
 }
 
-(window as unknown as { CookedLive: { mount: typeof mount } }).CookedLive = { mount };
+(window as unknown as { CookedLive: { mount: typeof mount; mountScene: typeof mountScene } }).CookedLive = { mount, mountScene };

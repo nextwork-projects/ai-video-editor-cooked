@@ -914,8 +914,8 @@ body.making #making{display:flex}
  <div id="stage">
   <div id="pair">
    <figure class="pl" id="p2"><figcaption id="cap2"></figcaption><div class="player"><video id="v2" preload="auto" muted playsinline></video><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
-   <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><div id="live"></div><video id="v" preload="auto" playsinline></video>
-    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div class="hits" id="guides"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
+   <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><div id="live"></div><div id="scl"></div><video id="v" preload="auto" playsinline></video>
+    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div class="hits" id="guides"></div><div id="scover"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
@@ -1108,7 +1108,7 @@ async function load(force){const sent=performance.now();
     view=cur();followNew=false;if(was&&was!==key(cur()))tab='notes'}   // follow a new round when it lands
   if(S.baked&&S.baked!==DATA._baked){DATA._baked=S.baked;delete DATA[key(S)]}   // a bake remade this round's data (cards moved)
   for(const r of S.rounds||[])if(!(key(r) in DATA)){DATA[key(r)]=null;fetch('/data?k='+key(r)).then(x=>x.json()).then(j=>{DATA[key(r)]=j;txSig='';render()}).catch(()=>{})}
-  setVideo();render();liveFetch();
+  setVideo();render();SC.check().then(on=>{if(!on)liveFetch()});   // a scene (review-scene.js) or the plan's live player
   if(landing===2){landing=0;toast(S.stills?'The preview is ready':'The edit is ready')}
 }
 // Claude's words reach the page as written. Check output never should ("Render check: 1 FAIL left", "-12.7 LUFS",
@@ -1170,7 +1170,7 @@ async function liveFetch(){if(!S||S.stage!=='edit'||LV.failed)return;
   try{const r=await (await fetch('/live/plan')).text();if(r!==LV.text){LV.text=r;const j=JSON.parse(r);LV.why=j.why||'';LV.off=j.lane_off||{};LV.raw=j.why?'':r;renderEdTracks()}
     if(LV.raw&&!window.CookedLive)await import('/live/live.js')}catch(e){LV.failed=true;console.warn('live player off:',e)}
   liveSwitch();liveSync()}
-const liveWanted=()=>!!(LV.raw&&window.CookedLive&&!LV.failed&&S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!alt&&!cmp&&!previewOn);
+const liveWanted=()=>!!(!SC.on&&LV.raw&&window.CookedLive&&!LV.failed&&S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!alt&&!cmp&&!previewOn);
 function liveSwitch(){const on=liveWanted();if(on===LV.on)return;LV.on=on;document.body.classList.toggle('live',on);
   if(on&&!LV.shim){try{LV.shim=CookedLive.mount($('live'),liveNow());LV.sent=''}catch(e){LV.failed=LV.on=false;document.body.classList.remove('live');console.warn('live player off:',e);return}}
   v.use(on?LV.shim:null);if(!on)LV.shim.pause();tsig=null;$('clayer')._s=null;placeSafe();drawCard();drawCapPrev();renderTexts();liveAudio()}
@@ -1398,6 +1398,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const on=!!(S&&view&&view.stage==='edit'&&isCur()&&!previewOn&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
   document.body.classList.toggle('edro',on&&(!noteOk()||!!alt));document.body.classList.toggle('edalt',on&&!!alt);
   if(!on){E.innerHTML='';E._h='';return}
+  if(window.SC&&SC.on)return SC.tl();   // a scene: one row per track (review-scene.js)
   const TT=TO(),pc=t=>Math.max(0,Math.min(100,so(t)/TT*100)),it=data().items||{};   // pc: on the output clock (ripple)
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
@@ -1515,7 +1516,7 @@ $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eit
 // the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
 // draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
 let vsel=null,edDragged=0;
-const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
+const cuts=()=>(!(window.SC&&SC.on)&&S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
 // ripple (the Video row's magnet, on unless turned off, overrides.json cuts.ripple): the timeline runs on the output clock,
 // the video with its cut pieces out, as the bake renders it. Everything is kept on the source clock; so maps a source time
 // onto the output clock (inside a cut piece: its join), os back. With ripple off both are t and a cut piece keeps its place
@@ -1572,7 +1573,7 @@ const edSave=(path,b)=>post(path,b).then(r=>{if(!(r.ok||r.id))throw new Error(r.
 async function edUndo(redo){if(tx)await textAuto();const h=(redo?EH.r:EH.u).pop();if(!h)return;(redo?EH.u:EH.r).push(h);h.key=null;edAt=performance.now();edBtns();
   if(csel){csel=null;drawCard()}if(tx)setText(null);   // what was picked may be what changes: let go, so the old box is not drawn over it
   try{if(h.j&&h.j.length){const r=await post('/timeline/restore',{j:redo?Math.max(...h.j):Math.min(...h.j),side:redo?'after':'before'});if(!r.ok)throw new Error('That change was on another draft.')}
-    else await (redo?h.redo:h.undo)();JQ.length=0;$('cbody')._s=null;$('edtracks')._h=null;await load(true);toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
+    else await (redo?h.redo:h.undo)();JQ.length=0;$('cbody')._s=null;$('edtracks')._h=null;await load(true);if(SC.on)await SC.fetch();toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
 $('undob').onclick=()=>edUndo();$('redob').onclick=()=>edUndo(true);
 $('tx').addEventListener('pointerdown',()=>txAt=performance.now(),true);
 // Cmd+Z, Shift+Cmd+Z: a slider or a colour keeps the focus after a change, so they do not count as typing
@@ -2980,7 +2981,7 @@ async function libUpload(fs){fs=[...fs].filter(f=>/^audio\//.test(f.type)||/\.(w
       x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Add it again.'});x.send(f)});
     if(!r.ok){toast(r.error||`${f.name} was not added.`);continue}n++;S.sounds_ui=r.sounds;$('sbody')._s=null;renderSndPanel()}
   if(n)toast(n===1?'Added to your sounds.':`${n} sounds added.`)}
-async function libAdd(name,t){const r=await post('/sfx/add',{t,sound:name});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
+async function libAdd(name,t){if(SC.on)return SC.addSound(name,t);const r=await post('/sfx/add',{t,sound:name});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
   toast(`${sndName(name)} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load();sndAddedUndo(name)}
 // the sound just put on the timeline is the newest of that name in S.placed_sounds (the server gives it its id)
 function sndAddedUndo(name){const x=[...(S.placed_sounds||[])].reverse().find(y=>y.sound===name);if(x)edPush('add sound',()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}),()=>edSave('/sfx/add',{t:x.t,item:x}))}
@@ -3033,7 +3034,7 @@ function medBox(iw,ih,px,py){const FW=v.videoWidth||1080,FH=v.videoHeight||1920,
   let cx=px??50,cy=py??(Y0+Y1)/2;if(Math.abs(cx-50)<12)cx=50;
   const x=Math.min(X1-w,Math.max(X0,cx-w/2)),y=Math.min(Y1-h,Math.max(Y0,cy-h/2)),q=n=>Math.round(n*10)/10;return [q(x),q(y),q(w),q(h)]}
 const medSize=m=>new Promise(res=>{const i=new Image();i.onload=()=>res([i.naturalWidth||16,i.naturalHeight||9]);i.onerror=()=>res([16,9]);i.src=medPic(m)});
-async function medAdd(m,t,px,py){medAdd.busy=1;try{const size=await medSize(m),r=await post('/media/add',{src:m.src,t:Math.round(t*100)/100,box:medBox(size[0],size[1],px,py),size});
+async function medAdd(m,t,px,py){if(SC.on)return SC.addMedia(m,t,px,py);medAdd.busy=1;try{const size=await medSize(m),r=await post('/media/add',{src:m.src,t:Math.round(t*100)/100,box:medBox(size[0],size[1],px,py),size});
   if(!r.key&&!r.id)return toast(r.error||'That did not go on. Media goes on the edit, before it is approved.');jPush('add media');
   toast(r.id?'Added. Claude has this draft: it puts it in the next one.':`${m.kind==='video'?'Clip':'Picture'} added at ${fmtx(r.start)}. Drag it to move, a corner to resize.`);
   $('edtracks')._h=null;await load();const x=r.key&&cardsAll().find(c=>c.key===r.key);if(x){v.currentTime=x.s+.02;selectCard(x)}}finally{medAdd.busy=0}}
@@ -3204,7 +3205,7 @@ function inspTarget(){if(!S||!view||view.stage!=='edit')return null;if(msel.size
   return csel?{k:'card'}:ssel&&placed(ssel)?{k:'snd'}:vsel!=null?{k:'vid'}:null}
 const inspSoon=()=>{if(!IN.raf)IN.raf=requestAnimationFrame(()=>{IN.raf=0;inspSync()})};
 {const f=renderEdTracks;renderEdTracks=function(){f.apply(this,arguments);inspSoon()}}   // every pick redraws the rows: the inspector follows
-function inspSync(){const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
+function inspSync(){if(window.SC&&SC.on)return;const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
   if(!t||tx&&t.k!=='multi'){if(tool==='insp')openTool(IN.prev);return}
   if(tool!=='insp'){IN.prev=tool==='text'?null:tool;openTool('insp')}
   if(IN.sig!==sig){IN.sig=sig;renderInsp(t)}else inspVals()}
@@ -3326,4 +3327,4 @@ load();setInterval(load,3000);
     if(document.body.classList.contains('vertical'))keep('--plw',Math.round(Math.max(20,Math.min(75,(e.clientX-r.left)/r.width*100)))+'cqw');
     else keep('--txsplit',Math.round(Math.max(20,Math.min(85,(e.clientY-r.top)/r.height*100)))+'%')},clear('--txsplit','--plw'));
 })();
-</script><script src="/ask.js"></script></body></html>
+</script><script src="/review-scene.js"></script><script src="/ask.js"></script></body></html>

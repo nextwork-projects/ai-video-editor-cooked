@@ -117,6 +117,7 @@ import askhook  # noqa: E402
 import shortcuts  # noqa: E402
 import assets  # noqa: E402
 import live  # noqa: E402
+import scene  # noqa: E402
 
 HTML = Path(__file__).with_name("review.html")
 LOCK = threading.RLock()   # re-entrant: /edits holds it across apply_edits and update
@@ -1460,6 +1461,56 @@ def live_plan(folder, d):
     return p
 
 
+SCENE_LOCK, EXPORTS = threading.Lock(), {}   # folder -> {"state": working | done | failed, "file", "log", "why"}
+
+
+def scene_for(folder, d):
+    """scene.json, made on the first ask (never over one that is there): a plan draft through scene.from_plan, with this
+    page's live plan (texts.json, overrides.json, placed sounds); any other draft as its MP4 (scene.from_video).
+    The raw take's seek-friendly copy is made in the background; until then the page plays the take itself."""
+    with SCENE_LOCK:
+        if (folder / scene.NAME).exists():
+            return scene.load(folder)
+        sc = None
+        if d.get("stage") == "edit" and not d.get("stills") and d.get("plan") and Path(d["plan"]).is_file():
+            try:
+                lp = live_plan(folder, d)
+            except Exception:   # noqa: BLE001  the live plan is a nicety: the plan file is the draft
+                lp = {"why": "no live plan"}
+            p = load(Path(d["plan"])) if lp.get("why") or lp.get("layer") else lp
+            try:
+                sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
+            except scene.SceneError as e:
+                print(f"scene: {e}", file=sys.stderr)
+        if sc is None:
+            sc = scene.from_video(folder, d.get("video") or "render.mp4")
+        sc = scene.save(folder, sc)
+    if any(a.get("proxy") for a in sc["assets"].values()):
+        threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
+    return sc
+
+
+def scene_out(folder, sc):
+    """The scene as the page gets it: each asset on /scene/asset/<id>, versioned by the file it plays (a proxy that
+    lands is a new URL). Never saved."""
+    sc = json.loads(json.dumps(sc))
+    for k, a in sc["assets"].items():
+        f = scene.path_of(folder, a)
+        a["url"] = f"/scene/asset/{quote(k)}?v={f.stat().st_mtime_ns if f.exists() else 0}"
+    return sc
+
+
+def export_scene(folder, out):
+    """POST /export's job: the scene rendered to out, its progress in the log."""
+    x = EXPORTS[str(folder)]
+    try:
+        with live.busy():
+            scene.render(folder, out, log=x["log"])
+        x.update(state="done", file=str(out))
+    except Exception as e:   # noqa: BLE001  shown on the page
+        x.update(state="failed", why=str(e))
+
+
 LIVE_JS = {"lock": threading.Lock()}
 
 
@@ -1489,8 +1540,8 @@ def render_stamped(src):
 
 
 # the page's undo: every hand edit's files before and after it, so Undo and Redo put them back byte for byte
-HAND_FILES = ("texts.json", "sounds.json", "overrides.json")
-HAND_PATHS = {"/text/add", "/text/delete", "/text/edit", "/sfx/add", "/sfx/remove", "/sfx/move", "/sfx/split", "/audio/upload",
+HAND_FILES = ("texts.json", "sounds.json", "overrides.json", "scene.json")
+HAND_PATHS = {"/scene/ops", "/text/add", "/text/delete", "/text/edit", "/sfx/add", "/sfx/remove", "/sfx/move", "/sfx/split", "/audio/upload",
               "/captions/text", "/captions/time", "/card/edit", "/timeline/lanes", "/timeline/cut", "/media/add"}
 JOURNAL, JOURNAL_LOCK = {}, threading.Lock()   # folder -> [{"at": (stage, round), "before", "after"}], one edit at a time
 
@@ -2455,8 +2506,9 @@ def make_handler(folder, token):
                 d["layer"] = layer_of(folder, d) is not None   # plays base_video with the hand edits as layers (layer_plan)
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
-                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)   # the tab reloads when this changes
+                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS, HTML.with_name("review-scene.js"))   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
+                d["scene"] = (folder / scene.NAME).exists()   # the page edits the scene (SCENE.md)
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
                 d["home"] = home_url()   # the Home button: back to the editor's window, or how to start it
                 d["update"] = _HOME.get("update") if d["home"] else None   # the rail's Update
@@ -2494,6 +2546,8 @@ def make_handler(folder, token):
                 if making_edit(d):
                     d["making"] = {"style": making_style(folder), "steps": EDIT_STEPS}
                 return self.send(200, d)
+            if path == "/review-scene.js":   # the edit page on a scene (review-scene.js)
+                return self.send(200, HTML.with_name("review-scene.js").read_bytes(), "text/javascript; charset=utf-8")
             if path == "/live/plan":   # the live player's plan (live_plan), or why the page plays the MP4
                 return self.send(200, live_plan(folder, load(rj)))
             if path == "/live/live.js" or re.fullmatch(r"/live/chunks/[\w-]+\.js", path):   # the live player and its chunks
@@ -2505,6 +2559,25 @@ def make_handler(folder, token):
                 if not p.is_file() or not p.is_relative_to(folder.resolve()):
                     return self.send(404, {})
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+            if path == "/scene":   # the scene (scene.json), made on the first ask
+                try:
+                    return self.send(200, scene_out(folder, scene_for(folder, load(rj))))
+                except (scene.SceneError, OSError, KeyError) as e:
+                    return self.send(400, {"error": str(e)})
+            if path.startswith("/scene/asset/"):   # an asset the scene names: its seek-friendly copy once made
+                try:
+                    a = scene.load(folder)["assets"][unquote(path[len("/scene/asset/"):])]
+                except (scene.SceneError, OSError, KeyError, ValueError):
+                    return self.send(404, {})
+                p = scene.path_of(folder, a)
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream") if p.is_file() else self.send(404, {})
+            if path == "/export":   # the export's state: working (pct), done (file), failed (why)
+                x = dict(EXPORTS.get(str(folder)) or {"state": None})
+                if x.get("state") == "working":
+                    x["pct"] = log_pct(x["log"]) or 0
+                x["file"] = Path(x["file"]).name if x.get("file") else None
+                x.pop("log", None)
+                return self.send(200, x)
             if path == "/video":
                 d = load(rj)
                 if q.get("k") == "raw":
@@ -3168,6 +3241,32 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
                 return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
                                      f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
+            if path == "/scene/ops":   # the page's edit of the scene: ops applied in order, kept for Undo (j); no note for Claude
+                try:
+                    sc = scene.apply(scene_for(folder, load(rj)), body.get("ops") or [], edit=folder)
+                    sc = scene.save(folder, sc)
+                except (scene.SceneError, TypeError, ValueError, AttributeError) as e:
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, "scene": scene_out(folder, sc)})
+            if path == "/export":   # render the scene (as the page shows it) to <edit>/exports/<download name>
+                x = EXPORTS.get(str(folder)) or {}
+                if x.get("state") == "working":
+                    return self.send(409, {"error": "An export is already running."})
+                try:
+                    scene_for(folder, load(rj))
+                except (scene.SceneError, OSError, KeyError) as e:
+                    return self.send(400, {"error": str(e)})
+                out = folder / "exports" / download_name(folder)
+                (folder / "exports").mkdir(exist_ok=True)
+                EXPORTS[str(folder)] = {"state": "working", "file": None, "log": str(folder / "exports" / ".export.log"), "why": None}
+                threading.Thread(target=export_scene, args=(folder, out), daemon=True).start()
+                return self.send(200, {"ok": True, "state": "working"})
+            if path == "/export/reveal":   # Show in Finder: the exported file
+                f = (EXPORTS.get(str(folder)) or {}).get("file")
+                if not f or not Path(f).is_file():
+                    return self.send(404, {"error": "Nothing exported yet."})
+                subprocess.Popen(["open", "-R", f] if sys.platform == "darwin" else ["xdg-open", str(Path(f).parent)])
+                return self.send(200, {"ok": True})
             if path == "/timeline/restore":   # Undo or Redo of a hand edit: its files as they were before it, or after it
                 d, js = load(rj), JOURNAL.get(str(folder)) or []
                 try:
@@ -3184,7 +3283,8 @@ def make_handler(folder, token):
                             (folder / n).unlink(missing_ok=True)
                         elif not (folder / n).exists() or (folder / n).read_bytes() != b:
                             (folder / n).write_bytes(b)
-                bake_soon(folder)
+                if any(j["before"].get(n) != j["after"].get(n) for n in HAND_FILES if n != scene.NAME):   # a scene edit bakes nothing
+                    bake_soon(folder)
                 return self.send(200, {"ok": True})
             if path == "/card/dup":   # Alt-drag on the video: a copy of a card at a new box, an added card like a dropped picture
                 d = load(rj)

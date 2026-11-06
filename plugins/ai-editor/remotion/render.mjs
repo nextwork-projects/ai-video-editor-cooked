@@ -80,7 +80,8 @@ async function prepare(publicDir, planPath) {
   const t0 = Date.now();
   let serveUrl = path.resolve(publicDir);
   if (!fs.existsSync(path.join(serveUrl, "bundle.js"))) {
-    serveUrl = await bundle({ entryPoint: ENTRY, publicDir: serveUrl });
+    // a scene's public folder holds hard links to its media (scene.py stage): linked in, never copied
+    serveUrl = await bundle({ entryPoint: ENTRY, publicDir: serveUrl, symlinkPublicDir: inputProps.composition === "Scene" });
     // The bundle is a temp folder holding a copy of the video and images (150 MB+ per render) that
     // Remotion never deletes; left alone, a few dozen renders fill the disk.
     process.on("exit", () => { try { fs.rmSync(serveUrl, { recursive: true, force: true }); } catch {} });

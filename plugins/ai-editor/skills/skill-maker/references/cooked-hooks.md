@@ -55,6 +55,22 @@ Instead of building a renderer, write the style's numbers into `edits/<name>/sty
 `images.json` / `visuals.json` (`<plugin>/skills/style-edit/references/shapes.md`), then follow style-edit
 from its step 4 (plan, stills, render). Captions, zooms, cards, the safe zone and the review page come with it.
 
+## Write a scene
+
+What the skill puts on screen goes into `edits/<name>/scene.json` as items the user can move and trim
+(`<plugin>/lib/ai_editor/SCENE.md`), never a flattened MP4 with titles, frames or masks burned in:
+
+```python
+sys.path.insert(0, "<plugin>/lib/ai_editor"); import scene
+S = scene.Scene(1080, 1920, 30, edit=edit)
+S.video("cut.mp4", 0, 30)                                   # the footage, full frame
+S.video("motion/intro/render.mp4", 1, 4, x=540, y=600, w=800, h=450, radius=24, shadow={"blur": 40})  # a self-animated clip: one item
+S.text("Fact or Hype?", 0, 4, y=300, size=44, color="#000000", box={"color": "#FFFFFF", "pad": [26, 8], "radius": 18, "block": True})
+S.save(edit)
+```
+
+`python3 <plugin>/lib/ai_editor/scene.py render edits/<name>` exports it; the review page plays and edits it live.
+
 ## Learned rules
 
 Keep a `## Learned rules` section in the SKILL.md and say "Follow every rule in Learned rules". skill-improver
