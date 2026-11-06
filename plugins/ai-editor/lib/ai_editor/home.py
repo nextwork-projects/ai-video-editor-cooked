@@ -1280,6 +1280,24 @@ def trash(p):
     return r.returncode == 0 and not Path(p).exists()
 
 
+def to_review(vids):
+    """Videos view, Rules to review: the videos whose learn panel waits on the user (learn state proposed), newest first,
+    as {slug, title, count, url}. One stuck on "reading" with nobody listening gets cooked.'s own learn job."""
+    import review
+    out = []
+    for v in vids:
+        lr = (library._review(Path(v["dir"])) or {}).get("learn") or {}
+        if lr.get("state") == "proposed" and lr.get("rules"):
+            out.append({"slug": Path(v["dir"]).name, "title": v["name"], "count": len(lr["rules"]),
+                        "url": "/review?dir=" + quote(v["dir"])})
+        elif lr.get("state") == "reading":
+            try:
+                review.start_learn_job(Path(v["dir"]), stuck=True)
+            except Exception:   # noqa: BLE001  the list shows either way
+                pass
+    return out
+
+
 def recent_list(st):
     """The clips the page lists: the library's videos/, picked files, the opt-in scan; minus hidden ones."""
     hidden = set(st.get("hidden") or [])
@@ -2129,7 +2147,7 @@ def make_handler(token):
                 return self.send(200, {"path": root, "place": place(root), "env": bool(os.environ.get("AI_EDITOR_LIBRARY", "").strip()),
                                        "custom": str(custom.path(False)), "videos": vids, "folders": folders(),
                                        "styles": [c for c in cards if c["id"] not in arch], "archived_styles": [c for c in cards if c["id"] in arch],
-                                       "default_style": default_style(cards)})
+                                       "default_style": default_style(cards), "to_review": to_review(vids)})
             if path == "/skills":   # the Skills view and New style, "Use your own skill"
                 return self.send(200, editing_skills(read()["root"]))
             if path == "/recent":
@@ -2462,6 +2480,16 @@ def make_handler(token):
                     return self.send(200, {"ok": True, "id": new_own_style(read()["root"], body.get("name"), sk)})
                 except ValueError as e:
                     return self.send(400, {"error": str(e)})
+            if path == "/style/from-video":   # New style, "From a video": {dir, name}, a copy of the style that video used
+                import review
+                d = Path(str(body.get("dir") or "")).resolve()
+                if d not in library.edit_dirs() or not (d / "review.json").exists():
+                    return self.send(404, {"error": "That video is gone."})
+                try:
+                    ns_ = review.new_style_from(d, body.get("name"))
+                except ValueError as e:
+                    return self.send(400, {"error": str(e) or "That name is taken. Pick another."})
+                return self.send(200, {"ok": True, "id": "@" + Path(ns_["id"]).parent.name, "name": ns_["name"]})
             if path == "/style/combine":   # New style, "Combine styles": {ids: [2+], name?, text?}
                 d = read()
                 try:
@@ -4257,6 +4285,29 @@ def demo():
         assert post("/stop", {"edit": str(hid)})["stopped"]
         rv = json.loads((hid / "review.json").read_text(encoding="utf-8"))
         assert not rv["sent"] and rv["stopped"] and rv["events"][-1]["type"] == "stop", rv
+        # Rules to review: a video whose learn panel waits lists first with its rule count; one stuck reading gets the learn job
+        os.environ.setdefault("AI_EDITOR_CLAUDE", shutil.which("true") or "true")   # never the real Claude Code here
+        rv["learn"] = {"state": "proposed", "rules": [{"rule": "a", "section": "cut"}, {"rule": "b", "section": "cut"}]}
+        (hid / "review.json").write_text(json.dumps(rv), encoding="utf-8")
+        assert get("/library")["to_review"] == [{"slug": "hide-me", "title": "hide-me", "count": 2,
+                                                 "url": "/review?dir=" + quote(str(hid.resolve()))}], get("/library")["to_review"]
+        rv["learn"] = {"state": "reading", "at": time.time() - 3600}
+        (hid / "review.json").write_text(json.dumps(rv), encoding="utf-8")
+        assert get("/library")["to_review"] == [] and json.loads((hid / "review.json").read_text(encoding="utf-8"))["learn"]["job"]
+        for _ in range(200):   # the stub CLI posts nothing: the page says Claude could not read the notes
+            if json.loads((hid / "review.json").read_text(encoding="utf-8"))["learn"]["state"] == "failed":
+                break
+            time.sleep(0.05)
+        assert json.loads((hid / "review.json").read_text(encoding="utf-8"))["learn"]["state"] == "failed"
+        # New style, From a video: a copy of the style that video used, named, listed at once
+        fv = post("/style/from-video", {"dir": str(hid), "name": "From hide"})
+        assert fv == {"ok": True, "id": "@own-from-hide", "name": "From hide"} and "@own-from-hide" in [c["id"] for c in get("/library")["styles"]], fv
+        for bad, code in (({"dir": str(tmp), "name": "x"}, 404), ({"dir": str(hid), "name": " "}, 400)):
+            try:
+                post("/style/from-video", bad)
+                raise AssertionError(bad)
+            except urllib.error.HTTPError as e:
+                assert e.code == code, (bad, e.code)
         try:
             post("/stop", {"edit": str(tmp)})
             raise AssertionError("a folder that is not a video")

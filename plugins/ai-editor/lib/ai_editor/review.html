@@ -718,6 +718,28 @@ body.staged #stagebar{display:flex}
 .rcpt button:hover{color:var(--ink)}
 .learn .erow button.go{flex:1}.learn .erow button.go:disabled{opacity:.5}
 .lset{margin-left:28px;font-size:12px;line-height:16px;color:var(--quiet)}   /* the setting a kept rule saves */
+/* teach anywhere: the learn card over the video, Make this a rule on a note, New style from this video */
+dialog.ov{border:0;padding:0;background:none;color:inherit;max-width:calc(100vw - 32px);max-height:calc(100vh - 64px);overflow:visible}
+dialog.ov::backdrop{background:rgba(12,10,9,.28)}
+.ov .learn{position:relative;width:min(520px,calc(100vw - 32px));max-height:calc(100vh - 64px);overflow:auto;padding:24px;gap:16px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--pop)}
+.ov .learn>div:first-child{padding-right:32px}
+.ov .learn b{font-size:16px;line-height:20px}.ov .learn .lar b,.ov .learn .lmenu b{font-size:14px;line-height:18px}
+.lx{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;color:var(--muted)}.lx:hover{background:var(--hover);color:var(--ink)}
+.hbtn{height:32px;padding:0 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);font-size:13px;font-weight:600;flex-shrink:0}.hbtn:hover{border-color:var(--ink)}.hbtn[hidden]{display:none}
+#vmore{width:32px;padding:0;display:grid;place-items:center;color:var(--ink)}
+.pmenu{position:fixed;inset:auto;margin:0;width:280px;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);color:var(--ink);box-shadow:var(--pop)}
+.pmenu button{display:flex;align-items:center;width:100%;min-height:40px;padding:8px 12px;border-radius:8px;font-size:14px;line-height:18px;text-align:left;color:var(--ink)}.pmenu button:hover,.pmenu button:focus-visible{background:var(--hover);outline:none}
+.rpop{position:fixed;inset:auto;margin:0;width:340px;max-width:calc(100vw - 32px);padding:16px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);color:var(--ink);box-shadow:var(--pop);flex-direction:column;gap:12px}
+.rpop:popover-open{display:flex}
+.rpop b,.ov form b{font-size:14px;line-height:18px;font-weight:600;color:var(--strong)}
+.rpop label,.ov form label{display:flex;flex-direction:column;gap:6px;font-size:12px;line-height:16px;color:var(--muted)}
+.rsel{height:44px;border:1px solid var(--line2);border-radius:10px;background:var(--panel);color:var(--strong);padding:0 10px;font:inherit;font-size:14px;width:100%}.rsel:focus{border-color:var(--ink);outline:none}
+.rgo{width:100%;height:44px;border-radius:10px;border:1px solid var(--ink);background:var(--ink);color:var(--onink);font-size:14px;font-weight:600}.rgo:hover:not(:disabled){background:var(--ink-hover)}.rgo:disabled{opacity:.45}
+.rerr{font-size:12px;line-height:16px;color:var(--flag)}.rerr:empty{display:none}
+.ov form{width:min(420px,calc(100vw - 32px));padding:24px;display:flex;flex-direction:column;gap:14px;border-radius:12px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--pop)}
+.ov form p{margin:0;font-size:13px;line-height:18px;color:var(--body)}
+.ov form .skip{height:32px;color:var(--quiet);font-size:13px;font-weight:500}.ov form .skip:hover{color:var(--strong)}
+#toast.act{pointer-events:auto}#toast button{font:inherit;font-weight:600;color:var(--strong);text-decoration:underline;text-underline-offset:2px;margin-left:4px}
 /* the rules a draft used: a quiet line in the notes panel that opens the list, each with Turn off */
 .rused{align-self:flex-start;border:0;background:none;padding:8px 0 0;font:inherit;font-size:12px;line-height:16px;color:var(--muted);cursor:pointer}
 .rused:hover{color:var(--strong)}
@@ -864,7 +886,7 @@ body.making #making{display:flex}
 <header>
  <div class="brand"><button id="homebtn" class="homebtn" title="Back to your videos"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Your videos</button><span class="sl">/</span><span id="name"></span><span id="homemsg" class="homemsg" hidden></span></div>
  <div class="seg" id="stages"><button id="st1" data-go="cut"></button><svg class="chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="st2" data-go="edit"></button></div>
- <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
+ <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="lrev" class="hbtn" hidden>Rules to review</button><button id="vmore" class="hbtn" popovertarget="moremenu" aria-label="more for this video" title="More for this video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
  <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="mapprove"></button><button id="popen" class="popen" title="Chat with Claude and your notes" aria-label="open the chat with Claude and your notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5a8 8 0 0 1-8 8H5l-2 1.5v-9.5a8 8 0 0 1 8-8h1"/><path d="M18 2.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/></svg><small id="ncount2"></small></button>
 </header>
 <section id="how" aria-label="how this works"><ol>
@@ -935,6 +957,16 @@ body.making #making{display:flex}
 </main>
 </div>
 <div id="toast" role="status"></div>
+<dialog id="learnov" class="ov" aria-label="teach your style"></dialog>
+<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button></div>
+<div id="rpop" class="rpop" popover role="dialog" aria-label="make this a rule"><b>Make this a rule</b>
+ <label>Rule<input id="rptext" class="lname rin" maxlength="160"></label>
+ <label>Save to<select id="rpto" class="rsel"></select></label>
+ <input id="rpname" class="lname rin" maxlength="40" placeholder="Name the new style, like Podcast clips" aria-label="name the new style" hidden>
+ <span id="rperr" class="rerr"></span><button id="rpgo" class="rgo">Save</button></div>
+<dialog id="styleov" class="ov" aria-label="new style from this video"><form id="nsform"><b>New style from this video</b><p>It starts from this video's style. Pick it for your next video.</p>
+ <label>Name<input id="nsname" class="lname rin" maxlength="40" placeholder="Podcast clips"></label>
+ <span id="nserr" class="rerr"></span><button class="rgo" id="nsgo">Create</button><button type="button" class="skip" id="nscancel">Cancel</button></form></dialog>
 <script>
 let themeAt=0;   // a poll already in flight still carries the old theme: ignore the server's for 3 s after a click
 const $=id=>document.getElementById(id),vid=$('v'),v=media(vid),v2=$('v2'),bar=$('bar'),ta=$('ta'),box=$('box');
@@ -1101,7 +1133,7 @@ $('dl').addEventListener('click',async e=>{
     toast('The video did not download. Try again.')}finally{delete a.dataset.busy}
 });
 const sessBtn=()=>'';   // Copy session moved into the Claude control (Show Claude / Start Claude)
-function toast(t,ms){const e=$('toast');e.innerHTML=TICK+esc(t);e.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('show'),ms||3500)}
+function toast(t,ms){const e=$('toast');e.innerHTML=TICK+esc(t);e.classList.remove('act');e.classList.add('show');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('show'),ms||3500)}
 function cmpOptions(){   // what can play beside this round: its other versions, then earlier rounds of this stage
   const r=viewRound(),o=['',...(r.alts||[]).map(a=>a.name)].filter(x=>x!==alt).map(x=>({k:key(view),alt:x,label:lab(x)}));
   (S.rounds||[]).filter(x=>x.stage===view.stage&&x.round!==view.round).reverse().forEach(x=>o.push({k:key(x),alt:'',label:rn(x)}));
@@ -1382,8 +1414,9 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
         `<div class="etrack${i?'':' l1'}${off?' lhid':''}${s.locked?' llock':''}" data-row="${kind}" data-lane="${i}">${h}</div>`)});
     add(`<div class="ehd newl" data-row="${kind}"></div>`,`<div class="etrack newl" data-row="${kind}" data-lane="${p.n}">Drop here for a new lane</div>`)};
   add(`<div class="ehd"><span>Video</span><button id="vsplit" title="Split the video at the playhead (S)" aria-label="split the video at the playhead"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></button></div>`,`<div class="etrack" data-row="vid">${vids}${vsps}</div>`);
-  lanes('img',imgs);lanes('text',texts,`<button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button>`);
-  add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[],T)}</div>`);
+  const lay=!!S.layer;   // a layer draft (its MP4 under the user's layers): no Images, its captions are burned in, so those rows only show when they hold something
+  if(!lay||imgs.length)lanes('img',imgs);lanes('text',texts,`<button id="addtx" title="Add a text at the playhead" aria-label="add a text at the playhead">+</button>`);
+  if(!lay||(it.captions||[]).length)add(`<div class="ehd l1"><span>Captions</span><button id="capedit" title="Caption style" aria-label="caption style"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg></button></div>`,`<div class="etrack capw l1" data-row="cap">${caps}${capWords(it.captions||[],T)}</div>`);
   lanes('snd',snds,`<button id="addsnd" title="Add one of your sounds at the playhead" aria-label="add a sound at the playhead">+</button>`);
   const h=`<div class="edwrap"><div class="edleft">${L.join('')}</div>
     <div class="edright">
@@ -1488,7 +1521,7 @@ function splitAt(t){const c=cuts();t=Math.round(t*100)/100;if(t<.1||t>D()-.1||c.
   setCuts({...c,splits:[...c.splits,t].sort((a,b)=>a-b)},'split');toast(`Split at ${fmtx(t)}. Click a piece, then Delete to cut it.`)}
 function cutPiece(a){const p=vpieces().find(x=>Math.abs(x.a-a)<.01);if(!p)return;const c=cuts();
   const gone=p.cut?c.gone.flatMap(([x,y])=>y<=p.a||x>=p.b?[[x,y]]:[...(p.a>x?[[x,p.a]]:[]),...(p.b<y?[[p.b,y]]:[])]):[...c.gone,[p.a,p.b]];
-  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now. Submit feedback and the next draft is cut.')}
+  setCuts({...c,gone},p.cut?'piece put back':'piece cut');toast(p.cut?'Piece put back.':'Piece cut. It plays without it now.'+(S.layer?'':' Submit feedback and the next draft is cut.'))}
 // the transcript cuts on the edit too: Delete puts the words' time (first word's start to the last one's end, edit
 // clock) in the Video row's gone ranges, so the row, the skip and Claude's note follow; Delete on struck words puts them back
 const edTxOk=()=>!alt&&!!S&&!!view&&view.stage==='edit'&&noteOk()&&!cmp;
@@ -1729,7 +1762,7 @@ function noteHtml(c){
   if(said){const btns=old&&live&&st==='wontfix'?`<button class="obtn" data-anyway="${c.id}">Fix it anyway</button>`:'';
     rep=(c.reply||moved?`<span class="cr">${c.reply?'Claude: '+esc(c.reply):''}${esc(moved)}</span>`:'')+btns}
   const notes=[];
-  const keep=c.receipt?rcptHtml(c.receipt):'keep' in c&&!old?(canEdit?`<label class="lrule keep${c.keep?'':' off'}"><input type="checkbox" data-keep="${c.id}"${c.keep?' checked':''}><span>Keep as a rule for ${esc(S.style_name||'your style')}</span></label>`
+  const keep=c.receipt?rcptHtml(c.receipt):S.teach?'':'keep' in c&&!old?(canEdit?`<label class="lrule keep${c.keep?'':' off'}"><input type="checkbox" data-keep="${c.id}"${c.keep?' checked':''}><span>Keep as a rule for ${esc(S.style_name||'your style')}</span></label>`
     :c.keep?`<span class="nmeta">Kept as a rule for ${esc(S.style_name||'your style')}</span>`:''):'';
   if(c.moved&&!old)notes.push(c.moved==='words'?`Moved from ${fmtx(c.t_was)} to where the same words are said`:`Same time as in the last draft. The cut changed, so check it.`);
   const meta=[nv?(c.alt==='*'?(nv===1?'Both':'All')+' versions':esc(c.alt||mainName(viewRound()))+' only'):'',c.edited&&!old?'Edited':''].filter(Boolean);
@@ -1738,6 +1771,8 @@ function noteHtml(c){
   if(old&&live&&!c.checked&&c.status!=='open')acts.push(`<button data-good="${c.id}">Got it</button>`);
   if(canEdit&&!ed)acts.push(`<button data-edit="${c.id}">Edit</button>`);
   if(canEdit&&nv)acts.push(`<button data-scope="${c.id}">${c.alt==='*'?'Make it this video only':'Apply to all versions'}</button>`);
+  const rc=c.receipt&&(S.receipts||[]).find(x=>x.id===c.receipt);
+  if(S.teach&&c.text&&!(rc&&!rc.undone)&&!ed)acts.push(`<button data-mkrule="${c.id}">Make this a rule</button>`);
   if(canEdit)acts.push(`<button data-del="${c.id}">Delete</button>`);
   if(!said&&!canEdit&&c.round===S.round&&c.stage===S.stage&&S.sent&&!c.queued)acts.push('<span>Sent</span>');
   return `<div class="note${old?' old':''}${ed?' editing':''}${done?' done':''}${wont?' wont':''}" data-t="${t}" data-old="${old?1:0}"${why?` title="${esc(why)}"`:''}><div class="bub">${said?'':thumb}<div class="nb"><div class="nh">${done?`<span class="okt" aria-label="done">${TICK}</span>`:''}<span class="tchip num">${tm}</span>${said?lead:quote}</div>
@@ -1768,7 +1803,7 @@ function workHtml(){
       +(m.extra?`<li class="now"><span class="ic">${SPIN}</span>${esc(m.extra)}</li>`:'');
     const ok=S.stills?'The preview is approved. ':'The cut is approved. ';
     return `<div class="claude"><div><b>Claude</b><p>${esc(m.idle?ok+m.idle:ok+(S.stills?'Claude is making the video':'Claude is making the edit')+(m.style?' in '+m.style:'')+'.')}</p></div><ol class="steps">${li}</ol>${m.at&&!m.idle?`<span class="since" data-since="${esc(m.at)}">Working for ${dur((Date.now()-new Date(m.at))/1000)}</span>`:''}${sessBtn()}</div>`}
-  if(p==='approve')return `<div class="claude"><div><b>Claude</b><p>${S.stage==='cut'?'The cut is approved. It is the finished video.':'Approved. The edit is finished.'}</p></div></div>`+learnHtml();
+  if(p==='approve')return `<div class="claude"><div><b>Claude</b><p>${S.stage==='cut'?'The cut is approved. It is the finished video.':'Approved. The edit is finished.'}</p></div></div>`+($('learnov').open?'':learnHtml());
   if(S.raw&&S.cut_steps)return cutHtml(S.cut_steps);
   if(p!=='send'&&(!live||S.stage==='cut'))return '';   // the cut is ready: what Claude does next is the edit's prep, not this round
   const ed=editsSent()?S.events[S.events.length-1]:null,nch=ed?plural(ed.n,'transcript change'):'';
@@ -1808,6 +1843,7 @@ function learnHtml(){
   const ed=L.edits&&L.edits.length?' and edits':'';   // edit_patterns: what the user did on the page counts too
   const say={none:'No notes or edits this time. Your style stays as it is.',empty:`Nothing in your notes${ed} was about the style. It stays as it is.`,skipped:'Not saved. Your style stays as it is.'}[L.state];
   if(say)return `<div class="learn">${head}<p>${say}</p></div>`;
+  if(L.state==='failed')return `<div class="learn">${head}<p>Claude could not read your notes${ed}.${L.why?' '+esc(L.why):''}</p>${lErr?`<span class="lerr">${esc(lErr)}</span>`:''}<div class="lact"><button class="go" data-lretry>Try again</button></div></div>`;
   if(L.state==='reading')return `<div class="learn">${head}<p class="wait"><i></i>Claude is reading your notes${ed}...</p></div>`;
   const open=L.state==='proposed',rs=(L.rules||[]).map((r,i)=>[r,i]).filter(([,i])=>open||L.chosen.includes(i));
   const rows='<div class="lrules">'+rs.map(([r,i])=>`<label class="lrule${open&&untick.has(i)?' off':''}"><input type="checkbox" data-li="${i}"${open&&untick.has(i)?'':' checked'}${open?'':' disabled'}><span>${esc(r.rule)}.</span></label>`).join('')+'</div>';
@@ -1865,6 +1901,7 @@ function workedFor(r){   // the send of the round before this one to the moment 
   return e&&r.at?dur((new Date(r.at)-new Date(e.at))/1000):'';
 }
 function renderList(){
+  renderLearn();
   if(tab==='trials'&&S.trials){
     const l=$('list'),h=trialsHtml(),a=document.activeElement,f=a&&a.classList.contains('trta'),pos=f?a.selectionStart:0;
     if(l._trh!==h){const st=l.scrollTop;l._trh=h;l.innerHTML=h;l.scrollTop=st;trPlace();
@@ -1910,12 +1947,11 @@ function renderList(){
   if(queued.length)h+=`<p class="sub">${S.raw?'For the cut':'For the next draft'}</p>`+queued.map(noteHtml).join('');
   const l=$('list'),keepScroll=l.scrollTop,atEnd=l.scrollHeight-keepScroll-l.clientHeight<40,hadFocus=document.activeElement&&document.activeElement.classList.contains('edta');
   const hadLearn=!!l.querySelector('.learn'),newP=p!==renderList.p;renderList.p=p;
-  const ln=document.activeElement&&document.activeElement.classList.contains('lname')?document.activeElement.selectionStart:null;
+  const ln=document.activeElement&&document.activeElement.matches('.lname:not(.rin)')?document.activeElement.selectionStart:null;
   // with Claude: open at the work panel at the bottom, then stay where the user scrolled (status lines re-render this)
   l.innerHTML=h;l.scrollTop=isCur()&&p&&!editing&&(atEnd||newP)?l.scrollHeight:keepScroll;
   const lp=l.querySelector('.learn');if(lp&&!hadLearn)lp.scrollIntoView({block:'end'});
-  const lnm=l.querySelector('.lname');if(lnm){lnm.oninput=()=>{lName=lnm.value;lErr='';const b=l.querySelector('[data-lsave]');if(b)b.disabled=!lName.trim()||(S.learn.rules||[]).every((r,i)=>untick.has(i))};
-    lnm.onkeydown=ev=>{if(ev.key==='Enter'&&lName.trim()){ev.preventDefault();l.querySelector('[data-lsave]').click()}};if(ln!=null){lnm.focus();lnm.setSelectionRange(ln,ln)}}
+  lnWire(l,ln);
   const ea=$('list').querySelector('.edta');
   if(ea){ea.oninput=()=>editing.text=ea.value;ea.onkeydown=ev=>{if(ev.key==='Enter'&&!ev.shiftKey){ev.preventDefault();saveEdit()}if(ev.key==='Escape'){ev.preventDefault();editing=null;renderList()}};
     ea.onpaste=ev=>{const fs=[...(ev.clipboardData?.files||[])];if(fs.length){ev.preventDefault();editFiles(fs)}};
@@ -2033,23 +2069,87 @@ function editFiles(fs){[...fs].filter(f=>/^image\/(png|jpeg|gif|webp)$/.test(f.t
 $('editpic').onchange=e=>{if(editing)editFiles(e.target.files);e.target.value=''};
 $('list').addEventListener('change',async e=>{const kb=e.target.closest('[data-keep]');
   if(kb){const r=await fetch('/keep',{method:'POST',body:JSON.stringify({id:+kb.dataset.keep,keep:kb.checked})});if(!r.ok)alert('This note is with Claude now.');return load(true)}
-  const cb=e.target.closest('[data-li]');if(!cb)return;
-  cb.checked?untick.delete(+cb.dataset.li):untick.add(+cb.dataset.li);renderList()});
-$('introx').onclick=()=>{introOff=true;document.body.classList.remove('intro');post('/intro',{})};
-$('list').addEventListener('click',async e=>{
+  learnChange(e)});
+function learnChange(e){const cb=e.target.closest('[data-li]');if(!cb)return;
+  cb.checked?untick.delete(+cb.dataset.li):untick.add(+cb.dataset.li);renderList()}
+// the learn card's controls, in the notes panel or over the video (#learnov): true when the click was theirs
+async function learnClick(e){const root=e.currentTarget;
   const ub=e.target.closest('[data-undo]');
-  if(ub){ub.disabled=true;const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+ub.dataset.undo})});if(!r.ok)alert('That rule was already taken out.');return load(true)}
+  if(ub){ub.disabled=true;const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+ub.dataset.undo})});if(!r.ok)alert('That rule was already taken out.');await load(true);return true}
   const dd=e.target.closest('[data-ldd]');
-  if(dd){const i=+dd.dataset.ldd;lOpen=lOpen===i?-1:i;return renderList()}
+  if(dd){const i=+dd.dataset.ldd;lOpen=lOpen===i?-1:i;renderList();return true}
   const lt=e.target.closest('[data-lto]');
-  if(lt){lPick[+lt.dataset.lrow]=lt.dataset.lto==='+new'?'new':lt.dataset.lto;lOpen=-1;lErr='';renderList();const n=$('list').querySelector('.lname');if(n&&lt.dataset.lto==='+new')n.focus();return}
+  if(lt){lPick[+lt.dataset.lrow]=lt.dataset.lto==='+new'?'new':lt.dataset.lto;lOpen=-1;lErr='';renderList();const n=root.querySelector('.lname');if(n&&lt.dataset.lto==='+new')n.focus();return true}
   if(lOpen>=0&&!e.target.closest('.lmenu')){lOpen=-1;renderList()}
   if(e.target.closest('[data-lsave],[data-lskip]')){const L=S.learn,save=!!e.target.closest('[data-lsave]'),chosen=L.rules.map((r,i)=>i).filter(i=>!untick.has(i));
     const to={};for(const i of chosen)if(lPick[i]!=null)to[i]=lPick[i];
     const body=!save?{skip:true}:{chosen,to,...(Object.values(to).includes('new')||chosen.some(i=>lPick[i]==null&&L.rules[i].to==='new')?{new:lName}:{})};
     const r=await fetch('/learn',{method:'POST',body:JSON.stringify(body)});
-    if(!r.ok){let j={};try{j=await r.json()}catch(x){}lErr=j.error||'That did not save. Try again.';return renderList()}
-    lErr='';return load(true)}
+    if(!r.ok){let j={};try{j=await r.json()}catch(x){}lErr=j.error||'That did not save. Try again.';renderList();return true}
+    lErr='';await load(true);return true}
+  if(e.target.closest('[data-lretry]')){const r=await fetch(LEARN_RETRY,{method:'POST',body:JSON.stringify({retry:true})});
+    if(!r.ok){let j={};try{j=await r.json()}catch(x){}lErr=j.error||'That did not start. Try again.';renderList();return true}
+    lErr='';lovShut=null;await load(true);return true}
+  if(e.target.closest('[data-lclose]')){$('learnov').close();return true}
+  return false}
+function lnWire(l,ln){const lnm=l.querySelector('.lname');if(!lnm)return;
+  lnm.oninput=()=>{lName=lnm.value;lErr='';const b=l.querySelector('[data-lsave]');if(b)b.disabled=!lName.trim()||(S.learn.rules||[]).every((r,i)=>untick.has(i))};
+  lnm.onkeydown=ev=>{if(ev.key==='Enter'&&lName.trim()){ev.preventDefault();l.querySelector('[data-lsave]').click()}};if(ln!=null){lnm.focus();lnm.setSelectionRange(ln,ln)}}
+// after the final approve the card sits over the video while Claude reads or the rules wait; Esc or the x hides it
+// (Rules to review in the top bar brings it back), Not now is the old skip. A new state (reading -> proposed) opens it again.
+const LEARN_RETRY='/learn';   // the failed read's Try again
+let lovShut=null;
+function renderLearn(){const d=$('learnov'),L=S&&S.learn,on=!!L&&pending()==='approve'&&isCur();
+  const want=on&&(['reading','proposed','failed'].includes(L.state)?lovShut!==L.state:d.open&&['chosen','done'].includes(L.state));
+  $('lrev').hidden=!(on&&L.state==='proposed'&&!want);
+  if(!want){if(d.open)d.close();return}
+  const h=learnHtml().replace(/<\/div>$/,'<button class="lx" data-lclose aria-label="close" title="Close (esc)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>');
+  if(d._h!==h){const a=document.activeElement,ln=a&&d.contains(a)&&a.classList.contains('lname')?a.selectionStart:null,st=(d.firstElementChild||{}).scrollTop||0;
+    d._h=h;d.innerHTML=h;if(d.firstElementChild)d.firstElementChild.scrollTop=st;lnWire(d,ln)}
+  if(!d.open)d.showModal()}
+$('learnov').addEventListener('close',()=>{lovShut=S.learn&&S.learn.state;lOpen=-1;$('learnov')._h='';renderList()});
+$('learnov').addEventListener('click',e=>{if(e.target===e.currentTarget)return e.currentTarget.close();learnClick(e)});   // a click on the dim closes it
+$('learnov').addEventListener('change',learnChange);
+$('learnov').addEventListener('keydown',e=>e.stopPropagation());   // the player's keys stay off while it is open
+$('lrev').onclick=()=>{lovShut=null;renderList()};
+// Make this a rule: any note, any round. Saves now (POST /teach/rule) with Undo in the toast; the note then shows its receipt
+function teachTargets(){const T=(S.teach||{}).targets||[],rk=x=>x.here?0:x.mine?1:2;
+  return [...T.filter(x=>x.kind!=='skill').sort((a,b)=>rk(a)-rk(b)),...T.filter(x=>x.kind==='skill').sort((a,b)=>a.name.localeCompare(b.name))]}
+let rpNote=null;
+function rpOpen(btn){const c=S.comments.find(x=>x.id===+btn.dataset.mkrule);if(!c)return;rpNote=c.id;const P=$('rpop'),T=teachTargets();
+  $('rptext').value=c.text.split('\n')[0].trim().replace(/\.$/,'');
+  const st=T.filter(x=>x.kind!=='skill'),sk=T.filter(x=>x.kind==='skill'),o=x=>`<option value="${esc(x.id)}">${esc(x.kind==='skill'?x.name+' skill':x.name)}</option>`;
+  $('rpto').innerHTML=`<optgroup label="Styles">${st.map(o).join('')}</optgroup>${sk.length?`<optgroup label="Skills">${sk.map(o).join('')}</optgroup>`:''}<option value="new">New style...</option>`;
+  $('rpto').value=(st[0]||{}).id??'new';$('rpname').hidden=$('rpto').value!=='new';$('rpname').value='';$('rperr').textContent='';$('rpgo').disabled=false;
+  P.showPopover();rpAt=btn.getBoundingClientRect();rpPlace();$('rptext').focus()}
+let rpAt=null;   // under the note's button, or over it when there is no room below (again when the name field shows)
+function rpPlace(){const P=$('rpop'),r=rpAt,h=P.offsetHeight,up=innerHeight-r.bottom<h+16;
+  P.style.left=Math.max(16,Math.min(r.left,innerWidth-P.offsetWidth-16))+'px';P.style.top=Math.max(16,up?r.top-h-6:r.bottom+6)+'px'}
+$('rpto').onchange=()=>{$('rpname').hidden=$('rpto').value!=='new';rpPlace();if(!$('rpname').hidden)$('rpname').focus()};
+$('rpop').addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Enter'&&e.target.tagName==='INPUT'){e.preventDefault();$('rpgo').click()}});
+$('rpgo').onclick=async()=>{const text=$('rptext').value.trim(),to=$('rpto').value,name=$('rpname').value.trim();
+  if(!text)return $('rperr').textContent='Write the rule first.';if(to==='new'&&!name)return $('rperr').textContent='Name the new style.';
+  $('rpgo').disabled=true;const r=await fetch('/teach/rule',{method:'POST',body:JSON.stringify({text,to,note:rpNote,...(to==='new'?{name}:{})})});let j={};try{j=await r.json()}catch(x){}
+  $('rpgo').disabled=false;if(!r.ok||!j.ok)return $('rperr').textContent=j.error||j.msg||'That did not save. Try again.';
+  $('rpop').hidePopover();toastUndo(j.msg||'Saved to '+(j.label||'your style')+'.',j.receipt);await load(true)};
+function toastUndo(t,id){toast(t,9000);if(id==null)return;const e=$('toast');e.insertAdjacentHTML('beforeend',`<button data-tundo="${+id}">Undo</button>`);e.classList.add('act')}
+$('toast').addEventListener('click',async e=>{const b=e.target.closest('[data-tundo]');if(!b)return;b.disabled=true;
+  const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+b.dataset.tundo})});toast(r.ok?'Rule taken out.':'That rule was already taken out.');await load(true)});
+// New style from this video (the ... menu in the top bar): a name, then POST /teach/style
+$('moremenu').addEventListener('toggle',e=>{if(e.newState!=='open')return;const M=e.target,r=$('vmore').getBoundingClientRect();
+  M.style.top=r.bottom+6+'px';M.style.left=Math.max(16,r.right-M.offsetWidth)+'px'});
+$('nsopen').onclick=()=>{$('moremenu').hidePopover();$('nsname').value='';$('nserr').textContent='';$('nsgo').disabled=false;$('styleov').showModal();$('nsname').focus()};
+$('nscancel').onclick=()=>$('styleov').close();
+$('styleov').addEventListener('keydown',e=>e.stopPropagation());
+$('styleov').addEventListener('click',e=>{if(e.target===e.currentTarget)e.currentTarget.close()});
+$('nsform').onsubmit=async e=>{e.preventDefault();const name=$('nsname').value.trim();if(!name)return $('nserr').textContent='Give it a name.';
+  $('nsgo').disabled=true;const r=await fetch('/teach/style',{method:'POST',body:JSON.stringify({name})});let j={};try{j=await r.json()}catch(x){}
+  $('nsgo').disabled=false;if(!r.ok||!j.ok)return $('nserr').textContent=j.error||j.msg||'That did not save. Try again.';
+  $('styleov').close();toast(`Made ${j.name||name}. Pick it for your next video.`,6000);await load(true)};
+$('introx').onclick=()=>{introOff=true;document.body.classList.remove('intro');post('/intro',{})};
+$('list').addEventListener('click',async e=>{
+  if(await learnClick(e))return;
+  const mr=e.target.closest('[data-mkrule]');if(mr)return rpOpen(mr);
   if(e.target.closest('.editing')){
     if(e.target.closest('[data-save]'))return saveEdit();
     if(e.target.closest('[data-cancel]')){editing=null;return renderList()}
@@ -2627,7 +2727,7 @@ function renderTextPanel(){
   if($('trows')._h!==h){$('trows')._h=h;$('trows').innerHTML=h}}
 // where the typed texts are: drawn on the page at once, then put into the video file by a patch render (review.py bake)
 function bakeLine(){const b=(S&&S.bake)||{},live=(S.texts||[]).some(x=>!(S.texts_baked||[]).includes(x.id));
-  const m=b.state==='waiting'||b.state==='working'?'Putting your changes into the video...':b.state==='failed'?`It shows here but did not go into the video: ${b.why}. Claude adds it with the next draft.`
+  const m=b.state==='waiting'||b.state==='working'?'Putting your changes into the video...':b.state==='failed'?(S.layer?'It plays here but did not go into the video.':`It shows here but did not go into the video: ${b.why}. Claude adds it with the next draft.`)
     :live&&b.state==='off'?(b.why==='Claude has this draft'?'Claude adds it to the draft it is making.':'It goes into the video with the next render.'):'';
   return m?`<p class="tsub">${esc(m)}</p>`:''}
 // an open text saves itself: moved, resized or restyled when you let go, typed a moment after the last key. No Done, no note

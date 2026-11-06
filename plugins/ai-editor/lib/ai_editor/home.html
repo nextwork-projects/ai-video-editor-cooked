@@ -1795,6 +1795,7 @@ function createModal(){
   if(st.pick)return pickModal();
   if(st.skills)return skillModal();
   if(st.combine)return combineModal();
+  if(st.fromvid)return fromVidModal();
   return `<div class="modalbg" onclick="if(event.target===this)closeCreate()"><div class="modal nsm" role="dialog" aria-modal="true" aria-labelledby="mtitle">
     <div class="row" style="justify-content:space-between"><b class="mt2" id="mtitle">New style</b><button class="mx2" aria-label="Close" title="Close" onclick="closeCreate()">${ic('x',18,2)}</button></div>
     <div class="nbox" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')" ondrop="event.preventDefault();event.stopPropagation();this.classList.remove('over');addRefs(event.dataTransfer.files)"><div class="row" style="justify-content:space-between;align-items:baseline"><b>Analyse a format</b></div>
@@ -1807,6 +1808,7 @@ function createModal(){
         <button class="b1" ${rows.length&&!st.busy?'':'disabled'} onclick="studyLink()">${st.busy?'Starting...':'Analyse this format'}</button></div></div>
     <button class="nbox brow" onclick="buildYourself()"><div><b>Build it yourself</b><p>Pick captions, zooms, cut and sound yourself.</p></div>${ic('chev',18,2)}</button>
     <button class="nbox brow" onclick="ui.study={combine:{sel:[],text:''}};render()"><div><b>Combine styles</b><p>Pick two or more of your styles and say what to take from each.</p></div>${ic('chev',18,2)}</button>
+    <button class="nbox brow" onclick="ui.study={fromvid:{sel:null,name:''}};render()"><div><b>From a video</b><p>Start from the style one of your videos was edited in.</p></div>${ic('chev',18,2)}</button>
     <button class="nbox brow" onclick="openSkills()"><div><b>Use your own skill</b><p>A Claude Code skill that edits videos makes the edit.</p></div>${ic('chev',18,2)}</button></div></div>`;
 }
 // Analyse a format: what the user likes (Claude looks closer at those) and their own files (videos, pictures, PDFs, notes),
@@ -1862,6 +1864,21 @@ function skillModal(){
     <div style="display:flex;flex-direction:column;gap:8px;max-height:50vh;overflow:auto">${body}</div>
     ${k.sel&&k.for?`<button class="b1" style="align-self:flex-end" onclick="swapSkill()">Use /${esc(k.sel)}</button>`:k.sel?`<div class="fld"><div class="in2"><input id="sk-name" value="${esc(k.name||'')}" placeholder="Name your style" aria-label="Style name" oninput="ui.study.skills.name=this.value" onkeydown="if(event.key==='Enter')createSkillStyle()"></div><button class="b1" onclick="createSkillStyle()">Create</button></div>`:''}
     ${k.msg?`<div class="msg bad">${CROSS}<span>${esc(k.msg)}</span></div>`:''}</div></div>`;
+}
+// New style, From a video: the recent videos with an editor page; the new style copies the one that video used
+function fromVidModal(){
+  const k=ui.study.fromvid,vs=(L.videos||[]).filter(v=>v.review&&!v.sample).slice(0,8);
+  const body=vs.length?vs.map(v=>`<button class="brow2${k.sel===v.dir?' on':''}" onclick="ui.study.fromvid.sel=${J(v.dir)};render()"><span class="grow">${esc(v.name)}</span></button>`).join(''):'<div class="t2" style="white-space:normal;padding:12px">No videos yet. Make one first.</div>';
+  return `<div class="modalbg" onclick="if(event.target===this)closeCreate()"><div class="modal nsm" role="dialog" aria-modal="true" aria-labelledby="mtitle">
+    <div class="row" style="justify-content:space-between"><button class="back" style="text-decoration:none" onclick="ui.study={};render()">${ic('back',14,2)}<b class="mt2" id="mtitle">From a video</b></button><button class="mx2" aria-label="Close" title="Close" onclick="closeCreate()">${ic('x',18,2)}</button></div>
+    <div style="border:1px solid var(--line);border-radius:12px;overflow:auto;max-height:50vh">${body}</div>
+    ${k.sel?`<div class="fld"><div class="in2"><input id="fv-name" value="${esc(k.name||'')}" placeholder="Name your style" aria-label="Style name" oninput="ui.study.fromvid.name=this.value" onkeydown="if(event.key==='Enter')createFromVid()"></div><button class="b1" onclick="createFromVid()">Create</button></div>`:''}
+    ${k.msg?`<div class="msg bad">${CROSS}<span>${esc(k.msg)}</span></div>`:''}</div></div>`;
+}
+async function createFromVid(){
+  const k=ui.study.fromvid,r=await post('/style/from-video',{dir:k.sel,name:k.name});
+  if(!r._ok){k.msg=r.error||'That did not work.';return render()}
+  ui.create=false;ui.study=null;await loadLib();openStyle(r.id);
 }
 // the name the field offers: "<skill> style", never the skill's own name (that one is taken by the skill)
 const skStyleName=n=>n.replace(/[-_:]+/g,' ').replace(/^./,c=>c.toUpperCase()).slice(0,34).trim()+' style';
@@ -2299,10 +2316,15 @@ function vVideos(){
       ${vids.length?cardRows(vids):'<div class="none">Nothing in this folder yet. Drag a video onto it in the sidebar. Or open a video\'s ⋯ menu and pick Move to folder.</div><button class="b2 s" style="align-self:flex-start" onclick="ui.fold.videos=null;render()">See all your videos</button>'}</div>`}
   const now=vids.filter(v=>vPh(v)!=='done'),done=vids.filter(v=>vPh(v)==='done'),filed=all.length-vids.length,lede=vSum(vids)+(filed?` ${filed} in folders.`:'');
   const fit=perRow();
-  return `<div class="pgc"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px"><div class="ph"><h1>Your videos</h1>${all.length?`<p>${lede}</p>`:''}</div><div class="row hact">${newFoldBtn('videos')}</div></div>${editTrashRow()}
+  return `<div class="pgc"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px"><div class="ph"><h1>Your videos</h1>${all.length?`<p>${lede}</p>`:''}</div><div class="row hact">${newFoldBtn('videos')}</div></div>${editTrashRow()}${reviewRows()}
     ${now.length?`<div class="sec2"><div class="sh"><b>Now</b></div>${cardRows(now)}</div>`:''}
     ${done.length?`<div class="sec2"><div class="sh"><b>Done</b>${seeAll('done',done.length,fit)}</div><div class="dts">${(ui.exp.done?done:done.slice(0,fit)).map(tile).join('')}</div></div>`:''}
     ${all.length?(vids.length?'':'<div class="none">Every video is in a folder. Open one in the sidebar.</div>'):`<div class="none">No videos yet. Pick a clip to make your first one.</div><button class="b1" style="align-self:flex-start" onclick="rgo('new')">New video</button>`}</div>`;
+}
+// Rules to review: videos whose finished-edit rules wait for a tick, one line each, opening that video's page
+function reviewRows(){
+  const rs=L.to_review||[];if(!rs.length)return '';
+  return `<div class="sec2"><div class="sh"><b>Rules to review</b></div><div style="border:1px solid var(--line);border-radius:12px;overflow:hidden">${rs.map(r=>`<button class="brow2" onclick="location.href=${J(r.url)}"><span class="grow">${esc(r.title)}</span><span class="t2">${r.count} rule${r.count===1?'':'s'}</span>${ic('chev',16,2)}</button>`).join('')}</div></div>`;
 }
 function editTrashRow(){
   const v=ui.edittrash&&L.videos.find(x=>x.dir===ui.edittrash);if(!v)return ui.editmsg?`<div class="msg bad">${CROSS}<span>${esc(ui.editmsg)}</span></div>`:'';

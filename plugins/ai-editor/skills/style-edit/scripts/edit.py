@@ -148,6 +148,7 @@ def prepare_public(edit, plan, tag):
     vf, made = footage_filter(plan, m["width"], m["height"]), pub / f"{plan['video']}.vf"   # a new layout remakes it
     if not proxy.exists() or proxy.stat().st_mtime < cut.stat().st_mtime or not made.exists() or made.read_text(encoding="utf-8") != vf:
         print(f"preparing {plan['width']}x{plan['height']} copy of {cut.name}", flush=True)
+        proxy.parent.mkdir(parents=True, exist_ok=True)   # a layer draft's base sits in review/ (review.py bake_layers)
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(cut), "-filter_complex", vf,
                         "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-g", "15",
                         "-keyint_min", "15", "-sc_threshold", "0", "-pix_fmt", "yuv420p",

@@ -1243,7 +1243,17 @@ def bake_ready(folder, d):
     edit's final render and the plan it was made from; while Claude has the round it plans them in itself."""
     why = live_ready(folder, d)
     return why if why == "not the edit" else "Claude has this draft" if d.get("sent") or busy(folder) and not listening(folder) \
-        else why   # waiting for notes: idle
+        else None if layer_of(folder, d) else why   # waiting for notes: idle; a layer draft bakes its layers (bake_layers)
+
+
+def layer_of(folder, d):
+    """A layer draft's base: the untouched MP4 its round came with (review.json base_video, else its video). A layer
+    draft is one on the edit the page cannot play from its plan (a house skill's finished MP4, one finished by hand):
+    the page plays the base with the user's texts, sounds and cuts over it, and the bake renders them onto it. None
+    for the rest."""
+    p = Path(d.get("base_video") or d.get("video") or "-")
+    return p if live_ready(folder, d) not in (None, "not the edit") and p.is_file() \
+        and Path(folder).resolve() in p.resolve().parents else None
 
 
 def live_ready(folder, d):
@@ -1281,14 +1291,10 @@ def live_video(folder, plan, plan_f):
     the cut itself while that is made. Renders never read .live/."""
     sys.path.insert(0, str(EDIT_PY.parent))
     from edit import footage_filter
-    from plan import probe
     rel, cut = plan["video"], folder / plan["video"]
     if not cut.is_file():
         return rel
-    k = (str(cut), cut.stat().st_mtime_ns)
-    if LIVE_PROXY.get(k) is None:
-        LIVE_PROXY[k] = probe(cut)   # once per cut: ffprobe on every poll would be slow
-    m = LIVE_PROXY[k]
+    m = probed(cut)
     vf = footage_filter(plan, m["width"], m["height"])
     for c in (folder / f".render{plan_f.stem[len('plan'):]}" / rel, folder / ".live" / rel):
         made = c.with_name(c.name + ".vf")
@@ -1315,10 +1321,47 @@ def live_video(folder, plan, plan_f):
     return rel
 
 
-def tell_claude(folder, d):
+def probed(video):
+    """plan.py probe, once per version of the file: ffprobe on every poll would be slow."""
+    k = (str(video), video.stat().st_mtime_ns)
+    if LIVE_PROXY.get(k) is None:
+        sys.path.insert(0, str(EDIT_PY.parent))
+        from plan import probe
+        LIVE_PROXY[k] = probe(video)
+    return LIVE_PROXY[k]
+
+
+def layer_plan(folder, base):
+    """A layer draft's plan, drawn by the StyleEdit composition's plain path: its base MP4 full frame as it is (no
+    layout, grade, zoom, cards or captions of its own: it has them burned in), the typed texts over it, and the Video
+    row's cut pieces ("gone", on the base's clock). The sounds are the caller's: the page's routes live, .sfx/ files
+    for the render."""
+    m = probed(base)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import read_ov
+    return {"video": base.resolve().relative_to(Path(folder).resolve()).as_posix(), "width": m["width"], "height": m["height"],
+            "fps": m["fps"], "durationInFrames": max(1, round(m["duration"] * m["fps"])), "layer": True,
+            "captions": {"style": {}, "chunks": []}, "zooms": [], "cards": [], "texts": typed_labels(folder), "sfx": [],
+            "gone": (read_ov(folder).get("cuts") or {}).get("gone") or []}
+
+
+def on_cut(t, gone):
+    """A time on the base's clock on the clock of the base with the gone pieces out, and whether it was inside one
+    (then it lands where that piece was)."""
+    s = 0.0
+    for a, b in gone:
+        if t >= b:
+            s += b - a
+        elif t > a:
+            return round(a - s, 3), True
+    return round(t - s, 3), False
+
+
+def tell_claude(folder, d, layer=False):
     """A hand edit needs a note only when it cannot go in by itself: Claude has the round (it plans it in itself), or the
-    draft cannot be baked (finished by hand, no render). Otherwise the page's change is the whole job."""
-    return bake_ready(folder, d) is not None
+    draft cannot be baked (finished by hand, no render). Otherwise the page's change is the whole job. A layer draft
+    takes texts, placed sounds and cuts by itself (layer=True for those); anything else on it still needs Claude."""
+    return bake_ready(folder, d) is not None or not layer and layer_of(folder, d) is not None
 
 
 def lay_captions(p, cap):
@@ -1347,30 +1390,33 @@ def live_plan(folder, d):
     """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
     the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
     smoothly (live_video), and each card's overrides.json key ("_key"). {"why": ...} when the page plays the MP4.
-    Made again only when one of its files changed: the page asks after every change it sees."""
-    why = live_ready(folder, d)
-    if why:
+    Made again only when one of its files changed: the page asks after every change it sees. A layer draft (layer_of):
+    layer_plan, always on its base_video, never on a video its layers were baked into (they would draw twice)."""
+    why, base = live_ready(folder, d), layer_of(folder, d)
+    if why and not base:
         return {"why": why}
-    plan_f = Path(d["plan"])
-    p = load(plan_f)
-    cap = captions_info(folder, plan_f)
+    plan_f = folder / "plan-layers.json" if base else Path(d["plan"])
+    p = layer_plan(folder, base) if base else load(plan_f)
+    cap = None if base else captions_info(folder, plan_f)
     video = live_video(folder, p, plan_f)
-    key = (json.dumps(cap, sort_keys=True), video, *((f.stat().st_mtime_ns if f.exists() else 0) for f in
-           (plan_f, folder / "texts.json", folder / "overrides.json", folder / "sounds.json")))
+    key = (json.dumps(cap, sort_keys=True), video, str(base), *((f.stat().st_mtime_ns if f.exists() else 0) for f in
+           (base or plan_f, folder / "texts.json", folder / "overrides.json", folder / "sounds.json")))
     hit = LIVE_PLAN.get(str(folder))
     if hit and hit[0] == key:
         return hit[1]
-    p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
     sys.path.insert(0, str(EDIT_PY.parent))
-    from preview import apply_overrides
-    p = apply_overrides(p, folder, plan_f.name)
+    if not base:
+        p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
+        from preview import apply_overrides
+        p = apply_overrides(p, folder, plan_f.name)
     from preview import laned, read_ov   # a muted Sounds lane leaves its placed sounds out, as plan.py placed_sounds does
     p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in laned(
         [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x], read_ov(folder), "snd", lambda x: x.get("id"))]
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
-    lay_captions(p, cap)
+    if not base:
+        lay_captions(p, cap)
     p["video"] = video
     for c in p["cards"]:
         c["_key"] = card_key(c)
@@ -1443,6 +1489,8 @@ def bake_now(folder, run=subprocess.run):
     if why:
         b.update(state="off", why=why)
         return why
+    if layer_of(folder, d):
+        return bake_layers(folder, layer_of(folder, d), b, run)
     plan_f = Path(d["plan"])
     p = load(plan_f)
     p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
@@ -1476,6 +1524,67 @@ def bake_now(folder, run=subprocess.run):
             save(folder / "review" / d["data"], new)
         d["baked"] = d.get("baked", 0) + 1
     update(rj, swap)
+    return bake_done(folder, b)
+
+
+def bake_layers(folder, base, b, run=subprocess.run):
+    """A layer draft's bake: its base MP4 with the Video row's cut pieces taken out (what comes after one moves earlier
+    by its length; a text inside one is clipped or dropped, a sound starting in one dropped), the typed texts and the
+    placed sounds over it, rendered by `edit.py render` from plan-layers.json into render-layers.mp4, kept beside the
+    round's video as <name>.layers.mp4 and made the round's video. With no layers the round's video is the base again."""
+    p = layer_plan(folder, base)
+    gone = p.pop("gone")
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from plan import placed_sounds
+    p = placed_sounds(p, folder)
+    out = base.with_name(base.stem + ".layers.mp4")
+    layered = bool(p["texts"] or p["sfx"] or gone)
+    if layered:
+        audio = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels", "-of", "csv=p=0",
+                                str(base)], capture_output=True, text=True).stdout.split()
+        if gone or audio == ["1"]:   # the cut pieces out of the base, sound and picture, so the render is the shorter video;
+            # mono sound copied to both sides at full level (Remotion and -ac 2 pan it 3 dB down: the bake came out quieter)
+            cut = folder / ".layers" / base.name
+            cut.parent.mkdir(exist_ok=True)
+            edges, fa = [0.0, *(x for g in gone for x in g)], bool(audio)   # the pieces kept, by trim and atrim: sample-exact
+            keep = [(edges[i], edges[i + 1] if i + 1 < len(edges) else None) for i in range(0, len(edges), 2)]   # (aselect drops whole
+            keep = [(a, z) for a, z in keep if (probed(base)["duration"] if z is None else z) - a > 0.02]   # audio frames: the
+            # sound ran 0.1 s late after a cut)
+            tr = lambda a, z: f"start={a}" + (f":end={z}" if z is not None else "")
+            fc = "".join(f"[0:v]trim={tr(a, z)},setpts=PTS-STARTPTS[v{i}];" + (f"[0:a]atrim={tr(a, z)},asetpts=PTS-STARTPTS[a{i}];" if fa else "")
+                         for i, (a, z) in enumerate(keep)) + "".join(f"[v{i}]" + (f"[a{i}]" if fa else "") for i in range(len(keep)))
+            af = "pan=stereo|c0=c0|c1=c0" if audio == ["1"] else "anull"
+            fc += f"concat=n={len(keep)}:v=1:a={int(fa)}[v]" + (f"[c];[c]{af}[a]" if fa else "")
+            r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(base), *(
+                ["-filter_complex", fc, "-map", "[v]", *(["-map", "[a]"] if fa else []), "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+                 "-g", "15", "-pix_fmt", "yuv420p"] if gone else ["-c:v", "copy", "-af", af]),
+                *(["-c:a", "aac", "-b:a", "192k"] if fa else []), str(cut)], capture_output=True, text=True)
+            if r.returncode:
+                b.update(state="failed", why=(r.stderr.strip().splitlines() or ["the cut stopped"])[-1])
+                return b["why"]
+            m = probed(cut)
+            p.update(video=cut.relative_to(folder).as_posix(), durationInFrames=max(1, round(m["duration"] * p["fps"])))
+            texts = [{**x, "start": on_cut(x["start"], gone)[0], "end": on_cut(x["end"], gone)[0]} for x in p["texts"]]
+            p["texts"] = [x for x in texts if x["end"] - x["start"] >= 0.05]
+            p["sfx"] = [{**c, "t": on_cut(c["t"], gone)[0]} for c in p["sfx"] if not on_cut(c["t"], gone)[1]]
+        save(folder / "plan-layers.json", p)
+        r = run([sys.executable, str(EDIT_PY), "render", str(folder), "--plan", "plan-layers.json"], capture_output=True, text=True)
+        if r.returncode:
+            b.update(state="failed", why=((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1])
+            return b["why"]
+        clone(folder / "render-layers.mp4", out)
+
+    def swap(d):
+        if d.get("sent") or d["stage"] != "edit" or Path(d.get("base_video") or d["video"]) != base:   # Claude took it, or a new round
+            return
+        d.update(base_video=str(base), video=str(out if layered else base))
+        d["baked"] = d.get("baked", 0) + 1
+    update(Path(folder) / "review.json", swap)
+    return bake_done(folder, b)
+
+
+def bake_done(folder, b):
+    """The bake is in: another starts when a change came while it ran."""
     with BAKE_LOCK:
         b["state"] = "done"
         if b.get("again"):
@@ -2265,6 +2374,7 @@ def make_handler(folder, token):
                 d["media"] = assets.media(folder, [u for u in used if isinstance(u, str)]) if d.get("stage") == "edit" else []
                 b = BAKE.get(str(folder)) or {}
                 d["bake"] = {"state": b.get("state"), "why": b.get("why")}   # putting the texts in the video
+                d["layer"] = layer_of(folder, d) is not None   # plays base_video with the hand edits as layers (layer_plan)
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
                 d["page"] = live.page_version(HTML, HTML.with_name("ask.js"))   # the tab reloads when this changes
@@ -2282,6 +2392,9 @@ def make_handler(folder, token):
                     d["style_sample"] = False
                 if isinstance(d.get("learn"), dict):   # "Teach <style>": its name now, even renamed after the approve
                     d["learn"]["style"] = d["style_name"]
+                    if d["learn"].get("state") == "reading" and start_learn_job(folder, stuck=True):   # stuck: nobody came
+                        d["learn"]["job"] = {"at": time.time()}
+                d["teach"] = teach_state(folder)   # Teach anywhere: where a rule can go, at every stage and round
                 d["assets"] = assets.load(folder)   # "Anything to add?": the images and links added to this video
                 try:
                     d["skills"] = video_skills(folder)   # the skills this video ran, runs now and will run
@@ -2443,7 +2556,7 @@ def make_handler(folder, token):
                     self.close_connection = True
                     return self.send(400, {"error": str(e)})
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", f"add {x['sound']} at {fmt(x['t'])} "
-                                          f"for {x['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"])
+                                          f"for {x['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"], layer=True)
             try:
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             except ValueError:
@@ -2495,6 +2608,23 @@ def make_handler(folder, token):
                 except (TypeError, ValueError):
                     msg = None
                 return self.send(200, {"msg": msg}) if msg else self.send(409, {"error": "nothing to undo"})
+            if path == "/teach/rule":   # Teach anywhere: one rule saved now, no Claude, with a receipt Undo takes out
+                return self.send(*teach_rule(folder, body))
+            if path == "/teach/style":   # a new style from this video, at any stage
+                try:
+                    ns_ = new_style_from(folder, body.get("name"))
+                except ValueError as e:
+                    return self.send(409, {"error": str(e) or "That name is taken. Pick another."})
+                teach_choices(folder, fresh=True)
+                return self.send(200, {"ok": True, "id": ns_["id"], "name": ns_["name"]})
+            if path == "/learn" and body.get("retry"):   # Claude could not read the notes: Try again
+                def rt(d):
+                    lr = d.get("learn") or {}
+                    if lr.get("state") != "failed":
+                        return False
+                    lr.update(state="reading", why=None, job=None)
+                    return True
+                return self.send(200, {"ok": start_learn_job(folder)}) if update(rj, rt) else self.send(409, {"error": "nothing to retry"})
             if path == "/learn":   # the learn panel: the ticked rules and where each goes, or Not now. `wait` hands them on
                 def lc(d):
                     lr = d.get("learn") or {}
@@ -2704,7 +2834,7 @@ def make_handler(folder, token):
                 log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}, Path(x["sound"]).stem)
                 line = f"add {Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
-                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"])
+                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"], layer=True)
             if path == "/sfx/split":   # the Sounds row: a song split at a moment (Cmd+B), two clips of the same file
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -2724,7 +2854,7 @@ def make_handler(folder, token):
                 save(folder / "sounds.json", {"items": items + [y]})
                 log_edit(folder, "sfx.split", x["id"], None, {"at": at, "new": y["id"]}, Path(x["sound"]).stem)
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", f"add {Path(x['sound']).stem} at {fmt(y['t'])} "
-                                          f"for {y['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=y["id"])
+                                          f"for {y['dur']:.1f} s", "Plan again so they are in (sounds.json and overrides.json sfx).", key=y["id"], layer=True)
             if path in ("/sfx/add", "/sfx/remove"):   # the timeline's Sounds row: put a library sound at a moment, or take one out
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -2770,7 +2900,8 @@ def make_handler(folder, token):
                 except (KeyError, TypeError, ValueError):
                     return self.send(400, {"error": "sfx/add takes t and a library sound; sfx/remove takes t and placed or src"})
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
-                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=nk, drop=nd)
+                                          "Plan again so they are in (sounds.json and overrides.json sfx).", key=nk, drop=nd,
+                                          layer=not nk.startswith("draft@"))   # one the draft's own MP4 has needs Claude
             if path == "/captions/text":   # the Captions panel's lines or the timeline: one caption line retyped, or deleted ("")
                 d = load(rj)
                 last = d["events"][-1]["type"] if d["events"] else None
@@ -2949,6 +3080,10 @@ def make_handler(folder, token):
                 for g in was:
                     if g not in cuts["gone"]:
                         log_edit(folder, "cut.restore", f"{g[0]:.2f}", g, None)
+                if layer_of(folder, d) and not tell_claude(folder, d, True):   # a layer draft: the bake cuts its MP4 itself
+                    self.drop_note("cuts")
+                    bake_soon(folder)
+                    return self.send(200, {"ok": True, "cuts": cuts})
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
                 text = cuts_text(d.get("transcript"), cuts["gone"])
@@ -3045,7 +3180,7 @@ def make_handler(folder, token):
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
                         d["learn"] = {"state": "reading" if session_notes(d) or pats else "none", "style": style, "styles": choices,
-                                      "skills": skills, "edits": pats}
+                                      "skills": skills, "edits": pats, "at": time.time()}
                     elif body["type"] == "approve" and d["stage"] == "cut":
                         prepared_steps(folder, d)
                     return True
@@ -3053,6 +3188,8 @@ def make_handler(folder, token):
                     return self.send(409, {"error": "Claude is applying your transcript changes."})
                 if body["type"] == "send" and load(rj).get("stills"):   # notes on the stills: that render is not the one
                     drop_spec(folder)
+                if body["type"] == "approve" and not busy(folder):   # no Claude to read the notes: cooked. reads them itself
+                    start_learn_job(folder)
                 with contextlib.suppress(Exception):   # the notes are saved either way
                     reopen(folder, rj)   # no Claude on this edit any more: a new one takes the notes
                 return self.send(200, {})
@@ -3069,11 +3206,12 @@ def make_handler(folder, token):
                                                                   and c["round"] >= x["round"] and editable(x, c))]
             update(rj, f)
 
-        def timeline_note(self, k, title, line, tail, key=None, drop=False):
+        def timeline_note(self, k, title, line, tail, key=None, drop=False, layer=False):
             """One note per round for the timeline's changes of a kind, one line per thing changed (key): a later
-            change replaces its line, and drop takes it out (a sound added then removed leaves nothing)."""
+            change replaces its line, and drop takes it out (a sound added then removed leaves nothing). layer: a
+            layer draft takes this change by itself (tell_claude)."""
             d = load(rj)
-            if not tell_claude(folder, d):   # it just updates: the player has it at once, the bake puts it in the video
+            if not tell_claude(folder, d, layer):   # it just updates: the player has it at once, the bake puts it in the video
                 self.drop_note(k)
                 bake_soon(folder)
                 return self.send(200, {"ok": True})
@@ -3385,6 +3523,7 @@ def cmd_start(a, folder):
         d["events"].append({"type": "send", "stage": d["stage"], "round": 0, "at": now(), "handled": True, "raw": True})
     # the raw clip is a source, never rewritten: played where it is, not copied (it can be gigabytes)
     d["video"] = d["video"] if raw else keep(folder, a.video, d["stage"], d["round"])
+    d.pop("base_video", None)
     d.update(src=None if raw else str(Path(a.video).resolve()), snap=None if raw else snapshot(folder, d["stage"], d["round"]),
              changed=list(getattr(a, "changed", None) or []), back_to=None)
     d["data"] = round_data(folder, d["video"], d["stage"], d["round"], d["plan"])
@@ -3416,6 +3555,7 @@ def open_round(folder, video, stage=None, transcript=None, plan=None, note="", s
         else:
             d["round"] += 1
         d["video"] = keep(folder, video, d["stage"], d["round"])
+        d.pop("base_video", None)   # Claude's new video: the next layers go on it (bake_layers)
         d["vertical"] = probe(video)
         if transcript:
             d["transcript"] = str(Path(transcript).resolve())
@@ -4076,6 +4216,128 @@ def skill_choices():
         return []
 
 
+_TEACH = {}   # folder -> (at, styles, skills): /state asks every poll, the skill folders are read at most every 15 s
+
+
+def teach_choices(folder, fresh=False):
+    """The styles (style_choices) and skills (skill_choices) a rule can go to, at any stage."""
+    k = str(folder)
+    if fresh or time.time() - _TEACH.get(k, (0,))[0] > 15:
+        _TEACH[k] = (time.time(), style_choices(folder), skill_choices())
+    return _TEACH[k][1], _TEACH[k][2]
+
+
+def teach_state(folder):
+    """/state "teach": where a rule can be saved now, {"targets": [{id, name, kind, here?, mine?, about?}], "style"}."""
+    styles, skills = teach_choices(folder)
+    t = [{"id": x["id"], "name": x["name"], "kind": "style", **{k: True for k in ("here", "mine") if x.get(k)}} for x in styles]
+    t += [{"id": x["id"], "name": x["name"], "kind": "skill", **({"about": x["about"]} if x.get("about") else {})} for x in skills]
+    return {"targets": t, "style": style_label(folder)}
+
+
+SECTION_WORDS = (("captions", r"\b(captions?|fonts?|words?)\b"), ("cut", r"\b(cut|pause|retake|jump)"),
+                 ("sound", r"\b(sound|music|sfx|song|volume)"), ("layout", r"\b(layout|position|safe|centre|center|size|box)"))
+
+
+def guess_section(text):
+    """A rule's section from its words (POST /teach/rule with no section): visuals when nothing matches."""
+    return next((sec for sec, rx in SECTION_WORDS if re.search(rx, text, re.I)), "visuals")
+
+
+def teach_rule(folder, body):
+    """POST /teach/rule: one rule saved now, no Claude, with a receipt Undo takes out again. (code, reply)."""
+    text = " ".join(str(body.get("text") or "").split()).rstrip(".")
+    if not text or len(text) > 300:
+        return 400, {"error": "Write the rule in one line."}
+    sec = str(body.get("section") or "").lower() or guess_section(text)
+    st = body.get("set") or None   # a taste setting, only when the caller knows it maps (key.path=value)
+    if sec not in SECTIONS or st is not None and (not isinstance(st, str) or "=" not in st):
+        return 400, {"error": f"section is one of {', '.join(SECTIONS)}"}
+    rj = folder / "review.json"
+    note = body.get("note")
+    if note is not None and not any(c["id"] == note for c in load(rj)["comments"]):
+        return 400, {"error": "That note is gone."}
+    styles, skills = teach_choices(folder)
+    to = body.get("to")   # "" is My style; left out, this video's style
+    if to == "new":
+        try:
+            dest = new_style_from(folder, body.get("name"))
+        except ValueError as e:
+            return 409, {"error": str(e) or "That name is taken. Pick another."}
+        teach_choices(folder, fresh=True)
+    else:
+        dest = next((x for x in styles + skills if x["id"] == str(to)), None) if to is not None else next((x for x in styles if x.get("here")), None)
+        if not dest:
+            return 400, {"error": "Pick a style or a skill from the list."}
+    d = load(rj)
+    try:
+        x = save_rule(folder, {"rule": text, "section": sec, "set": st}, dest, f"from a note on {d.get('name') or folder.name}")
+    except SystemExit as e:
+        return 409, {"error": str(e)}
+
+    def f(d):
+        r = receipt(d, *x, note=note, src="teach")
+        for c in d["comments"]:
+            if c["id"] == note:   # learn_prompt reads it as saved: the final approve does not offer it again
+                c["taste"], c["receipt"] = x[4] if x[3] == "settings" else "skill", r["id"]
+        return r
+    r = update(rj, f)
+    return 200, {"ok": True, "msg": f"Saved to {x[0]}: {x[1]}.", "receipt": r["id"], "label": x[0], "status": x[2]}
+
+
+LEARN_STUCK_S, LEARN_JOB_S = 600, 1800   # reading this long with nobody listening: cooked. reads it; a job's time
+
+
+def start_learn_job(folder, stuck=False):
+    """No Claude for the final approve's learn step: cooked. runs it itself (learn_job) in its own process. stuck: only a
+    draft "reading" for LEARN_STUCK_S with nothing listening. Never twice within LEARN_JOB_S. True when one started."""
+    rj = folder / "review.json"
+    if listening(folder) or not rj.exists():
+        return False
+
+    def f(d):
+        lr = d.get("learn") or {}
+        if lr.get("state") != "reading" or time.time() - (lr.get("job") or {}).get("at", 0) < LEARN_JOB_S \
+                or stuck and time.time() - lr.get("at", 0) < LEARN_STUCK_S:
+            return False
+        lr["job"] = {"at": time.time()}
+        return True
+    if not update(rj, f):
+        return False
+    subprocess.Popen([sys.executable, str(Path(__file__).resolve()), str(folder), "learn", "--job"], cwd=str(folder),
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    return True
+
+
+def learn_job(folder, cli=None):
+    """The learn step on the user's Claude Code CLI, headless (`claude -p`, the plan allowance, never an API key), in the
+    library: it posts the rules with learn --propose, so the page reaches "proposed" by itself. No CLI, or it stopped
+    before posting: state "failed" with why, and the page offers Try again. cli: $AI_EDITOR_CLAUDE, else `claude`."""
+    import launcher
+    rj = folder / "review.json"
+    cli = os.environ.get("AI_EDITOR_CLAUDE") or shutil.which("claude") if cli is None else cli
+    why = None
+    if (load(rj).get("learn") or {}).get("state") != "reading":
+        return
+    if not cli:
+        why = "Claude Code is not installed here, so Claude could not read your notes."
+    else:
+        try:
+            cmd = launcher.plan(claude=cli, prompt=learn_prompt(folder, load(rj), job=True))
+            with open(folder / "review" / "learn-job.log", "w", encoding="utf-8") as log:
+                p = subprocess.run(cmd[:-1] + ["-p", cmd[-1]], cwd=str(folder.parent.parent), stdin=subprocess.DEVNULL,
+                                   stdout=log, stderr=subprocess.STDOUT, timeout=LEARN_JOB_S - 60)
+            why = None if p.returncode == 0 else f"Claude stopped with an error (exit {p.returncode})."
+        except Exception as e:   # noqa: BLE001  never left on "reading": the page offers Try again
+            why = "Claude took too long reading your notes." if isinstance(e, subprocess.TimeoutExpired) else f"Claude Code did not start: {e}"
+
+    def f(d):
+        lr = d.get("learn") or {}
+        if lr.get("state") == "reading":   # it never posted: say so, never an empty list
+            lr.update(state="failed", why=why or "Claude finished without posting any rules.")
+    update(rj, f)
+
+
 def style_label(folder):
     """What the learn panel calls the style the edit used: its name on the home page, else My style."""
     try:
@@ -4101,11 +4363,15 @@ def disposition(name):
     return f"attachment; filename=\"{plain}\"; filename*=UTF-8''{quote(name)}"
 
 
-def learn_prompt(folder, d):
-    """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes."""
+def learn_prompt(folder, d, job=False):
+    """The final approve: Claude turns the whole session's notes into rules the page offers with checkboxes.
+    job: the prompt for learn_job's headless Claude (no chat, no `wait`)."""
     if d["learn"]["state"] == "none":
         return "LEARN: no notes or edits this session, so nothing to learn. The page says so; say nothing about it."
-    st = d["learn"]["style"]
+    if not job and d["learn"].get("job"):
+        return ("LEARN: cooked. is reading this session's notes on its own and the page offers the rules. Say nothing about "
+                "it; if `wait` returns with the user's pick, save it as it says.")
+    st = d["learn"].get("style") or style_label(folder)
     lines = [f"LEARN: the video is approved. Turn this session's notes, your replies and the user's hands-on edits (below) "
              f"into at most 8 one-line rules for how {st} edits next time, e.g. \"Captions one size smaller\", \"Fewer zooms in the "
              f"first 5 s\". Leave out one-off fixes (a word cut at 0:12) and notes already saved as rules. Post them "
@@ -4113,8 +4379,10 @@ def learn_prompt(folder, d):
              f"  python3 {Path(__file__).resolve()} {folder} learn --propose "
              f"'[{{\"rule\": \"...\", \"section\": \"cut|captions|visuals|sound|layout\", \"set\": \"captions.size_pct=4.5\"}}]'",
              "  (or a path to a .json file holding that list). \"set\" only when a taste setting maps (the taste "
-             "skill's table). Then run `wait` again: it returns with the rules the user ticked. The skill-improver "
-             "skill has the steps (one-offs stay with the video, sharpen an old rule rather than add a twin).",
+             "skill's table). " + ("You run on your own with no chat: post them, then stop. Never run `wait`. " if job else
+             "Then run `wait` again: it returns with the rules the user ticked. Also use what the user told you in this chat "
+             "about the edit. ") + "The skill-improver skill has the steps (one-offs stay with the video, sharpen an old rule "
+             "rather than add a twin).",
              "Give every rule a \"to\": where it belongs, one id from the list below. A rule about this kind of video "
              "goes to this video's style; a rule for every video to My style; a rule about what one of the user's skills "
              "does (trial reels, a talking head, a thumbnail) to that skill. The page shows your pick; the user can change it."]
@@ -4142,7 +4410,7 @@ def learn_prompt(folder, d):
                      "exactly, so the next draft changes:")
         lines += [f"  - {x['line']} [{x['section']}]" + (f" [set {x['set']}]" if x.get("set") else "") for x in lr["edits"]]
     for c in sorted(session_notes(d), key=lambda c: (c["stage"] != "cut", c["round"], c["t"])):
-        saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else ""
+        saved = f" [saved as rule {c['taste']}]" if isinstance(c.get("taste"), int) else " [saved as rule in a skill]" if c.get("taste") == "skill" else ""
         keep = " [the user asked to keep this as a rule: propose it]" if c.get("keep") and not saved else ""
         lines.append(f"#{c['id']} {stage_name(c['stage'])} r{c['round']}: {c['text']}"
                      + (f" -> reply: {c['reply']}" if c.get("reply") else "") + saved + keep)
@@ -4198,35 +4466,36 @@ def learn_propose(folder, raw):
     print(f"{len(out)} rule{'s' if len(out) != 1 else ''} on the page" + ("; run `wait` for the user's pick" if out else ""))
 
 
+def save_rule(folder, r, dest, why):
+    """One rule into its place (learn_done, POST /teach/rule): a skill's SKILL.md (skillrules.add) for a skill pick, or
+    this video's style when it runs a skill; else a style's overrides, rules and skill (styleskill.learn).
+    r: {rule, section, set?, why?, replace?}. Returns (label, rule, status, kind, ref) for receipt(). SystemExit when
+    the skill is not in the user's skill folders."""
+    from ai_editor import skillrules, styleskill, taste
+    sp0 = edit_style(folder)
+    tg = skillrules.target(folder)
+    if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
+        md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], shown_style(sp0))
+        if not md:
+            sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
+        status, line = skillrules.add(md, r["rule"], r.get("why") or why, r.get("replace"), edit=str(folder))
+        return label, skillrules.rule_of(line), status, "skill", md
+    sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
+    setting, _, raw = (r.get("set") or "").partition("=")
+    status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
+                                 edit=folder, source="review")
+    return shown_style(sp0) if dest.get("here") else dest["name"], x["rule"], status, "settings", x["id"]
+
+
 def learn_done(folder, summary):
     """Save the ticked rules into the edit's style (one creator style, else My style) and show it on the page."""
-    from ai_editor import styleskill, taste
     lr = load(folder / "review.json").get("learn") or {}
     if lr.get("state") != "chosen":
         sys.exit("nothing ticked to save: run `wait` for the user's pick first")
-    sp0 = edit_style(folder)
-    style0 = shown_style(sp0)
-    from ai_editor import skillrules
-    tg = skillrules.target(folder)
     saved, names = [], []   # (style label, rule, status, kind, ref) for the receipts; every place saved to
     for r in (lr["rules"][i] for i in lr["chosen"]):
-        dest = r.get("dest") or {"here": True}
-        if dest.get("skill") or dest.get("here") and tg["kind"] == "skill":   # into a skill's own SKILL.md
-            md, label = (dest["path"], dest["name"] + " skill") if dest.get("skill") else (tg["path"], style0)
-            if not md:
-                sys.exit(f"the {tg['skill']} skill is not in your skill folders; nothing saved")
-            status, line = skillrules.add(md, r["rule"], r.get("why") or f"from the notes on {folder.name}",
-                                          r.get("replace"), edit=str(folder))
-            saved.append((label, skillrules.rule_of(line), status, "skill", md))
-            print(f"{status}: {line} ({md})")
-        else:   # a style: its overrides, rules and skill (styleskill.learn)
-            sp = sp0 if dest.get("here") else Path(dest["id"]) if dest.get("id") else None
-            label = style0 if dest.get("here") else dest["name"]
-            setting, _, raw = (r.get("set") or "").partition("=")
-            status, x = styleskill.learn(sp, r["section"], r["rule"], setting or None, taste.parse(raw) if setting else None,
-                                         edit=folder, source="review")
-            saved.append((label, x["rule"], status, "settings", x["id"]))
-            print(f"{status} rule #{x['id']} {x['section']}: {x['rule']} (skill {styleskill.name(sp)})")
+        saved.append(save_rule(folder, r, r.get("dest") or {"here": True}, f"from the notes on {folder.name}"))
+        print(f"{saved[-1][2]}: {saved[-1][1]} ({saved[-1][0]})")
         if saved[-1][0] not in names:
             names.append(saved[-1][0])
     style = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
@@ -4505,9 +4774,10 @@ def demo_bake(tmp):
     d = load(f / "review.json")
     stamp = lambda: (f / "render.stamp.json").write_text(json.dumps({"size": (f / "render.mp4").stat().st_size,
                                                                      "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
-    assert bake_ready(f, d) == "the render was finished by hand", "no stamp: never patched over"
-    assert bake(f) == "the render was finished by hand" and BAKE[str(f)]["state"] == "off"
+    assert live_ready(f, d) == "the render was finished by hand" and layer_of(f, d) == Path(d["video"]), "no stamp: never patched over"
+    assert bake_ready(f, d) is None and not tell_claude(f, d, True) and tell_claude(f, d), "its layers bake themselves, a card edit is a note"
     stamp()
+    assert layer_of(f, d) is None and not tell_claude(f, d), "a plan draft: as before"
     assert baked_texts(f, d) == [] and bake_ready(f, d) is None, bake_ready(f, d)
     ran = []
 
@@ -4566,7 +4836,7 @@ def demo_live(tmp):
     save(f / "review.json", {"stage": "edit", "round": 1, "sent": True, "stills": False, "events": [], "comments": [],
                              "plan": str(f / "plan.json"), "snap": "snap-edit1", "video": str(f / "review" / "v-edit1.mp4")})
     d = load(f / "review.json")
-    assert live_plan(f, d) == {"why": "the render was finished by hand"}, "a render finished by hand plays as the MP4"
+    assert live_plan(f, d)["layer"] is True, "a render finished by hand: its MP4 with the hand edits as layers"
     (f / "render.stamp.json").write_text(json.dumps({"size": (f / "render.mp4").stat().st_size,
                                                      "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
     assert live_ready(f, d) is None and bake_ready(f, d) == "Claude has this draft", "live while Claude has it; only the bake waits"
@@ -4650,6 +4920,76 @@ def demo_live(tmp):
     srv.server_close()
 
 
+def demo_layers(tmp):
+    """A layer draft (a finished MP4 with no plan): /live/plan plays its base with the typed texts, placed sounds and cut
+    pieces as layers; the bake cuts the base, shifts the layers and renders them (faked here) into <name>.layers.mp4;
+    base_video stays the untouched MP4 until Claude sends a new round."""
+    f = tmp / "layers"
+    (f / "review").mkdir(parents=True)
+    (f / "audio").mkdir()
+    ff = lambda *a: subprocess.run(["ffmpeg", "-v", "error", "-y", *a], check=True)
+    ff("-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=4", "-f", "lavfi", "-i", "sine=duration=4", "-shortest", "-c:v", "libx264",
+       "-pix_fmt", "yuv420p", str(f / "review" / "v-edit3.mp4"))
+    ff("-f", "lavfi", "-i", "sine=f=880:duration=1", str(f / "audio" / "s.wav"))
+    base = f / "review" / "v-edit3.mp4"
+    save(f / "review.json", {"stage": "edit", "round": 3, "sent": False, "stills": False, "events": [], "comments": [],
+                             "video": str(base)})
+    d = load(f / "review.json")
+    assert live_ready(f, d) == "no plan" and layer_of(f, d) == base and bake_ready(f, d) is None
+    save(f / "texts.json", {"items": [{"id": "t1", "text": "hi", "style": "box", "start": 2.5, "end": 3.5, "x_pct": 50, "y_pct": 30},
+                                      {"id": "t2", "text": "in", "style": "box", "start": 1.1, "end": 1.4, "x_pct": 50, "y_pct": 60}]})
+    save(f / "sounds.json", {"items": [{"id": "a1", "t": 2.0, "sound": "s.wav", "kind": "clip", "in": 0, "dur": 0.5, "vol": 0.5},
+                                       {"id": "a2", "t": 1.2, "sound": "s.wav", "kind": "clip", "in": 0, "dur": 0.5, "vol": 1}]})
+    save(f / "overrides.json", {"cuts": {"splits": [1, 1.5], "gone": [[1.0, 1.5]]}})
+    lp = live_plan(f, d)
+    assert set(lp) == {"video", "width", "height", "fps", "durationInFrames", "layer", "captions", "zooms", "cards", "texts", "sfx", "gone"}, lp
+    assert (lp["layer"], lp["cards"], lp["zooms"], lp["gone"], lp["width"], lp["height"], lp["durationInFrames"]) == (
+        True, [], [], [[1.0, 1.5]], 64, 36, 120), lp
+    assert [x["text"] for x in lp["texts"]] == ["hi", "in"] and [c["placed"] for c in lp["sfx"]] == ["a1", "a2"], lp
+    assert lp["video"] in ("review/v-edit3.mp4", ".live/review/v-edit3.mp4") and lp["sfx"][0]["src"] == "/audio/s.wav"
+    ran = []
+
+    def fake(cmd, **k):   # edit.py render: the plan's own video as the render
+        ran.append(cmd[2:])
+        shutil.copy2(f / load(f / "plan-layers.json")["video"], f / "render-layers.mp4")
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    assert bake(f, run=fake) is None and ran == [["render", str(f), "--plan", "plan-layers.json"]], ran
+    p, d = load(f / "plan-layers.json"), load(f / "review.json")
+    assert p["video"] == ".layers/v-edit3.mp4" and abs(duration(f / p["video"]) - 3.5) < 0.1 and p["durationInFrames"] in (104, 105, 106), p
+    a = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels,duration", "-of", "csv=p=0",
+                        str(f / p["video"])], capture_output=True, text=True).stdout.split(",")
+    assert a[0] == "2" and abs(float(a[1]) - 3.5) < 0.05, ("the sound in sync after the cut, mono made stereo", a)
+    assert [(x["text"], x["start"], x["end"]) for x in p["texts"]] == [("hi", 2.0, 3.0)], "after the piece: 0.5 s earlier; inside it: dropped"
+    assert [c["placed"] for c in p["sfx"]] == ["a1"] and abs(p["sfx"][0]["t"] - 1.5) < 0.04 and p["sfx"][0]["src"].startswith(".sfx/"), p["sfx"]
+    assert (d["video"], d["base_video"], d["baked"]) == (str(f / "review" / "v-edit3.layers.mp4"), str(base), 1), d
+    assert layer_of(f, d) == base and live_plan(f, d)["video"].endswith("review/v-edit3.mp4"), "the page plays the base, never the bake"
+    assert filecmp.cmp(base, f / "review" / "v-edit3.mp4") and Path(d["video"]).is_file()
+    for x in ("texts.json", "sounds.json", "overrides.json"):   # no layers left: the round's video is the base again
+        (f / x).unlink()
+    assert bake(f, run=fake) is None and len(ran) == 1 and load(f / "review.json")["video"] == str(base)
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))   # the page's routes: no note for Claude, a bake
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    post = lambda p, b: json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"http://127.0.0.1:{srv.server_address[1]}{p}?t=tok", json.dumps(b).encode(), method="POST")).read())
+    save(f / "sounds.json", {"items": [{"id": "a1", "t": 2.0, "sound": "s.wav", "kind": "clip", "in": 0, "dur": 0.5, "vol": 0.5}]})
+    assert post("/text/add", {"text": "yo", "style": "plain", "x_pct": 50, "y_pct": 50, "start": 1, "end": 2})["ok"]
+    assert post("/sfx/move", {"placed": "a1", "t": 2.5, "in": 0, "dur": 0.5, "vol": 0.4}) == {"ok": True}
+    assert post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]]})["cuts"]["gone"] == [[1.0, 2.0]]
+    st = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/state?t=tok").read())
+    assert st["layer"] is True and st["comments"] == [] and st["bake"]["state"] == "waiting", st
+    BAKE[str(f)]["timer"].cancel()
+    srv.shutdown()
+    srv.server_close()
+    update(f / "review.json", lambda d: d.update(sent=True))
+    assert bake_ready(f, load(f / "review.json")) == "Claude has this draft" and tell_claude(f, load(f / "review.json"), True)
+    update(f / "review.json", lambda d: d.update(sent=False, base_video=str(base), video=str(f / "review" / "v-edit3.layers.mp4")))
+    vs = ui().get("videos")
+    open_round(f, str(base))
+    set_ui(videos=vs)   # not one of the user's first videos (the main demo counts those)
+    d = load(f / "review.json")
+    assert "base_video" not in d and d["video"] == str(f / "review" / "v-edit4.mp4") and layer_of(f, d) == Path(d["video"]), d
+
+
 def demo_learn_edits(tmp):
     """edit_patterns on fixed events: alike edits and changed look settings become lines, one-offs do not."""
     E = lambda change, target, frm, to, what="": {"source": "review", "change": change, "target": target, "from": frm, "to": to, "what": what}
@@ -4689,16 +5029,119 @@ def demo_learn_edits(tmp):
     assert [(e["change"], e["stage"], e["round"], e["from"], e["to"]) for e in edit_events(f)] == [("captions.size_pct", "edit", 2, 3.6, 4.3)]
 
 
+def demo_teach(folder, tmp, get, post, c3, tsk):
+    """Teach anywhere: /state "teach" at any stage, POST /teach/rule (a skill, My style, a new style; a note marked
+    saved; Undo), POST /teach/style, and the learn job that reads the notes when no Claude is on the video."""
+    from ai_editor import taste
+    rj = folder / "review.json"
+    teach_choices(folder, fresh=True)
+    te = json.loads(get("/state").read())["teach"]
+    assert te["style"] == "@alice" and te["targets"][0]["kind"] == "style" and te["targets"][0].get("here"), te
+    assert {"id": "skill:trial-notes", "name": "Trial notes", "kind": "skill", "about": "trial reels of a posted reel"} in te["targets"], te
+    assert [guess_section(t) for t in ("Captions one size smaller", "Shorter pauses", "Music quieter", "Center the logo", "More b-roll")] \
+        == ["captions", "cut", "sound", "layout", "visuals"]
+    nc = len(load(rj)["comments"])
+    for bad, code in (({"text": " "}, 400), ({"text": "x", "to": "/no/style.json"}, 400), ({"text": "x", "section": "colour"}, 400),
+                      ({"text": "x", "note": 99999}, 400), ({"text": "x", "to": "new", "name": " "}, 409)):
+        try:
+            post("/teach/rule", bad)
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == code, (bad, e.code)
+    tr = post("/teach/rule", {"text": "Hooks under 3 s.", "to": "skill:trial-notes", "note": c3["id"]})
+    assert tr == {"ok": True, "msg": "Saved to Trial notes skill: Hooks under 3 s.", "receipt": tr["receipt"], "label": "Trial notes skill",
+                  "status": "added"}, tr
+    assert "- Hooks under 3 s. Why: from a note on " in tsk.read_text(encoding="utf-8"), tsk.read_text(encoding="utf-8")
+    d = load(rj)
+    c = next(c for c in d["comments"] if c["id"] == c3["id"])
+    assert c["taste"] == "skill" and c["receipt"] == tr["receipt"] and len(d["comments"]) == nc, c   # no note for Claude
+    assert f"#{c3['id']} " in learn_prompt(folder, d) and "[saved as rule in a skill]" in learn_prompt(folder, d)
+    assert post("/undo", {"id": tr["receipt"]})["msg"] == "Removed from Trial notes skill."
+    assert "Hooks under 3 s" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
+    mine = next(x for x in te["targets"] if x.get("mine"))
+    tm = post("/teach/rule", {"text": "Fewer zooms in the first 5 s", "to": mine["id"]})
+    r = next(r for r in taste.load_rules() if r["rule"] == "Fewer zooms in the first 5 s")
+    assert tm["label"] == "My style" and r["section"] == "Visuals" and r["scope"] == "all" and tm["receipt"] == load(rj)["receipts"][-1]["id"], tm
+    assert post("/undo", {"id": tm["receipt"]})["msg"] == "Removed from My style." and not any(
+        x["rule"] == "Fewer zooms in the first 5 s" for x in taste.load_rules())
+    old_lib = os.environ.get("AI_EDITOR_LIBRARY")
+    os.environ["AI_EDITOR_LIBRARY"] = str(tmp / "lib")
+    try:   # "new": a style made from this video, the rule in it; /teach/style: a style now, any stage; both listed at once
+        tn = post("/teach/rule", {"text": "Big yellow captions", "to": "new", "name": "Shorts"})
+        r = next(r for r in taste.load_rules() if r["rule"] == "Big yellow captions")
+        assert tn["label"] == "Shorts" and r["section"] == "Captions" and r["scope"] == "style:own-shorts", (tn, r)
+        ts2 = post("/teach/style", {"name": "Podcasts"})
+        assert ts2["ok"] and ts2["name"] == "Podcasts" and Path(ts2["id"]).is_file(), ts2
+        names = [x["name"] for x in json.loads(get("/state").read())["teach"]["targets"]]
+        assert "Shorts" in names and "Podcasts" in names, names
+        try:
+            post("/teach/style", {"name": ""})
+            raise AssertionError("a nameless style")
+        except urllib.error.HTTPError as e:
+            assert e.code == 409
+    finally:
+        os.environ.pop("AI_EDITOR_LIBRARY", None) if old_lib is None else os.environ.update(AI_EDITOR_LIBRARY=old_lib)
+    # no Claude on the video: cooked. runs the learn step on the Claude Code CLI (a stub here), headless, in the library
+    fake, argf = tmp / "bin" / "claude", tmp / "bin" / "args.json"
+    fake.parent.mkdir(exist_ok=True)
+    fake.write_text(f"#!{sys.executable}\nimport json, os, subprocess, sys\n"
+                    f"open({str(argf)!r}, 'w').write(json.dumps({{'argv': sys.argv[1:], 'cwd': os.getcwd()}}))\n"
+                    f"subprocess.run([sys.executable, {str(Path(__file__).resolve())!r}, {str(folder)!r}, 'learn', '--propose', "
+                    f"json.dumps([{{'rule': 'Shorter hooks', 'section': 'cut'}}])], check=True, stdout=subprocess.DEVNULL)\n", encoding="utf-8")
+    fake.chmod(0o755)
+    reading = lambda **k: update(rj, lambda d: d["learn"].update(state="reading", rules=[], job=None, why=None, **k))
+    reading()
+    learn_job(folder, cli=str(fake))
+    lr, a = load(rj)["learn"], json.loads(argf.read_text(encoding="utf-8"))
+    assert lr["state"] == "proposed" and [x["rule"] for x in lr["rules"]] == ["Shorter hooks"], lr
+    assert a["argv"][-2] == "-p" and "You run on your own with no chat" in a["argv"][-1] and "learn --propose" in a["argv"][-1], a
+    assert "Also use what the user told you in this chat" not in a["argv"][-1] and Path(a["cwd"]).resolve() == folder.parent.parent.resolve(), a
+    assert "Also use what the user told you in this chat about the edit" in learn_prompt(folder, load(rj))
+    reading()
+    learn_job(folder, cli="")   # no Claude Code: the page says so plainly, never an empty list
+    lr = load(rj)["learn"]
+    assert lr["state"] == "failed" and "not installed" in lr["why"] and not lr["rules"], lr
+    reading()
+    learn_job(folder, cli=shutil.which("true") or "true")   # it ran but posted nothing
+    assert load(rj)["learn"]["state"] == "failed" and "without posting" in load(rj)["learn"]["why"]
+
+    def proposed():
+        for _ in range(200):
+            if load(rj)["learn"]["state"] == "proposed":
+                return True
+            time.sleep(0.05)
+    keep = os.environ.get("AI_EDITOR_CLAUDE")
+    os.environ["AI_EDITOR_CLAUDE"] = str(fake)
+    try:
+        assert post("/learn", {"retry": True}) == {"ok": True} and proposed(), load(rj)["learn"]   # Try again: its own process
+        try:
+            post("/learn", {"retry": True})
+            raise AssertionError("retry with nothing failed")
+        except urllib.error.HTTPError as e:
+            assert e.code == 409
+        reading(at=time.time())
+        assert not json.loads(get("/state").read())["learn"].get("job"), "reading a moment: Claude may still come"
+        assert "cooked. is reading" not in learn_prompt(folder, load(rj))
+        reading(at=time.time() - LEARN_STUCK_S - 5)   # stuck in reading with nobody listening: picked up
+        assert json.loads(get("/state").read())["learn"]["job"] and proposed(), load(rj)["learn"]
+        assert learn_prompt(folder, load(rj)).startswith("LEARN: cooked. is reading")
+        assert not start_learn_job(folder) and not start_learn_job(folder, stuck=True)
+    finally:
+        os.environ["AI_EDITOR_CLAUDE"] = keep
+
+
 def demo():
     import contextlib
     import io
     import tempfile
     tmp = Path(tempfile.mkdtemp(prefix="review_demo_"))
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")   # start records the folder in the library index there
+    os.environ.setdefault("AI_EDITOR_CLAUDE", shutil.which("true") or "true")   # a learn job never runs the real Claude Code here
     demo_timings(tmp)
     demo_learn_edits(tmp)
     demo_bake(tmp)
     demo_live(tmp)
+    demo_layers(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
@@ -5648,6 +6091,7 @@ def demo():
     assert ts_["kind"] == "skill" and ts_["style"] == "Trial notes skill", ts_
     post("/undo", {"id": ts_["id"]})   # a rule a save added to a skill comes out of that skill
     assert "Keep the pauses short" not in tsk.read_text(encoding="utf-8").split("## Log")[0]
+    demo_teach(folder, tmp, get, post, c3, tsk)
     if old_skills is None:
         os.environ.pop("AI_EDITOR_SKILLS", None)
     else:
@@ -6108,6 +6552,7 @@ def main():
     s.add_argument("--none", action="store_true", help="no note in this round is a preference")
     s.add_argument("--propose", metavar="JSON", help="after the final approve: candidate rules for the page's learn panel")
     s.add_argument("--done", nargs="?", const="", metavar="SUMMARY", help="save the rules the user ticked into the style")
+    s.add_argument("--job", action="store_true", help="cooked.'s own learn step on the Claude Code CLI (no Claude on the video)")
     s = sp.add_parser("trials", help="the Trial reels tab: Claude's plan for re-cuts of an approved reel")
     g = s.add_mutually_exclusive_group(required=True)
     g.add_argument("--propose", metavar="JSON",
@@ -6164,7 +6609,7 @@ def main():
     elif a.cmd == "final":
         cmd_final(folder)
     elif a.cmd == "learn":
-        cmd_learn(a, folder)
+        learn_job(folder) if a.job else cmd_learn(a, folder)
     elif a.cmd == "trials":
         trials_reply(folder, a.reply) if a.reply else trials_propose(folder, a.propose)
 

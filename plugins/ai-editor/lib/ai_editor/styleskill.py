@@ -181,7 +181,7 @@ def rename(style_path, new):
     old = name(style_path)
     if sl != old and ((skills_dir() / sl).exists() or sl in plugin_skill_names()
                       or any(v.get("skill") == sl for v in names().values())):
-        raise ValueError(f"/{sl} is already a skill. Pick another name.")
+        raise ValueError(f"{new} is taken. Pick another name.")
     d = names()
     d[key(style_path)] = {**d.get(key(style_path), {}), "name": new, "skill": sl,
                           "path": str(preferred(style_path)) if style_path else None}
@@ -503,7 +503,7 @@ def demo():
         assert not quoted(desc("fast-cuts")) & quoted(desc("my-style"))
         set_use_for(sp, "talking-head reels about AI tools.")
         assert "Use for: talking-head reels about AI tools. Not for:" in desc("fast-cuts") and all(len(desc(n)) <= 1024 for n in ("fast-cuts", "my-style"))
-        for bad, why in (("x", "at least 3"), ("../etc", "letters"), ("edit like other one", "already"), ("cut", "already")):
+        for bad, why in (("x", "at least 3"), ("../etc", "letters"), ("edit like other one", "is taken"), ("cut", "is taken")):
             try:   # too short, bad characters, another style's skill, a plugin skill
                 rename(sp, bad)
                 raise AssertionError(bad)
@@ -513,7 +513,7 @@ def demo():
             rename(sp2, "Fast cuts")
             raise AssertionError("clash accepted")
         except ValueError as e:
-            assert "already a skill" in str(e)
+            assert "is taken" in str(e)
         remove(sp2)
         assert not (d / "skills" / "edit-like-other-one").exists() and "other.one" not in names() and "other.one" not in desc("fast-cuts")
         # a temp taste folder keeps its skills beside it; a project with a .claude folder gets them there
