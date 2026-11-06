@@ -980,7 +980,7 @@ body.making #making{display:flex}
 </div>
 <div id="toast" role="status"></div>
 <dialog id="learnov" class="ov" aria-label="teach your style"></dialog>
-<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button><button id="classicsw" role="menuitem" hidden></button></div>
+<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button></div>
 <div id="rpop" class="rpop" popover role="dialog" aria-label="make this a rule"><b>Make this a rule</b>
  <label>Rule<input id="rptext" class="lname rin" maxlength="160"></label>
  <label>Save to<select id="rpto" class="rsel"></select></label>
@@ -2180,11 +2180,7 @@ $('toast').addEventListener('click',async e=>{const b=e.target.closest('[data-tu
   const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+b.dataset.tundo})});toast(r.ok?'Rule taken out.':'That rule was already taken out.');await load(true)});
 // New style from this video (the ... menu in the top bar): a name, then POST /teach/style
 $('moremenu').addEventListener('toggle',e=>{if(e.newState!=='open')return;const M=e.target,r=$('vmore').getBoundingClientRect();
-  const c=$('classicsw');c.hidden=!(S&&S.scene_able);c.textContent=S&&S.classic?'Back to the scene editor':'Classic editor';
   M.style.top=r.bottom+6+'px';M.style.left=Math.max(16,r.right-M.offsetWidth)+'px'});
-// the Classic editor switch (review.py /scene/classic): this video opens in the old editor, or back in scenes (SCENE.md)
-$('classicsw').onclick=async()=>{$('moremenu').hidePopover();const on=!S.classic,r=await post('/scene/classic',{on});if(!r.ok)return toast(r.error||'That did not save.');
-  SC.last='';await load(true);toast(on?'Classic editor on for this video.':'Back in the scene editor.')};
 $('nsopen').onclick=()=>{$('moremenu').hidePopover();$('nsname').value='';$('nserr').textContent='';$('nsgo').disabled=false;$('styleov').showModal();$('nsname').focus()};
 $('nscancel').onclick=()=>$('styleov').close();
 $('styleov').addEventListener('keydown',e=>e.stopPropagation());

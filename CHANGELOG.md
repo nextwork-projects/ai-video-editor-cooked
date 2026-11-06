@@ -7,7 +7,7 @@ What changed for every user, newest first.
 - Every element movable. Press on anything on the video to move it, drag a handle to resize or rotate it, crop a picture or a clip, and trim or slide it on the timeline. Its settings open on the left.
 - AI cuts as clips you can drag back. Each piece the AI kept is a clip of your raw take. A thin yellow line marks each cut: hover it to see what was taken out and why, and press Bring back, or drag a clip's edge out to get the words back. Everything after it moves with it.
 - Export from scenes. Export renders the scene exactly as you see it, with Show in Finder and Download.
-- Classic editor switch. The ⋯ menu puts a video back in the old editor, and back again. Videos that are not cooked. plan drafts open in the Classic editor for now.
+- One editor for every video. Every draft opens in the scene editor by itself, a cooked. edit or a finished MP4 from another skill, and everything in it moves. A finished MP4 is one clip you can move, trim and crop, with the texts, sounds and cuts you already made on it kept as their own items.
 
 ## ai-editor 2.7.39, creator-teardown 2.7.39 (2026-11-05)
 - Export. Edit, then press Export: it renders exactly what the page shows and saves the video, with Show in Finder and Download. No feedback to Claude, no approve, and it works while Claude is busy (it exports what you see now). Exports also go to your library's exports folder, and home shows when a video was exported.

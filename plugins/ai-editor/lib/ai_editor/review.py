@@ -1456,13 +1456,13 @@ def lane_out(kind, m):
     return off, (m.get("of") or {}) if kind != "snd" or off else None
 
 
-def live_plan(folder, d):
+def live_plan(folder, d, plan=False):
     """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
     the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
     smoothly (live_video), and each card's overrides.json key ("_key"). {"why": ...} when the page plays the MP4.
     Made again only when one of its files changed: the page asks after every change it sees. A layer draft (layer_of):
     layer_plan, always on its base_video, never on a video its layers were baked into (they would draw twice)."""
-    why, base = live_ready(folder, d), layer_of(folder, d)
+    why, base = (None, None) if plan else (live_ready(folder, d), layer_of(folder, d))   # plan: as a plan draft (plan_draft)
     if why and not base:
         return {"why": why}
     plan_f = folder / "plan-layers.json" if base else Path(d["plan"])
@@ -1496,48 +1496,76 @@ def live_plan(folder, d):
     return p
 
 
-SCENE_LOCK, NO_SCENE = threading.Lock(), {}   # NO_SCENE: folder -> the plan from_plan could not convert
-CLASSIC = ".classic"   # in an edit: this video opens in the Classic editor (the ⋯ menu's switch)
-
-
-def scene_able(folder, d):
-    """Whether this draft can open as a scene (SCENE.md, When a draft is a scene): scene.json is there, or it is a plan
-    draft (the edit, not the stills, plan.json there, not a draft finished by hand) that scene.from_plan converts.
-    Every other draft opens in the Classic editor until from_video is proven."""
-    if d.get("stage") != "edit" or d.get("stills") or d.get("raw"):
-        return False
-    if (folder / scene.NAME).exists():
-        return True
-    pf = d.get("plan")
-    return bool(pf and Path(pf).is_file() and NO_SCENE.get(str(folder)) != pf and layer_of(folder, d) is None)
+SCENE_LOCK = threading.Lock()
 
 
 def scene_mode(folder, d):
-    """The page edits the scene: it can (scene_able) and the video is not switched to the Classic editor."""
-    return not (folder / CLASSIC).exists() and scene_able(folder, d)
+    """The page edits this draft as a scene (SCENE.md): every draft on the edit, not the cut and not the stills sheet."""
+    return d.get("stage") == "edit" and not d.get("stills") and not d.get("raw")
+
+
+def plan_draft(folder, d):
+    """The draft is its plan's render, so scene.from_plan can draw it: render.mp4 was made from plan.json (its stamp, or
+    render.plan.json is plan.json) and the draft is that render (or its cut copy), or the round came from render.mp4.
+    A render that came back without its stamp (a Mac mini render) still counts."""
+    pf = Path(d.get("plan") or "-")
+    src = pf.with_name("render" + pf.stem[len("plan"):] + ".mp4")
+    v = Path(d.get("video") or "-")
+    if not pf.is_file() or not pf.stem.startswith("plan") or not src.is_file() or not v.is_file():
+        return False
+    if d.get("src") and Path(d["src"]) == src:
+        return True
+    try:
+        made = render_stamped(src) or load(src.with_suffix(".plan.json")) == load(pf)
+    except (OSError, ValueError):
+        made = False
+    cut = src.with_suffix(".cut.mp4")
+    return made and v.stat().st_size in (src.stat().st_size, *([cut.stat().st_size] if cut.is_file() else []))
+
+
+def video_scene(folder, d):
+    """Any other draft as a scene (scene.from_video): its untouched MP4 (base_video) as clips, the Video row's cuts the
+    gaps, and every hand edit already on it as items: the typed texts and placed sounds not already burned or mixed into
+    it (burned_labels), moved onto the cut's clock as the layer bake moves them, a track per lane."""
+    base = Path(d.get("base_video") or d.get("video") or "-")
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import lanes_of, read_ov
+    ov = read_ov(folder)
+    gone = (ov.get("cuts") or {}).get("gone") or []
+    f, keep = folder / "texts.json", ("text", "start", "end", *TEXT_KEYS)
+    burned, mixed = burned_labels(folder, base), burned_labels(folder, base, sounds=True)
+    lane, off = lanes_of(ov, "text")
+    texts = []
+    for x in (load(f).get("items") or []) if f.exists() else []:
+        x = {"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}, "lane": lane(x.get("id")), "lane_off": lane(x.get("id")) in off}
+        if burn_key(x) not in burned:
+            x["start"], x["end"] = on_cut(x["start"], gone)[0], on_cut(x["end"], gone)[0]
+            texts += [x] if x["end"] - x["start"] >= 0.05 else []
+    lane, off = lanes_of(ov, "snd")
+    sounds = [{**x, "t": on_cut(x["t"], gone)[0], "lane": lane(x.get("id")), "lane_off": lane(x.get("id")) in off} for x in placed_raw(folder)
+              if isinstance(x, dict) and "sound" in x and x.get("id") not in mixed and not on_cut(x["t"], gone)[1]]
+    return scene.from_video(folder, base, gone=gone, texts=texts, sounds=sounds, library=sfx_mod().library_dir())
 
 
 def scene_for(folder, d):
-    """scene.json in scene mode (scene_mode), made on the first ask and never over one that is there: the plan draft
-    through scene.from_plan, with this page's live plan (texts.json, overrides.json, placed sounds). None when the
-    draft opens in the Classic editor. The raw take's seek-friendly copy is made in the background; until then the
-    page plays the take itself."""
+    """scene.json for a draft on the edit (scene_mode), made on the first ask and never over one that is there: a plan
+    draft (plan_draft) through scene.from_plan with this page's live plan (texts.json, overrides.json, placed sounds),
+    any other draft, or a plan from_plan refuses, through video_scene. None off the edit. The raw take's seek-friendly
+    copy is made in the background; until then the page plays the take itself."""
     if not scene_mode(folder, d):
         return None
     with SCENE_LOCK:
         if (folder / scene.NAME).exists():
             return scene.load(folder)
-        try:
-            lp = live_plan(folder, d)
-        except Exception:   # noqa: BLE001  the live plan is a nicety: the plan file is the draft
-            lp = {"why": "no live plan"}
-        p = load(Path(d["plan"])) if lp.get("why") or lp.get("layer") else lp
-        try:
-            sc = scene.save(folder, scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir()))
-        except (scene.SceneError, KeyError, OSError) as e:
-            print(f"scene: {e}", file=sys.stderr)
-            NO_SCENE[str(folder)] = d["plan"]   # the Classic editor for this plan, without trying again on every ask
-            return None
+        sc = None
+        if plan_draft(folder, d):
+            try:
+                lp = live_plan(folder, d, plan=True)
+                p = load(Path(d["plan"])) if lp.get("why") else lp
+                sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
+            except Exception as e:   # noqa: BLE001  any refusal (split, board, cover, cutouts) or failure: the draft's MP4
+                print(f"scene: from-plan: {e}; the draft as a video instead", file=sys.stderr)
+        sc = scene.save(folder, sc or video_scene(folder, d))
     if any(a.get("proxy") for a in sc["assets"].values()):
         threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
     return sc
@@ -2728,8 +2756,6 @@ def make_handler(folder, token):
                 d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS, HTML.with_name("review-scene.js"))   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
                 d["scene"] = scene_mode(folder, d)   # the page edits the scene (SCENE.md)
-                d["scene_able"] = scene_able(folder, d)   # the ⋯ menu's Classic editor switch shows
-                d["classic"] = (folder / CLASSIC).exists()
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
                 d["home"] = home_url()   # the Home button: back to the editor's window, or how to start it
                 d["update"] = _HOME.get("update") if d["home"] else None   # the rail's Update
@@ -2783,7 +2809,7 @@ def make_handler(folder, token):
             if path == "/scene":   # the scene (scene.json), made on the first ask
                 try:
                     sc = scene_for(folder, load(rj))
-                    return self.send(200, scene_out(folder, sc)) if sc else self.send(404, {"error": "This draft opens in the Classic editor."})
+                    return self.send(200, scene_out(folder, sc)) if sc else self.send(404, {"error": "Only a draft on the edit is a scene."})
                 except (scene.SceneError, OSError, KeyError) as e:
                     return self.send(400, {"error": str(e)})
             if path.startswith("/scene/asset/"):   # an asset the scene names: its seek-friendly copy once made
@@ -3465,15 +3491,12 @@ def make_handler(folder, token):
                 try:
                     sc = scene_for(folder, load(rj))
                     if sc is None:
-                        return self.send(409, {"error": "This video is in the Classic editor."})
+                        return self.send(409, {"error": "Only a draft on the edit is a scene."})
                     sc = scene.apply(sc, body.get("ops") or [], edit=folder)
                     sc = scene.save(folder, sc)
                 except (scene.SceneError, TypeError, ValueError, AttributeError) as e:
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"ok": True, "scene": scene_out(folder, sc)})
-            if path == "/scene/classic":   # the ⋯ menu's Classic editor switch, for this video: {"on": true | false}
-                (folder / CLASSIC).touch() if body.get("on") else (folder / CLASSIC).unlink(missing_ok=True)
-                return self.send(200, {"ok": True, "scene": scene_mode(folder, load(rj))})
             if path == "/timeline/restore":   # Undo or Redo of a hand edit: its files as they were before it, or after it
                 d, js = load(rj), JOURNAL.get(str(folder)) or []
                 try:
@@ -5283,12 +5306,14 @@ def demo_bake(tmp):
     d = load(f / "review.json")
     assert d["baked"] == 1 and baked_texts(f, d) == ["t1"] and BAKE[str(f)]["state"] == "done", d
     assert filecmp.cmp(f / "render.mp4", d["video"], shallow=False), "the round's video is the patched render"
-    # scene mode (SCENE.md): a plan draft opens as a scene, unless the ⋯ menu switched this video to the Classic editor
-    assert scene_able(f, d) and scene_mode(f, d), "a plan draft from a cut: a scene"
-    (f / CLASSIC).touch()
-    assert scene_able(f, d) and not scene_mode(f, d) and scene_for(f, d) is None, "Classic editor: no scene, the old page"
-    assert not scene_able(f, {**d, "stills": True}) and not scene_able(f, {**d, "stage": "cut"})
-    # Export (Classic): the draft as it is when its last bake has every edit in; else the bake first; then into exports/
+    # scene mode (SCENE.md): every draft on the edit is a scene; a plan draft goes through from_plan, its stamp lost or not
+    assert scene_mode(f, d) and plan_draft(f, d) and not scene_mode(f, {**d, "stills": True}) and not scene_mode(f, {**d, "stage": "cut"})
+    st0 = (f / "render.stamp.json").read_bytes()
+    (f / "render.stamp.json").unlink()
+    assert live_ready(f, d) == "the render was finished by hand" and plan_draft(f, d), "a render back without its stamp: still the plan's"
+    assert not plan_draft(f, {**d, "video": str(f / "cut.mp4"), "src": None}), "a draft that is not the render: a video"
+    (f / "render.stamp.json").write_bytes(st0)
+    # export_src (a draft's bake into one MP4), which Export used before every draft was a scene
     n = len(ran)
     assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n, "nothing new: the baked draft, no render"
     t = load(f / "texts.json")
@@ -5297,7 +5322,11 @@ def demo_bake(tmp):
     assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n + 1, "a new edit: baked first"
     assert load(f / "plan.json")["texts"][1]["text"] == "hey" and export_left_out(f, d) is None
     EXPORT[str(f)] = {"state": "working", "since": time.time()}
+    r0, scene.render = scene.render, lambda e, out, log=None: Path(shutil.copy2(d["video"], out))   # Remotion faked
     export_job(f, run=fake)
+    scene.render = r0
+    assert (f / scene.NAME).is_file(), "Export renders the scene"
+    (f / scene.NAME).unlink()
     import library
     x = export_state(f, load(f / "review.json"))
     assert x["state"] == "done" and x["name"] == download_name(f) and (f / "exports" / x["name"]).is_file(), x
@@ -5458,6 +5487,13 @@ def demo_layers(tmp):
         True, [], [], [[1.0, 1.5]], 64, 36, 120), lp
     assert [x["text"] for x in lp["texts"]] == ["hi", "in"] and [c["placed"] for c in lp["sfx"]] == ["a1", "a2"], lp
     assert lp["video"] in ("review/v-edit3.mp4", ".live/review/v-edit3.mp4") and lp["sfx"][0]["src"] == "/audio/s.wav"
+    # as a scene (video_scene): the MP4 as two clips round the cut piece, the text after it 0.5 s earlier, the one and the
+    # sound inside it out, the other sound on the cut's clock; nothing burned in is laid on again
+    assert scene_mode(f, d) and not plan_draft(f, d)
+    sc = video_scene(f, d)
+    v, tx, au = ([it for t in sc["tracks"] if t["name"] == n for it in t["items"]] for n in ("Video", "Text", "Placed sounds"))
+    assert [(x["start"], x["end"], x["in"]) for x in v] == [(0, 1, 0), (1, 3.5, 1.5)] and v[1]["cut"]["before"]["reason"] == "by hand", v
+    assert [(x["text"], x["start"], x["end"]) for x in tx] == [("hi", 2.0, 3.0)] and [(x["start"], x["volume"]) for x in au] == [(1.5, 0.5)], (tx, au)
     ran = []
 
     def fake(cmd, **k):   # edit.py render: the plan's own video as the render

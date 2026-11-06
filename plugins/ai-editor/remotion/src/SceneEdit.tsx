@@ -74,7 +74,7 @@ const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; c
     top: (p.h - ch * f) / 2 - c.t * sh * f, maxWidth: "none", ...(g ? { filter: `brightness(${g.brightness ?? 1}) saturate(${g.saturate ?? 1})` } : {}) };
   const sh_ = it.shadow;
   return (
-    <div style={{ position: "absolute", left: p.x - p.w / 2, top: p.y - p.h / 2, width: p.w, height: p.h, opacity: p.o,
+    <div data-sc={it.id} style={{ position: "absolute", left: p.x - p.w / 2, top: p.y - p.h / 2, width: p.w, height: p.h, opacity: p.o,
       transform: `translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`, borderRadius: it.radius ?? 0, overflow: "hidden",
       boxShadow: sh_ ? `0 ${sh_.y ?? 12}px ${sh_.blur ?? 30}px rgba(0,0,0,${sh_.opacity ?? 0.35})` : undefined, background: it.type === "shape" ? it.fill : undefined }}>
       {children(media)}
@@ -122,7 +122,7 @@ const TextItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) =>
   const line: React.CSSProperties = b && !b.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0,
     WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" } as React.CSSProperties : {};
   return (
-    <div style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
+    <div data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
       opacity: p.o, width: "max-content", maxWidth: p.w, textAlign: it.align ?? "center", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
       fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: it.line_height ?? 1.2,
       color: it.color ?? "#FFFFFF", ...(b?.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}) }}>

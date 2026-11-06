@@ -13,6 +13,7 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .scbox{position:absolute;outline:calc(1.5px / var(--k)) solid #FFFFFF;box-shadow:0 0 0 calc(2.5px / var(--k)) rgba(0,0,0,.35);pointer-events:none}.scbox.sub{outline-style:dashed}
 .scbox i{position:absolute;width:calc(12px / var(--k));height:calc(12px / var(--k));margin:calc(-6px / var(--k)) 0 0 calc(-6px / var(--k));border-radius:calc(3px / var(--k));background:#FFFFFF;box-shadow:0 0 0 calc(1px / var(--k)) rgba(0,0,0,.45);pointer-events:auto}
 .scbox i::after{content:"";position:absolute;inset:calc(-6px / var(--k))}
+.scbox i[data-h=e]::after,.scbox i[data-h=w]::after{inset:0 calc(-6px / var(--k))}.scbox i[data-h=n]::after,.scbox i[data-h=s]::after{inset:calc(-6px / var(--k)) 0}   /* a side handle draws over the corners but takes no more than its own height: on a one-line text both stay reachable */
 .scbox i[data-h=nw],.scbox i[data-h=se]{cursor:nwse-resize}.scbox i[data-h=ne],.scbox i[data-h=sw]{cursor:nesw-resize}.scbox i[data-h=n],.scbox i[data-h=s]{cursor:ns-resize}.scbox i[data-h=e],.scbox i[data-h=w]{cursor:ew-resize}
 .scbox i[data-h=rot]{border-radius:50%;cursor:grab}.scbox i[data-h=rot]::before{content:"";position:absolute;left:50%;top:100%;width:calc(1.5px / var(--k));height:calc(18px / var(--k));background:#FFFFFF}
 .scbox i[data-h=rot].dn::before{top:auto;bottom:100%}.scbox.crop i{background:#FFD60A}.scghost{position:absolute;outline:calc(1px / var(--k)) dashed rgba(255,255,255,.6);background:rgba(0,0,0,.35);pointer-events:none}
@@ -36,16 +37,27 @@ const scCopy=x=>JSON.parse(JSON.stringify(x));
 const scAll=s=>(s||SC.s).tracks.flatMap((tr,ti)=>tr.items.map((it,ii)=>({it,tr,ti,ii})));
 const scGet=id=>scAll().find(o=>o.it.id===id);
 const scVis=it=>!/^(audio|captions)$/.test(it.type);
-const EASE={linear:u=>u,in:u=>u*u,out:u=>1-(1-u)*(1-u),inout:u=>u<.5?2*u*u:1-2*(1-u)*(1-u),hold:()=>0};
-function scVal(it,p,t){const k=it.keys&&it.keys[p];const b=p==='scale'?1:it[p]??(p==='opacity'?1:p==='rotation'?0:0);if(!k||!k.length)return b;const u=t-it.start;
+const EASE={linear:u=>u,in:u=>u*u*u,out:u=>1-(1-u)**3,inout:u=>(1-Math.cos(Math.PI*u))/2,hold:()=>0};   // SceneEdit's: power2 (cubic), sine.inOut
+function scVal(it,p,t){const k=it.keys&&it.keys[p];const b=p==='scale'?1:it[p]??(p==='opacity'?1:p==='x'?SC.s.width/2:p==='y'?SC.s.height/2:0);if(!k||!k.length)return b;const u=t-it.start;
   if(u<=k[0][0])return k[0][1];for(let i=1;i<k.length;i++)if(u<k[i][0]){const[a,va,e]=k[i-1],[c,vc]=k[i];return va+(vc-va)*(EASE[e]||EASE.linear)((u-a)/(c-a||1))}return k[k.length-1][1]}
 // a change to an animated prop is a key at the playhead (CapCut's way); any other prop changes the item
 function scSet(it,p,x,t){const k=it.keys&&it.keys[p];if(!k||!k.length){it[p]=x;return}const u=+(t-it.start).toFixed(3),f=1/(SC.s.fps||30);
   const i=k.findIndex(q=>Math.abs(q[0]-u)<f/2);if(i>=0)k[i][1]=x;else{k.push([u,x,'inout']);k.sort((a,b)=>a[0]-b[0])}}
-const TXH={};function scTextH(it){const sig=[it.text,it.font,it.weight,it.size,it.w,it.line_height,JSON.stringify((it.box||{}).pad)].join('|');if(TXH[sig])return TXH[sig];
-  const d=document.createElement('div');d.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;overflow-wrap:anywhere;width:${it.w||800}px;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700};font-size:${it.size||64}px;line-height:${it.line_height||1.2}`;
-  d.textContent=it.text||' ';document.body.appendChild(d);const b=it.box,pd=b&&b.pad,h=d.offsetHeight+(b&&b.block?2*(Array.isArray(pd)?(+pd[1]||0):(pd??(it.size||64)*.1)):0);d.remove();return TXH[sig]=h}   // as SceneEdit lays it: box.pad is px or [x, y], only a block box adds height
-function scGeo(it,t){const s=scVal(it,'scale',t),w=scVal(it,'w',t)||it.w||100;return {x:scVal(it,'x',t),y:scVal(it,'y',t),w:w*s,h:(it.type==='text'?scTextH({...it,w}):scVal(it,'h',t)||100)*s,r:scVal(it,'rotation',t),s}}
+// a text's drawn size (as SceneEdit lays it: as wide as its words up to w), measured on a copy of the player's own
+// element for it with this item's size, wrap width, padding and words, so the handles sit on the words as drawn
+const TXB={};function scTextBox(it){const W=SC.s.width,fs=it.size||Math.min(W,SC.s.height)*.05,b=it.box,pd=b?(Array.isArray(b.pad)?b.pad:[b.pad??fs*.25,b.pad??fs*.1]):[0,0],mw=it.w||W;
+  const sig=[it.id,it.text,it.font,it.weight,fs,mw,it.line_height,JSON.stringify(b)].join('|');if(TXB[sig])return TXB[sig];
+  const e=document.querySelector(`#scl [data-sc="${CSS.escape(it.id)}"]`);let c,w,h;
+  if(e){c=e.cloneNode(true);c.removeAttribute('data-sc');c.style.visibility='hidden';e.parentElement.appendChild(c)}
+  else{c=document.createElement('div');c.innerHTML='<span></span>';c.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;width:max-content;white-space:pre-wrap;overflow-wrap:anywhere;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700}`;document.body.appendChild(c)}
+  Object.assign(c.style,{fontSize:fs+'px',maxWidth:mw+'px',lineHeight:String(it.line_height??1.2),padding:b&&b.block?`${pd[1]}px ${pd[0]}px`:'0'});
+  const sp=c.firstElementChild;if(sp){sp.textContent=it.text||'';sp.style.padding=b&&!b.block?`${pd[1]}px ${pd[0]}px`:'0'}
+  const rs=[c.getBoundingClientRect(),...(sp?sp.getClientRects():[])],k=rs[0].width?c.offsetWidth/rs[0].width:1;   // a box behind each line can reach past the element: its line boxes count
+  const L=Math.min(...rs.map(r=>r.left)),T=Math.min(...rs.map(r=>r.top)),Rr=Math.max(...rs.map(r=>r.right)),B=Math.max(...rs.map(r=>r.bottom)),c0=rs[0];
+  const r=[(Rr-L)*k,(B-T)*k,((L+Rr)/2-(c0.left+c0.right)/2)*k,((T+B)/2-(c0.top+c0.bottom)/2)*k];c.remove();if(e)TXB[sig]=r;return r}   // [w, h, and the line boxes' centre off the element's]
+function scGeo(it,t){const s=it.type==='card'?1:scVal(it,'scale',t),x=scVal(it,'x',t),y=scVal(it,'y',t),r=scVal(it,'rotation',t);   // CardItem draws no scale
+  if(it.type==='text'){const z=scTextBox({...it,w:scVal(it,'w',t)||it.w}),a=r*Math.PI/180;return {x:x+(z[2]*Math.cos(a)-z[3]*Math.sin(a))*s,y:y+(z[2]*Math.sin(a)+z[3]*Math.cos(a))*s,w:z[0]*s,h:z[1]*s,r,s}}
+  return {x,y,w:(scVal(it,'w',t)||SC.s.width)*s,h:(scVal(it,'h',t)||SC.s.height)*s,r,s}}
 const scDur=s=>Math.max(.1,...scAll(s).map(o=>o.it.end||0));
 // the ops that take scene a to scene b (SCENE.md): tracks added, track fields, items added, moved, changed, removed
 function scDiff(a,b){const ops=[],A={},B={};scAll(a).forEach(o=>A[o.it.id]=o);scAll(b).forEach(o=>B[o.it.id]=o);
@@ -83,7 +95,7 @@ SC.draw=function(guides){if(!SC.on)return;guides=guides||SC.drag&&SC.gd;const t=
   let h=SC.s.width===1080&&SC.s.height===1920&&SC.mov?'<div class="scsz"></div>':'';
   ids.forEach((id,n)=>{const it=scGet(id).it,g=scGeo(it,t),cr=SC.crop&&ids.length===1&&/^(video|image)$/.test(it.type),c=it.crop||{l:0,t:0,r:0,b:0};
     if(cr){const fw=g.w/Math.max(.02,1-c.l-c.r),fh=g.h/Math.max(.02,1-c.t-c.b);h+=`<div class="scghost" style="left:${g.x-g.w/2-c.l*fw}px;top:${g.y-g.h/2-c.t*fh}px;width:${fw}px;height:${fh}px;transform-origin:${g.w/2+c.l*fw}px ${g.h/2+c.t*fh}px;transform:rotate(${g.r}deg)"></div>`}
-    const hs=ids.length>1?[]:it.type==='text'?['nw','ne','se','sw','e','w']:['nw','n','ne','e','se','s','sw','w'],P={nw:[0,0],n:[50,0],ne:[100,0],e:[100,50],se:[100,100],s:[50,100],sw:[0,100],w:[0,50]};
+    const hs=ids.length>1?[]:it.type==='text'?['nw','ne','se','sw','e','w']:['nw','ne','se','sw','n','e','s','w'],P={nw:[0,0],n:[50,0],ne:[100,0],e:[100,50],se:[100,100],s:[50,100],sw:[0,100],w:[0,50]};
     h+=`<div class="scbox${cr?' crop':''}${n?' sub':''}" data-b="${esc(id)}" style="left:${g.x-g.w/2}px;top:${g.y-g.h/2}px;width:${g.w}px;height:${g.h}px;transform:rotate(${g.r}deg)">${hs.map(k=>`<i data-h="${k}" style="left:${P[k][0]}%;top:${P[k][1]}%"></i>`).join('')}${hs.length&&!cr?`<i data-h="rot" class="${g.y-g.h/2<30/SC.k?'dn':''}" style="left:50%;top:${g.y-g.h/2<30/SC.k?`calc(100% + 26px / var(--k))`:'calc(-26px / var(--k))'}"></i>`:''}</div>`});
   for(const[a,p]of guides||[])h+=a==='x'?`<i class="scg" style="left:${p-1/SC.k}px;top:0;width:${2/SC.k}px;height:100%"></i>`:`<i class="scg" style="top:${p-1/SC.k}px;left:0;height:${2/SC.k}px;width:100%"></i>`;
   const ed=o.querySelector('.sced');o.innerHTML=h;if(ed)o.appendChild(ed)};
@@ -105,7 +117,7 @@ $('scover').addEventListener('pointerdown',e=>{if(e.button||!SC.on||e.target.clo
     if(e.shiftKey){SC.sel.has(id)?SC.sel.delete(id):SC.sel.add(id)}else if(!SC.sel.has(id)||(e.metaKey||e.ctrlKey)){SC.sel.clear();SC.sel.add(id)}}
   const before=scCopy(SC.s),b0=scCopy(SC.s),g0={};SC.sel.forEach(k=>{const q=scGet(k);if(q)g0[k]=scGeo(q.it,t)});const G=g0[id]||scGeo(scGet(id).it,t),h=hd&&hd.dataset.h;
   if(e.altKey&&!h){const ns=[];[...SC.sel].forEach(k=>{const q=scAll(b0).find(o=>o.it.id===k);if(!q)return;const c={...scCopy(q.it),id:scId('i'),name:(q.it.name||q.it.type)+' copy'};q.tr.items.splice(q.ii+1,0,c);ns.push(c.id);g0[c.id]=g0[k]});SC.sel=new Set(ns)}   // Alt-drag: the copies move, the originals stay
-  const L=!h&&(()=>{const xs=[SC.s.width/2],ys=[SC.s.height/2];if(SC.s.width===1080&&SC.s.height===1920){xs.push(60,940);ys.push(250,1440)}
+  const L=h!=='rot'&&(()=>{const xs=[SC.s.width/2],ys=[SC.s.height/2];if(SC.s.width===1080&&SC.s.height===1920){xs.push(60,940);ys.push(250,1440)}
     scAt(t).forEach(o=>{if(SC.sel.has(o.it.id)||g0[o.it.id])return;const g=scGeo(o.it,t);xs.push(g.x-g.w/2,g.x,g.x+g.w/2);ys.push(g.y-g.h/2,g.y,g.y+g.h/2)});return {xs,ys}})();
   let moved=false;SC.drag=1;SC.draw();
   const mv=ev=>{const[qx,qy]=scPt(ev),dx=qx-px,dy=qy-py;if(!moved&&Math.hypot(dx,dy)*SC.k<3)return;moved=true;SC.mov=1;SC.s=scCopy(b0);SC.apply(ev,dx,dy,h,G,g0,t,L,b0);SC.show(true)};
@@ -122,14 +134,29 @@ SC.apply=function(ev,dx,dy,h,G,g0,t,L,b0){const sh=ev.shiftKey,free=ev.metaKey||
     SC.sel.forEach(k=>{const q=scGet(k),g=g0[k];if(!q||!g)return;scSet(q.it,'x',Math.round(g.x+dx),t);scSet(q.it,'y',Math.round(g.y+dy),t)});SC.draw(gd);return}
   const q=scGet([...SC.sel][0]);if(!q)return;const it=q.it,a=G.r*Math.PI/180,lx=dx*Math.cos(a)+dy*Math.sin(a),ly=-dx*Math.sin(a)+dy*Math.cos(a);
   if(h==='rot')return SC.rot(ev,it,G,t);
-  const sx=/e/.test(h)?1:/w/.test(h)?-1:0,sy=/s/.test(h)?1:/^n/.test(h)?-1:0;let w=G.w,hh=G.h;
+  const sx=/e/.test(h)?1:/w/.test(h)?-1:0,sy=/s/.test(h)?1:/^n/.test(h)?-1:0,alt=ev.altKey,m=alt?2:1,s=G.s||1,cs=Math.cos(a),sn=Math.sin(a);
+  const put=(w,hh,o=[0,0])=>{const cx=(alt||!sx?0:sx*(w-G.w)/2)-o[0]*s,cy=(alt||!sy?0:sy*(hh-G.h)/2)-o[1]*s;   // the opposite corner or side stays put (Alt: the centre); o: a text's line boxes off its centre
+    scSet(it,'x',+(G.x+cx*cs-cy*sn).toFixed(2),t);scSet(it,'y',+(G.y+cx*sn+cy*cs).toFixed(2),t)};
   if(SC.crop&&/^(video|image)$/.test(it.type)){const c={l:0,t:0,r:0,b:0,...(it.crop||{})},fw=G.w/Math.max(.02,1-c.l-c.r),fh=G.h/Math.max(.02,1-c.t-c.b),n={...c};
     if(sx>0)n.r=Math.min(1-c.l-.05,Math.max(0,c.r-lx/fw));if(sx<0)n.l=Math.min(1-c.r-.05,Math.max(0,c.l+lx/fw));if(sy>0)n.b=Math.min(1-c.t-.05,Math.max(0,c.b-ly/fh));if(sy<0)n.t=Math.min(1-c.b-.05,Math.max(0,c.t+ly/fh));
-    w=fw*(1-n.l-n.r);hh=fh*(1-n.t-n.b);it.crop=Object.fromEntries(Object.entries(n).map(([k,x])=>[k,+x.toFixed(4)]))}
-  else{w=Math.max(8,G.w+sx*lx);hh=Math.max(8,G.h+sy*ly);
-    if(sx&&sy&&(it.type==='text'||sh)){const f=Math.max(.05,((G.w+sx*lx)/G.w+(G.h+sy*ly)/G.h)/2);w=G.w*f;hh=G.h*f;if(it.type==='text')it.size=Math.max(4,Math.round(((scAll(b0).find(o=>o.it.id===it.id)||{it:{}}).it.size||64)*f))}}
-  const cx=sx*(w-G.w)/2,cy=sy*(hh-G.h)/2,s=G.s||1;scSet(it,'x',Math.round(G.x+cx*Math.cos(a)-cy*Math.sin(a)),t);scSet(it,'y',Math.round(G.y+cx*Math.sin(a)+cy*Math.cos(a)),t);
-  scSet(it,'w',Math.round(w/s),t);if(it.type!=='text')scSet(it,'h',Math.round(hh/s),t);SC.draw()};
+    const w=fw*(1-n.l-n.r),hh=fh*(1-n.t-n.b);it.crop=Object.fromEntries(Object.entries(n).map(([k,x])=>[k,+x.toFixed(4)]));
+    put(w,hh);scSet(it,'w',+(w/s).toFixed(2),t);scSet(it,'h',+(hh/s).toFixed(2),t);return SC.draw()}
+  // the moving edges land on the guides (the centre, the safe zone, other items' edges) while it is not rotated
+  let w=G.w+sx*lx*m,hh=G.h+sy*ly*m,ax=null;
+  if(!free&&!G.r&&L){const th=6/SC.k,edge=(c,g,d,v)=>alt?c+d*v/2:c-d*g/2+d*v,size=(c,g,d,p)=>alt?2*d*(p-c):d*(p-(c-d*g/2));
+    const near=(e,ps)=>ps.reduce((b,p)=>Math.abs(p-e)<=th&&(b==null||Math.abs(p-e)<Math.abs(b-e))?p:b,null);
+    const px=sx?near(edge(G.x,G.w,sx,w),L.xs):null,py=sy?near(edge(G.y,G.h,sy,hh),L.ys):null;
+    if(px!=null){w=size(G.x,G.w,sx,px);gd.push(['x',px]);ax='x'}if(py!=null){hh=size(G.y,G.h,sy,py);gd.push(['y',py]);ax=ax||'y'}}
+  SC.gd=gd;
+  if(sx&&sy&&(it.type==='text'||!sh)){   // a corner keeps the shape (Shift frees it on pictures, clips and cards); a text scales as one
+    const f=Math.max(8/Math.min(G.w,G.h),ax==='x'?w/G.w:ax==='y'?hh/G.h:(w*G.w+hh*G.h)/(G.w*G.w+G.h*G.h));w=G.w*f;hh=G.h*f}
+  w=Math.max(8,w);hh=Math.max(8,hh);
+  if(it.type==='text'){const o=(scAll(b0).find(q=>q.it.id===it.id)||{it}).it,w0=scVal(o,'w',t)||o.w||SC.s.width,f=w/G.w;
+    if(sx&&sy){it.size=+((o.size||64)*f).toFixed(2);scSet(it,'w',+(w0*f).toFixed(2),t);if(o.box)it.box={...o.box,pad:Array.isArray(o.box.pad)?o.box.pad.map(x=>+(x*f).toFixed(2)):o.box.pad!=null?+(o.box.pad*f).toFixed(2):o.box.pad,radius:o.box.radius!=null?+(o.box.radius*f).toFixed(2):o.box.radius};
+      if(o.outline)it.outline={...o.outline,width:+(o.outline.width*f).toFixed(2)}}
+    else scSet(it,'w',+Math.max(it.size||16,w/s).toFixed(2),t);   // a side: the wrap width only
+    const z=scTextBox({...it,w:scVal(it,'w',t)});put(z[0]*s,sx&&sy?z[1]*s:G.h,[z[2],z[3]]);return SC.draw(gd)}
+  put(w,hh);scSet(it,'w',+(w/s).toFixed(2),t);scSet(it,'h',+(hh/s).toFixed(2),t);SC.draw(gd)};
 SC.rot=function(ev,it,G,t){const[px,py]=scPt(ev);let r=Math.atan2(py-G.y,px-G.x)*180/Math.PI+90;if(ev.shiftKey)r=Math.round(r/15)*15;else for(const s of[0,90,180,-90,-180])if(Math.abs(r-s)<3)r=s;
   r=((r+540)%360)-180;scSet(it,'rotation',Math.round(r*10)/10,t);SC.draw()};
 // double-click a text: its words typed in place, saved when you click away (Escape too)

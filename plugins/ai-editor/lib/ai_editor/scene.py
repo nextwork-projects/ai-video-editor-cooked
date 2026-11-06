@@ -4,7 +4,7 @@ live in the review page and for the export.
 
     python3 scene.py from-plan <edit> [--plan plan.json]   a cooked. plan draft as a scene: the cut's kept pieces of the
                                                            raw take as clips, cards, texts, captions and sounds as items
-    python3 scene.py from-video <edit> [--video render.mp4]   any other draft: its MP4 as one locked video item
+    python3 scene.py from-video <edit> [--video render.mp4]   any other draft: its MP4 as a video clip
     python3 scene.py render <edit> [--out file.mp4] [--draft] the export (Remotion, the Scene composition)
     python3 scene.py stills <edit> <out_dir> name=frame ...   frames of the scene as PNGs (the same bundle)
     python3 scene.py demo                                   self-check
@@ -719,27 +719,56 @@ def from_plan(edit, plan=None, sounds=None, library=None, proxies=True, frame_it
         aid_ = S.asset(c["src"])
         d = S.sc["assets"][aid_].get("duration") or 1
         S.audio(c["src"], c["t"], c["t"] + d, name=Path(c["src"]).stem)
-    for x in sounds or []:
-        if not isinstance(x, dict) or "sound" not in x or x.get("muted"):
-            continue
-        f = e / "audio" / x["sound"] if x.get("kind") == "clip" else Path(library or "") / x["sound"]
-        if not f.is_file():
-            continue
-        aid_ = S.asset(rel(e, f))
-        d = x.get("dur") or S.sc["assets"][aid_].get("duration") or 1
-        S.audio(rel(e, f), x["t"], x["t"] + d, track="Placed sounds", name=Path(x["sound"]).stem, volume=x.get("vol", 1),
-                fade_in=x.get("fade_in", 0), fade_out=x.get("fade_out", 0), **{"in": x.get("in") or 0})
+    placed(S, e, sounds, library)
     sc = S.done()
     sc["duration"] = round(max(sc["duration"], dur), 6)
     return sc
 
 
-def from_video(edit, video):
-    """Any draft: its MP4 as one locked video item on the bottom track."""
+def lane_name(name, n):
+    return name if not n else f"{name} {n + 1}"
+
+
+def placed(S, e, sounds, library):
+    """The timeline's placed sounds (sounds.json items) as audio items, a track per lane (`lane`, `lane_off`: its lane is
+    muted)."""
+    for x in sorted((x for x in sounds or [] if isinstance(x, dict) and "sound" in x and not x.get("muted")), key=lambda x: x.get("lane", 0)):
+        f = e / "audio" / x["sound"] if x.get("kind") == "clip" else Path(library or "") / x["sound"]
+        if not f.is_file():
+            continue
+        aid_ = S.asset(rel(e, f))
+        d = x.get("dur") or S.sc["assets"][aid_].get("duration") or 1
+        S.track(lane_name("Placed sounds", x.get("lane", 0)), "audio", **({"muted": True} if x.get("lane_off") else {}))
+        S.audio(rel(e, f), x["t"], x["t"] + d, track=lane_name("Placed sounds", x.get("lane", 0)), name=Path(x["sound"]).stem,
+                volume=x.get("vol", 1), fade_in=x.get("fade_in", 0), fade_out=x.get("fade_out", 0), **{"in": x.get("in") or 0})
+
+
+def from_video(edit, video, gone=(), texts=(), sounds=(), library=None):
+    """Any other draft (SCENE.md Migration): its MP4 as clips on the bottom track, the Video row's cut pieces (`gone`,
+    [a, b] on the MP4's clock) the gaps between them, and the hand edits already made on it as items, on the cut's
+    clock: texts (plan label texts, `lane`, `lane_off`: its lane is hidden) and placed sounds (sounds.json items)."""
     e = Path(edit)
-    i = probe(e / video if not Path(video).is_absolute() else video)
-    S = Scene(i["w"], i["h"], 30, edit=e)
-    S.video(rel(e, Path(video) if Path(video).is_absolute() else e / video), 0, i["duration"], track="Video", locked=True, name="Draft")
+    f = Path(video) if Path(video).is_absolute() else e / video
+    i = probe(f)
+    W, H = i["w"], i["h"]
+    S = Scene(W, H, 30, edit=e)
+    aid = S.asset(rel(e, f), "draft")
+    if needs_proxy(S.sc["assets"][aid], W, H):
+        S.sc["assets"][aid]["proxy"] = f".scene/{aid}.mp4"
+    tr = S.track("Video", "visual", magnet=True)
+    t, at = 0.0, 0.0
+    for a, b in [*sorted(gone), (i["duration"], i["duration"])]:
+        if a - at > EPS:
+            it = {"type": "video", "asset": aid, "start": round(t, 6), "end": round(t + a - at, 6), "in": round(at, 6), "x": W / 2, "y": H / 2,
+                  "w": W, "h": H, "name": "Draft"}
+            if at > EPS:
+                it["cut"] = {"before": {"reason": "by hand", "words": "", "dur": round(at - prev, 3)}}
+            tr["items"].append(it)
+            t += a - at
+        prev, at = a, max(at, b)
+    for x in sorted(texts, key=lambda x: x.get("lane", 0)):
+        S.track(lane_name("Text", x.get("lane", 0)), "visual", **({"hidden": True} if x.get("lane_off") else {}))["items"] += text_items(x, W, H)
+    placed(S, e, sounds, library)
     return S.done()
 
 
@@ -899,8 +928,13 @@ def demo():
         assert pos_keys(keys, org, (540, 960), 1080, 1920)["y"][1][1] == round(576 + 1.2 * 384, 3)
         assert cut_before({"cuts": [{"start": 1, "end": 3, "kind": "retake"}]}, [{"text": "uh", "start": 1.5, "end": 1.7}], 1, 3) == \
             {"reason": "retake", "words": "uh", "dur": 2}
-        v = from_video(e, "take.mp4")
-        assert v["tracks"][0]["items"][0]["locked"] and v["width"] == 320
+        v = from_video(e, "take.mp4", gone=[[1, 2], [4, 4.5]], texts=[{"kind": "label", "text": "Yo", "start": 0.5, "end": 2, "x_pct": 50,
+                       "y_pct": 30}, {"kind": "label", "text": "Hid", "start": 0, "end": 1, "x_pct": 50, "y_pct": 60, "lane": 1, "lane_off": True}])
+        vt = v["tracks"][0]["items"]
+        assert v["width"] == 320 and [(x["start"], x["end"], x["in"]) for x in vt] == [(0, 1, 0), (1, 3, 2), (3, 4.5, 4.5)], vt
+        assert "cut" not in vt[0] and vt[1]["cut"]["before"] == {"reason": "by hand", "words": "", "dur": 1} and vt[2]["cut"]["before"]["dur"] == 0.5
+        assert not vt[0].get("locked") and v["duration"] == 4.5 and [t["name"] for t in v["tracks"]] == ["Video", "Text", "Text 2"]
+        assert v["tracks"][2]["hidden"] and v["tracks"][1]["items"][0]["text"] == "Yo", v["tracks"]
     print("scene demo ok")
 
 
