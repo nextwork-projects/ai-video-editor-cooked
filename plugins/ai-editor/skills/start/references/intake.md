@@ -29,7 +29,7 @@ says what was used; the user changes them by saying so. Keep these calls and the
 
 | id | question | options |
 |---|---|---|
-| `brand` | Colours and fonts for the graphics? | use the creator's look (no creator: the clean editorial look) / my brand colours (paste hex codes) and font / a logo file too (give the path) |
+| `brand` (skip when the profile's brand has `kit`: the Brand page's BRAND.md; say "Using your brand kit") | Colours and fonts for the graphics? | use the creator's look (no creator: the clean editorial look) / my brand colours (paste hex codes) and font / a logo file too (give the path) |
 | `assets_dir` | Do you have your own photos, screenshots or b-roll for this? | no, find real screenshots and logos / yes, this folder: (path) |
 | `avoid` | Anything you never want on screen? (multi-select) | emoji, stock photos, generic icons (all three on by default) / a colour (hex) / other (free text) |
 | `captions` | Captions? | like the creator (no creator: "plain white, TikTok Sans", saved the same way) / plain white, TikTok Sans (over a creator's too: `plain`) / bold, a few words at a time / karaoke, the line fills as you speak / minimal / no captions |
@@ -53,6 +53,7 @@ python3 "$P" set liked_videos '["https://www.tiktok.com/@someone/video/123"]'
 python3 "$P" set audience '"developers who use Claude"'
 python3 "$P" set goal '"follow, then comment router for the guide"'   # saved with audience
 python3 "$P" set brand '{"use_creator": true}'           # or {"colors": ["#F2EEE6", "#E5482C"], "font": "Archivo", "logo": "/path/logo.svg"}
+python3 "${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/brandkit.py" import /path/BRAND.md   # a brand file they have: read and saved as brand
 python3 "$P" set assets_dir '"/Users/me/Pictures/screens"'
 python3 "$P" set 'broll.travel="/Users/me/Library/CloudStorage/GoogleDrive-me@gmail.com/My Drive/B-roll/Travel"'   # a b-roll library per type of video (lib/ai_editor/broll.py); set when the user names one
 python3 "$P" set names '[{"name": "Jev", "domain": "typesafe.ai"}, {"name": "Claude", "domain": "claude.com"}]'

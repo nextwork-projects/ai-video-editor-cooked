@@ -15,7 +15,10 @@ import { useFamily } from "./Captions";
 //          a black "outline", or black on a white "box"; centred on x_pct/y_pct, size_pct of the frame's short side.
 //          font: a Google font picked on the page (default TikTok Sans). color: the type's colour, or the box's on "box"
 //          (its type then black or white, whichever reads). "block": one box hugging the whole text. The text is as
-//          wide as its words, up to width_pct of the frame (84 unless the user brought it in), and wraps there
+//          wide as its words, up to width_pct of the frame (84 unless the user brought it in), and wraps there.
+//          Set from the page's inspector, each left out for today's look: rotation (degrees about its centre), opacity
+//          (0-1), anim (fade | pop | slide in, with a quick fade out), align (left | right lines), text_color (the
+//          type on a box look; default black or white, whichever reads)
 export type TextItem =
   | { kind: "onscreen"; text: string; start: number; end: number; box: [number, number, number, number]; size_pct: number;
       color: string; box_color?: string | null }
@@ -24,7 +27,8 @@ export type TextItem =
   | { kind: "list"; items: { text: string; at: number }[]; start: number; end: number; x_pct: number; y_pct: number; size_pct: number }
   | { kind: "stamp"; start: number; end: number; box: [number, number, number, number] }
   | { kind: "label"; text: string; style: "plain" | "outline" | "box" | "block"; start: number; end: number; x_pct: number; y_pct: number; size_pct: number;
-      font?: string; color?: string; width_pct?: number };
+      font?: string; color?: string; width_pct?: number; rotation?: number; opacity?: number; anim?: "fade" | "pop" | "slide";
+      align?: "left" | "right"; text_color?: string };
 type Label = Extract<TextItem, { kind: "label" }>;
 
 const POP_S = 0.18;
@@ -48,8 +52,8 @@ export const Texts: React.FC<{ items: TextItem[]; t: number; width: number; heig
           );
         }
         if (x.kind === "label") {
-          return x.font && x.font !== "TikTok Sans" ? <FontLabel key={i} x={x} width={width} height={height} />
-            : <LabelText key={i} x={x} width={width} height={height} family={tiktok} />;
+          return x.font && x.font !== "TikTok Sans" ? <FontLabel key={i} x={x} t={t} width={width} height={height} />
+            : <LabelText key={i} x={x} t={t} width={width} height={height} family={tiktok} />;
         }
         if (x.kind === "title" || x.kind === "cta") {
           const fs = (x.size_pct / 100) * height;
@@ -108,9 +112,9 @@ export const Texts: React.FC<{ items: TextItem[]; t: number; width: number; heig
 };
 
 // a typed text in its own font: the font loads before the frame renders (useFamily holds the render)
-const FontLabel: React.FC<{ x: Label; width: number; height: number }> = ({ x, width, height }) => {
+const FontLabel: React.FC<{ x: Label; t: number; width: number; height: number }> = ({ x, t, width, height }) => {
   const family = useFamily(x.font, 700);
-  return family ? <LabelText x={x} width={width} height={height} family={family} /> : null;
+  return family ? <LabelText x={x} t={t} width={width} height={height} family={family} /> : null;
 };
 
 const ink = (hex: string) => {   // black or white type on a box of this colour
@@ -118,15 +122,24 @@ const ink = (hex: string) => {   // black or white type on a box of this colour
   return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255) > 150 ? "#000000" : "#FFFFFF";
 };
 
-const LabelText: React.FC<{ x: Label; width: number; height: number; family: string }> = ({ x, width, height, family }) => {
+// a label's entrance (anim) and its quick fade out, with its rotation and opacity: "" and 1 for today's look
+export const labelMove = (x: Label, t: number, fs: number) => {
+  const p = prog(t, x.start, POP_S * 1.6, "power3.out"), q = prog(t, x.start, POP_S, "power1.out");
+  const out = x.anim ? 1 - prog(t, x.end - 0.18, 0.18, "power1.in") : 1;
+  const [tr, op] = x.anim === "pop" ? [` scale(${0.86 + 0.14 * p})`, q] : x.anim === "slide" ? [` translateY(${(1 - p) * fs * 0.6}px)`, q]
+    : x.anim === "fade" ? ["", prog(t, x.start, 0.25, "power1.out")] : ["", 1];
+  return { transform: tr + (x.rotation ? ` rotate(${x.rotation}deg)` : ""), opacity: Math.min(op, out) * (x.opacity ?? 1) };
+};
+
+const LabelText: React.FC<{ x: Label; t: number; width: number; height: number; family: string }> = ({ x, t, width, height, family }) => {
   const fs = (x.size_pct / 100) * Math.min(width, height);
-  const box = x.style === "box", block = x.style === "block", c = x.color ?? "#FFFFFF";
+  const box = x.style === "box", block = x.style === "block", c = x.color ?? "#FFFFFF", mv = labelMove(x, t, fs), on = x.text_color ?? ink(c);
   return (
-    <div style={{ position: "absolute", left: `${x.x_pct}%`, top: `${x.y_pct}%`, transform: "translate(-50%, -50%)", width: "max-content",
-      maxWidth: `${x.width_pct ?? 84}%`, textAlign: "center", fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: 700,
-      fontSize: fs, lineHeight: box ? 1.32 : 1.15, whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-      ...(block ? { background: c, color: ink(c), padding: `${fs * 0.22}px ${fs * 0.4}px`, borderRadius: fs * 0.28 } : {}) }}>
-      <span style={{ color: block ? ink(c) : box ? ink(c) : c, ...(box
+    <div style={{ position: "absolute", left: `${x.x_pct}%`, top: `${x.y_pct}%`, transform: "translate(-50%, -50%)" + mv.transform, width: "max-content",
+      maxWidth: `${x.width_pct ?? 84}%`, textAlign: x.align ?? "center", fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: 700,
+      fontSize: fs, lineHeight: box ? 1.32 : 1.15, whiteSpace: "pre-wrap", overflowWrap: "anywhere", ...(mv.opacity < 1 ? { opacity: mv.opacity } : {}),
+      ...(block ? { background: c, color: on, padding: `${fs * 0.22}px ${fs * 0.4}px`, borderRadius: fs * 0.28 } : {}) }}>
+      <span style={{ color: block || box ? on : c, ...(box
         ? { background: c, padding: `${fs * 0.06}px ${fs * 0.24}px`, borderRadius: fs * 0.18,
             WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" }
         : x.style === "outline" ? { WebkitTextStroke: `${fs * 0.14}px #000`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>{x.text}</span>

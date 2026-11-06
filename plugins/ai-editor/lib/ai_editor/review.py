@@ -114,6 +114,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))   # `from ai_editor import ...` (styleskill, taste)
 import askhook  # noqa: E402
+import shortcuts  # noqa: E402
 import assets  # noqa: E402
 import live  # noqa: E402
 
@@ -1088,7 +1089,34 @@ def text_look(add):
         out["color"] = str(add["color"]).upper()
     if add.get("width_pct") is not None and float(add["width_pct"]) < 84:   # the text's width brought in: it wraps sooner
         out["width_pct"] = round(max(15.0, float(add["width_pct"])), 1)
+    out.update(text_more(add, out["style"]))
     return out
+
+
+TEXT_ANIMS, TEXT_ALIGNS = ("fade", "pop", "slide"), ("left", "right")   # Texts.tsx labelMove; none and centre are left out
+
+
+def text_more(add, style):
+    """The inspector's extras on a text (Texts.tsx Label): rotation (degrees), opacity (0-1), anim, align and text_color
+    (the type on a box look), each kept only when it is not today's look, so older rows render byte-identical."""
+    out = {}
+    if add.get("rotation") not in (None, "") and round(float(add["rotation"]) % 360, 1) not in (0, 360):
+        out["rotation"] = round((float(add["rotation"]) + 180) % 360 - 180, 1)
+    if add.get("opacity") not in (None, "") and float(add["opacity"]) < 1:
+        out["opacity"] = round(max(0.05, float(add["opacity"])), 2)
+    for k, ok in (("anim", TEXT_ANIMS), ("align", TEXT_ALIGNS)):
+        if add.get(k) and add[k] not in ("none", "center"):
+            if add[k] not in ok:
+                raise ValueError(f"{k} is one of {', '.join(ok)}.")
+            out[k] = add[k]
+    if add.get("text_color") and style in ("box", "block"):
+        if not re.fullmatch(r"#[0-9A-Fa-f]{6}", str(add["text_color"])):
+            raise ValueError("A colour is #RRGGBB.")
+        out["text_color"] = str(add["text_color"]).upper()
+    return out
+
+
+TEXT_KEYS = ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct", "rotation", "opacity", "anim", "align", "text_color")
 
 
 def put_texts(folder, notes):
@@ -1116,7 +1144,8 @@ def timeline_cuts(body):
             gone[-1][1] = max(gone[-1][1], b)
         else:
             gone.append([a, b])
-    return {"splits": splits, "gone": gone}
+    return {"splits": splits, "gone": gone, **({"ripple": bool(body["ripple"])} if "ripple" in body else {})}   # ripple: the
+    # timeline closes the gaps (the page's view only; the bake always takes the pieces out)
 
 
 def cuts_text(transcript, gone):
@@ -1142,7 +1171,7 @@ def said_in(transcript, a, b):
 def typed_labels(folder):
     """texts.json as plan.json's "label" texts (plan.py typed_texts does the same when Claude plans)."""
     f = Path(folder) / "texts.json"
-    keep = ("text", "style", "start", "end", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct")
+    keep = ("text", "start", "end", *TEXT_KEYS)
     sys.path.insert(0, str(EDIT_PY.parent))
     from preview import laned, read_ov   # the Text lanes (overrides.json lanes): a hidden one's texts out, a later one on top
     return [{"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}}
@@ -1186,6 +1215,9 @@ def cards_pending(folder, d):
             **{a: o[a] for a, b in (("start", "s"), ("end", "e")) if a in o and abs(float(o[a]) - c[b]) > 0.01}}
         if p:
             out.append({"key": k, **p})
+        if not o.get("deleted") and any(o.get(a) is not None for a in ("rotation", "opacity")):   # the inspector's look: the page
+            # starts from it (the live plan draws it; screen_items has no such fields)
+            (out[-1] if p else out.append({"key": k}) or out[-1]).update({a: o[a] for a in ("rotation", "opacity") if o.get(a) is not None})
     return out
 
 
@@ -1231,10 +1263,12 @@ def cards_added(folder, d):
         if a["key"] in shown or o.get("deleted"):
             continue
         c = {**a, **{k: o[k] for k in ("box", "start", "end") if k in o}}
-        vid = assets.kind_of(c["src"]) == "video"
+        src = c.get("src") or ((c.get("anim") or {}).get("props") or {}).get("src") or ""
+        vid = assets.kind_of(src) == "video"
         out.append({"s": c["start"], "e": c["end"], "box": c["box"], "key": a["key"], "added": True,
-                    "label": f"your {'clip' if vid else 'picture'} {Path(c['src']).name}",
-                    "pic": "/media-file/" + quote(c["src"]) + ("?thumb=1" if vid else ""), **({} if vid else {"src": c["src"]})})
+                    "label": f"your {'clip' if vid else 'picture'} {Path(src).name}" if src else "the copy",
+                    **({"pic": "/media-file/" + quote(src) + ("?thumb=1" if vid else "")} if src.startswith(MEDIA_ROOTS) else {}),
+                    **({} if vid or not src else {"src": src})})
     return out
 
 
@@ -1266,8 +1300,9 @@ def live_ready(folder, d):
             "no plan" if not plan.is_file() or not plan.stem.startswith("plan") else
             "no render to patch" if not src.is_file() or not src.with_suffix(".plan.json").is_file() else
             "the render was finished by hand" if not render_stamped(src) else
-            "the draft is not the render" if not Path(d.get("video") or "-").is_file()
-            or Path(d["video"]).stat().st_size != src.stat().st_size else None)
+            "the draft is not the render" if not Path(d.get("video") or "-").is_file() or Path(d["video"]).stat().st_size not in (
+                src.stat().st_size, *([src.with_suffix(".cut.mp4").stat().st_size] if src.with_suffix(".cut.mp4").is_file() else []))
+            else None)   # render.cut.mp4: the render with the Video row's cut pieces out (bake_now)
 
 
 LIVE_PLAN, LIVE_PROXY, LIVE_LOCK = {}, {}, threading.Lock()   # folder -> (files' key, plan); folder -> its proxy's thread
@@ -1278,10 +1313,11 @@ def live_sound(x):
     "in" for "dur" at "vol", a library sound as it is, both at "t" (plan.py placed_sounds levels and trims them into
     .sfx/ for the render). Quoted as the page's encodeURIComponent quotes, so the page's own copy is the same cue."""
     q = quote(str(x["sound"]), safe="!'()*")
+    fades = {k: x[k] for k in ("fade_in", "fade_out") if x.get(k)}   # the inspector's fades (preview/Sfx.tsx ramps the volume)
     if x.get("kind") == "clip":
-        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), "placed": x.get("id")}
+        return {"t": x["t"], "src": "/audio/" + q, "from": x.get("in") or 0, "dur": x["dur"], "vol": x.get("vol", 1), **fades, "placed": x.get("id")}
     d = sound_shape(sfx_mod().library_dir() / str(x["sound"]), cap=sfx_mod().MAX_OWN_S).get("d")
-    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), "placed": x.get("id")}
+    return {"t": x["t"], "src": "/sound-file?name=" + q, **({"_d": d} if d else {}), **({"vol": x["vol"]} if "vol" in x else {}), "placed": x.get("id")}
 
 
 def live_video(folder, plan, plan_f):
@@ -1396,7 +1432,7 @@ def live_plan(folder, d):
     if why and not base:
         return {"why": why}
     plan_f = folder / "plan-layers.json" if base else Path(d["plan"])
-    p = layer_plan(folder, base) if base else load(plan_f)
+    p = layer_plan(folder, base) if base else plan_base(folder, d, plan_f)
     cap = None if base else captions_info(folder, plan_f)
     video = live_video(folder, p, plan_f)
     key = (json.dumps(cap, sort_keys=True), video, str(base), *((f.stat().st_mtime_ns if f.exists() else 0) for f in
@@ -1411,7 +1447,7 @@ def live_plan(folder, d):
         p = apply_overrides(p, folder, plan_f.name)
     from preview import laned, read_ov   # a muted Sounds lane leaves its placed sounds out, as plan.py placed_sounds does
     p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in laned(
-        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x], read_ov(folder), "snd", lambda x: x.get("id"))]
+        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x and not x.get("muted")], read_ov(folder), "snd", lambda x: x.get("id"))]
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
@@ -1452,6 +1488,17 @@ def render_stamped(src):
         return False
 
 
+# the page's undo: every hand edit's files before and after it, so Undo and Redo put them back byte for byte
+HAND_FILES = ("texts.json", "sounds.json", "overrides.json")
+HAND_PATHS = {"/text/add", "/text/delete", "/text/edit", "/sfx/add", "/sfx/remove", "/sfx/move", "/sfx/split", "/audio/upload",
+              "/captions/text", "/captions/time", "/card/edit", "/timeline/lanes", "/timeline/cut", "/media/add"}
+JOURNAL, JOURNAL_LOCK = {}, threading.Lock()   # folder -> [{"at": (stage, round), "before", "after"}], one edit at a time
+
+
+def hand_files(folder):
+    return {n: (Path(folder) / n).read_bytes() if (Path(folder) / n).exists() else None for n in HAND_FILES}
+
+
 BAKE = {}   # folder -> {"state": "waiting" | "working" | "done" | "failed" | "off", "why", "timer", "again"}
 BAKE_LOCK, BAKE_WAIT_S = threading.Lock(), 2.5   # seconds after the last text change before the render starts
 
@@ -1477,6 +1524,16 @@ def bake(folder, run=subprocess.run):
         return bake_now(folder, run)
 
 
+def plan_base(folder, d, plan_f, keep=False):
+    """The plan this round's bakes start from: plan.json as it was before the first bake (kept then in
+    review/<snap>/plan.base.json, keep=True), so overrides.json alone decides the rest and an Undo that puts it back
+    brings back a card a bake took out. plan.json until the first bake."""
+    f = Path(folder) / "review" / Path(d["snap"]).name / "plan.base.json" if d.get("snap") else None
+    if keep and f and not f.exists() and f.parent.is_dir():
+        shutil.copy2(plan_f, f)
+    return load(f if f and f.exists() else plan_f)
+
+
 def bake_now(folder, run=subprocess.run):
     """The texts in texts.json into the draft the page shows, with no Claude: plan.json's label texts swapped for
     them, `edit.py patch` re-renders those seconds into render.mp4, and the round's video and snapshot take it."""
@@ -1492,10 +1549,10 @@ def bake_now(folder, run=subprocess.run):
     if layer_of(folder, d):
         return bake_layers(folder, layer_of(folder, d), b, run)
     plan_f = Path(d["plan"])
-    p = load(plan_f)
+    p = plan_base(folder, d, plan_f, keep=True)
     p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
     sys.path.insert(0, str(EDIT_PY.parent))
-    from preview import apply_overrides   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
+    from preview import apply_overrides, read_ov   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
     from plan import placed_sounds
     cap = captions_info(folder, plan_f)
     p = apply_overrides(p, folder, plan_f.name)
@@ -1510,11 +1567,17 @@ def bake_now(folder, run=subprocess.run):
         b.update(state="failed", why=((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1])
         return b["why"]
     src = plan_f.with_name("render" + plan_f.stem[len("plan"):] + ".mp4")
+    gone = (read_ov(folder).get("cuts") or {}).get("gone") or []
+    if gone:   # the Video row's cut pieces out of the render, as a layer draft's bake takes them out of its base
+        why = cut_mp4(src, gone, src.with_suffix(".cut.mp4"))
+        if why:
+            b.update(state="failed", why=why)
+            return why
 
     def swap(d):
         if d.get("sent") or d["stage"] != "edit" or Path(d.get("plan") or "-") != plan_f:   # Claude took it meanwhile
             return
-        clone(src, Path(d["video"]))
+        clone(src.with_suffix(".cut.mp4") if gone else src, Path(d["video"]))
         shutil.copy2(plan_f, folder / "review" / Path(d["snap"]).name / plan_f.name)
         old = data_of(folder, d.get("data"))
         d["data"] = round_data(folder, d["video"], d["stage"], d["round"], d.get("plan"))
@@ -1525,6 +1588,27 @@ def bake_now(folder, run=subprocess.run):
         d["baked"] = d.get("baked", 0) + 1
     update(rj, swap)
     return bake_done(folder, b)
+
+
+def cut_mp4(base, gone, out):
+    """base without the gone pieces ([[a, b]] on its clock), sound and picture, into out; mono sound copied to both
+    sides at full level (Remotion and -ac 2 pan it 3 dB down: the bake came out quieter). None, or why it stopped."""
+    audio = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels", "-of", "csv=p=0",
+                            str(base)], capture_output=True, text=True).stdout.split()
+    edges, fa = [0.0, *(x for g in gone for x in g)], bool(audio)   # the pieces kept, by trim and atrim: sample-exact
+    keep = [(edges[i], edges[i + 1] if i + 1 < len(edges) else None) for i in range(0, len(edges), 2)]   # (aselect drops whole
+    keep = [(a, z) for a, z in keep if (probed(base)["duration"] if z is None else z) - a > 0.02]   # audio frames: the
+    # sound ran 0.1 s late after a cut)
+    tr = lambda a, z: f"start={a}" + (f":end={z}" if z is not None else "")
+    fc = "".join(f"[0:v]trim={tr(a, z)},setpts=PTS-STARTPTS[v{i}];" + (f"[0:a]atrim={tr(a, z)},asetpts=PTS-STARTPTS[a{i}];" if fa else "")
+                 for i, (a, z) in enumerate(keep)) + "".join(f"[v{i}]" + (f"[a{i}]" if fa else "") for i in range(len(keep)))
+    af = "pan=stereo|c0=c0|c1=c0" if audio == ["1"] else "anull"
+    fc += f"concat=n={len(keep)}:v=1:a={int(fa)}[v]" + (f"[c];[c]{af}[a]" if fa else "")
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(base), *(
+        ["-filter_complex", fc, "-map", "[v]", *(["-map", "[a]"] if fa else []), "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
+         "-g", "15", "-pix_fmt", "yuv420p"] if gone else ["-c:v", "copy", "-af", af]),
+        *(["-c:a", "aac", "-b:a", "192k"] if fa else []), str(out)], capture_output=True, text=True)
+    return (r.stderr.strip().splitlines() or ["the cut stopped"])[-1] if r.returncode else None
 
 
 def bake_layers(folder, base, b, run=subprocess.run):
@@ -1542,26 +1626,13 @@ def bake_layers(folder, base, b, run=subprocess.run):
     if layered:
         audio = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels", "-of", "csv=p=0",
                                 str(base)], capture_output=True, text=True).stdout.split()
-        if gone or audio == ["1"]:   # the cut pieces out of the base, sound and picture, so the render is the shorter video;
-            # mono sound copied to both sides at full level (Remotion and -ac 2 pan it 3 dB down: the bake came out quieter)
+        if gone or audio == ["1"]:   # the cut pieces out of the base, sound and picture, so the render is the shorter video
             cut = folder / ".layers" / base.name
             cut.parent.mkdir(exist_ok=True)
-            edges, fa = [0.0, *(x for g in gone for x in g)], bool(audio)   # the pieces kept, by trim and atrim: sample-exact
-            keep = [(edges[i], edges[i + 1] if i + 1 < len(edges) else None) for i in range(0, len(edges), 2)]   # (aselect drops whole
-            keep = [(a, z) for a, z in keep if (probed(base)["duration"] if z is None else z) - a > 0.02]   # audio frames: the
-            # sound ran 0.1 s late after a cut)
-            tr = lambda a, z: f"start={a}" + (f":end={z}" if z is not None else "")
-            fc = "".join(f"[0:v]trim={tr(a, z)},setpts=PTS-STARTPTS[v{i}];" + (f"[0:a]atrim={tr(a, z)},asetpts=PTS-STARTPTS[a{i}];" if fa else "")
-                         for i, (a, z) in enumerate(keep)) + "".join(f"[v{i}]" + (f"[a{i}]" if fa else "") for i in range(len(keep)))
-            af = "pan=stereo|c0=c0|c1=c0" if audio == ["1"] else "anull"
-            fc += f"concat=n={len(keep)}:v=1:a={int(fa)}[v]" + (f"[c];[c]{af}[a]" if fa else "")
-            r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(base), *(
-                ["-filter_complex", fc, "-map", "[v]", *(["-map", "[a]"] if fa else []), "-c:v", "libx264", "-crf", "18", "-preset", "veryfast",
-                 "-g", "15", "-pix_fmt", "yuv420p"] if gone else ["-c:v", "copy", "-af", af]),
-                *(["-c:a", "aac", "-b:a", "192k"] if fa else []), str(cut)], capture_output=True, text=True)
-            if r.returncode:
-                b.update(state="failed", why=(r.stderr.strip().splitlines() or ["the cut stopped"])[-1])
-                return b["why"]
+            why = cut_mp4(base, gone, cut)
+            if why:
+                b.update(state="failed", why=why)
+                return why
             m = probed(cut)
             p.update(video=cut.relative_to(folder).as_posix(), durationInFrames=max(1, round(m["duration"] * p["fps"])))
             texts = [{**x, "start": on_cut(x["start"], gone)[0], "end": on_cut(x["end"], gone)[0]} for x in p["texts"]]
@@ -2294,6 +2365,11 @@ def make_handler(folder, token):
             return any(hmac.compare_digest(v.encode(), token.encode()) for v in (q, got) if v)
 
         def send(self, code, body, ctype="application/json", cookie=False):
+            j0, self._j0 = getattr(self, "_j0", None), None
+            if j0 and code == 200 and isinstance(body, dict) and hand_files(folder) != j0[1]:   # a hand edit: kept for Undo
+                js = JOURNAL.setdefault(str(folder), [])
+                js.append({"at": j0[0], "before": j0[1], "after": hand_files(folder)})
+                body = {**body, "j": len(js) - 1}
             if isinstance(body, (dict, list)):
                 body = json.dumps(body).encode()
             elif isinstance(body, str):
@@ -2345,6 +2421,8 @@ def make_handler(folder, token):
             q = {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}
             if askhook.route(self, "GET", path, q):   # Claude's questions (askhook.py)
                 return
+            if shortcuts.route(self, "GET", path, q):   # the keyboard shortcuts (shortcuts.py)
+                return
             if path == "/":
                 return self.send(200, themed(HTML.read_bytes()), "text/html; charset=utf-8", cookie=True)
             if path == "/state":
@@ -2377,7 +2455,7 @@ def make_handler(folder, token):
                 d["layer"] = layer_of(folder, d) is not None   # plays base_video with the hand edits as layers (layer_plan)
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
-                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"))   # the tab reloads when this changes
+                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
                 d["home"] = home_url()   # the Home button: back to the editor's window, or how to start it
@@ -2513,6 +2591,17 @@ def make_handler(folder, token):
             self.send(404, {})
 
         def do_POST(self):
+            if urlsplit(self.path).path not in HAND_PATHS:
+                return self.post()
+            with JOURNAL_LOCK:
+                d = load(rj)
+                self._j0 = ((d.get("stage"), d.get("round")), hand_files(folder))
+                try:
+                    return self.post()
+                finally:
+                    self._j0 = None
+
+        def post(self):
             if not self.authorized():
                 return self.send(403, {"error": "open the page with the URL review.py printed"})
             if not askhook.same_origin(self):   # a POST from another site's page, even with the cookie
@@ -2563,6 +2652,8 @@ def make_handler(folder, token):
                 return self.send(400, {"error": "not json"})
             path = urlsplit(self.path).path
             if askhook.route(self, "POST", path, {}, body):
+                return
+            if shortcuts.route(self, "POST", path, {}, body):
                 return
             if path == "/theme":   # the toggle: one choice for the window and every review page
                 try:
@@ -2821,17 +2912,29 @@ def make_handler(folder, token):
                 x = next((i for i in items if i.get("id") == body.get("placed")), None)
                 if not x:
                     return self.send(404, {"error": "That sound is gone already."})
-                was = {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}
+                SK = ("t", "in", "dur", "vol", "kind", "fade_in", "fade_out", "muted")
+                was = {k: x.get(k) for k in SK}
                 try:
                     x["t"] = round(max(0.0, float(body.get("t", x["t"]))), 2)
                     if x.get("kind") == "clip":
                         x["in"] = round(max(0.0, float(body.get("in", x.get("in", 0)))), 2)
                         x["dur"] = round(max(0.1, float(body.get("dur", x["dur"]))), 2)
+                        for k in ("fade_in", "fade_out"):   # the inspector: seconds; plan.py's 20 ms when left out
+                            if k in body:
+                                x[k] = round(min(x["dur"] / 2, max(0.0, float(body[k] or 0))), 2)
+                                if x[k] <= 0.02:
+                                    x.pop(k)
+                    if "vol" in body or x.get("kind") == "clip":   # a library sound's level too (plan.py gains its cue)
                         x["vol"] = round(min(2.0, max(0.0, float(body.get("vol", x.get("vol", 1))))), 2)
+                        if x.get("kind") != "clip" and x["vol"] == 1:
+                            x.pop("vol")
+                    if "muted" in body:
+                        x.pop("muted", None)
+                        x.update({"muted": True} if body["muted"] else {})
                 except (TypeError, ValueError):
                     return self.send(400, {"error": "sfx/move takes placed and t (a clip also in, dur, vol)"})
                 save(folder / "sounds.json", {"items": items})
-                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in ("t", "in", "dur", "vol", "kind")}, Path(x["sound"]).stem)
+                log_edit(folder, "sfx.move", x["id"], was, {k: x.get(k) for k in SK}, Path(x["sound"]).stem)
                 line = f"add {Path(x['sound']).stem} at {fmt(x['t'])}" + (f" for {x['dur']:.1f} s at {round(x['vol'] * 100)}%" if x.get("kind") == "clip" else "")
                 return self.timeline_note("sounds-timeline", "Sounds on the timeline", line,
                                           "Plan again so they are in (sounds.json and overrides.json sfx).", key=x["id"], layer=True)
@@ -2971,6 +3074,12 @@ def make_handler(folder, token):
                                 raise ValueError
                             change.update(start=s, end=e)
                             what = f"Retime ({fmt(s)}-{fmt(e)})" if "box" not in change else what
+                        if "rotation" in body:   # the inspector and the rotate handle: degrees, None back to upright
+                            r = round((float(body["rotation"] or 0) + 180) % 360 - 180, 1)
+                            change["rotation"] = r or None
+                        if "opacity" in body:
+                            o = round(min(1.0, max(0.05, float(body["opacity"] if body["opacity"] is not None else 1))), 2)
+                            change["opacity"] = o if o < 1 else None
                         if not change:
                             raise ValueError
                     t, te = float(body["t"]), float(body["t_end"])
@@ -3059,6 +3168,51 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
                 return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
                                      f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
+            if path == "/timeline/restore":   # Undo or Redo of a hand edit: its files as they were before it, or after it
+                d, js = load(rj), JOURNAL.get(str(folder)) or []
+                try:
+                    j = js[int(body["j"])]
+                    files = j[body["side"]]
+                except (KeyError, TypeError, ValueError, IndexError):
+                    return self.send(400, {"error": "timeline/restore takes j (from a hand edit) and side (before or after)"})
+                last = d["events"][-1]["type"] if d["events"] else None
+                if j["at"] != (d.get("stage"), d.get("round")) or d.get("sent") and last not in ("send", "edits"):
+                    return self.send(409, {"error": "That change was on another draft."})
+                with JOURNAL_LOCK:
+                    for n, b in files.items():
+                        if b is None:
+                            (folder / n).unlink(missing_ok=True)
+                        elif not (folder / n).exists() or (folder / n).read_bytes() != b:
+                            (folder / n).write_bytes(b)
+                bake_soon(folder)
+                return self.send(200, {"ok": True})
+            if path == "/card/dup":   # Alt-drag on the video: a copy of a card at a new box, an added card like a dropped picture
+                d = load(rj)
+                last = d["events"][-1]["type"] if d["events"] else None
+                if d.get("stage") != "edit" or d.get("sent") and last not in ("send", "edits") or not Path(d.get("plan") or "-").is_file():
+                    return self.send(409, {"error": "Cards are copied on the edit, before it is approved."})
+                try:
+                    box = [round(float(v), 1) for v in body["box"]]
+                    if len(box) != 4 or box[2] < 3 or box[3] < 3 or not all(-50 <= v <= 150 for v in box):
+                        raise ValueError
+                    sys.path.insert(0, str(EDIT_PY.parent))
+                    from preview import apply_overrides
+                    c = next(c for c in apply_overrides(load(Path(d["plan"])), folder, Path(d["plan"]).name)["cards"] if card_key(c) == body["key"])
+                except (KeyError, TypeError, ValueError, StopIteration):
+                    return self.send(400, {"error": "card/dup takes the key of a card in this draft and box [x, y, w, h]"})
+                ovf = folder / "overrides.json"
+                ov = load(ovf) if ovf.exists() else {}
+                added = ov.setdefault("added_cards", [])
+                n = 1 + max([int(m.group(1)) for a in added for m in [re.match(r"media(\d+)@", a["key"])] if m] or [0])
+                key = f"media{n}@{c['start']:.3f}"
+                added.append({"key": key, **{k: v for k, v in c.items() if k not in ("override", "_key", "lane", "z")}, "box": box})
+                save(ovf, ov)
+                log_edit(folder, "card.add", key, None, {"copy_of": body["key"], "box": box}, "a copy")
+                bake_soon(folder)
+                if not d.get("sent"):
+                    return self.send(200, {"ok": True, "key": key, "start": c["start"], "end": c["end"]})
+                return self.comment({"t": c["start"], "t_end": c["end"], "text": f"Copy the card {body['key']} to {box} as shown on the page: "
+                                     f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
             if path == "/timeline/cut":   # the timeline's Video row: {splits: [t], gone: [[a, b]]} on the edit's clock.
                 # The page skips the gone pieces at once; one note tells Claude the words to cut from the next draft
                 d = load(rj)
@@ -3080,9 +3234,10 @@ def make_handler(folder, token):
                 for g in was:
                     if g not in cuts["gone"]:
                         log_edit(folder, "cut.restore", f"{g[0]:.2f}", g, None)
-                if layer_of(folder, d) and not tell_claude(folder, d, True):   # a layer draft: the bake cuts its MP4 itself
+                if not tell_claude(folder, d, True):   # the bake cuts the MP4 itself (a layer draft's base, a plan draft's render)
                     self.drop_note("cuts")
-                    bake_soon(folder)
+                    if was != cuts["gone"]:   # a split or the ripple view alone changes nothing in the video
+                        bake_soon(folder)
                     return self.send(200, {"ok": True, "cuts": cuts})
                 old = next((c for c in d["comments"] if (c.get("on") or {}).get("k") == "cuts" and c["stage"] == d["stage"]
                             and c["round"] >= d["round"] and editable(d, c)), None)
@@ -3125,8 +3280,8 @@ def make_handler(folder, token):
                 if not text:
                     return self.send(400, {"error": "Type the text first."})
                 try:
-                    new = {k: v for k, v in x.items() if k not in ("font", "color", "width_pct")}   # text_look sets them again when kept
-                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in ("style", "x_pct", "y_pct", "size_pct", "font", "color", "width_pct") if k in body}})}
+                    new = {k: v for k, v in x.items() if k not in TEXT_KEYS[4:]}   # text_look sets them again when kept
+                    new = {**new, "text": text, **text_look({**x, **{k: body[k] for k in TEXT_KEYS if k in body}})}
                     if body.get("start") is not None:
                         new["start"] = round(max(0.0, float(body["start"])), 2)
                         new["end"] = round(max(new["start"] + 0.1, float(body.get("end") or new["start"] + TEXT_HOLD_S)), 2)
@@ -3139,6 +3294,8 @@ def make_handler(folder, token):
                     return tell(f'Add the on-screen text "{text}": texts.json has it. Plan again so it shows.', new)
                 what = [w for w, k in (("words", "text"), ("look", "style"), ("place", "x_pct"), ("place", "y_pct"),
                                        ("size", "size_pct"), ("font", "font"), ("colour", "color"), ("width", "width_pct"), ("time", "start"),
+                                       ("rotation", "rotation"), ("opacity", "opacity"), ("animation", "anim"), ("alignment", "align"),
+                                       ("colour", "text_color"),
                                        ("time", "end")) if new.get(k) != x.get(k)]
                 return tell(f'Change the on-screen text "{x["text"]}" ({", ".join(dict.fromkeys(what)) or "no change"}): '
                             f'texts.json has it now as "{text}". Plan again so it shows.', new)
@@ -3663,7 +3820,7 @@ def go_back(folder, n):
         if "music.wav" not in had:
             (folder / ".sfx" / "music.wav").unlink(missing_ok=True)
         for f in snap.rglob("*"):   # the files come back before the new round snapshots them
-            if f.is_file() and f.name != SNAP_NAMES:
+            if f.is_file() and f.name not in (SNAP_NAMES, "plan.base.json"):   # plan.base.json: its bakes' start (plan_base)
                 rel = f.relative_to(snap)
                 out_ = folder / ".sfx" / "music.wav" if rel.name == "music.wav" and len(rel.parts) == 1 else \
                     folder / Path(*rel.parts[1:]) if rel.parts[0] == "files" else folder / rel
@@ -4317,8 +4474,10 @@ def learn_job(folder, cli=None):
     rj = folder / "review.json"
     cli = os.environ.get("AI_EDITOR_CLAUDE") or shutil.which("claude") if cli is None else cli
     why = None
-    if (load(rj).get("learn") or {}).get("state") != "reading":
+    lr0 = load(rj).get("learn") or {}
+    if lr0.get("state") != "reading":
         return
+    mine = lr0.get("job")   # a later read (Try again, a new approve) is not this job's to fail
     if not cli:
         why = "Claude Code is not installed here, so Claude could not read your notes."
     else:
@@ -4333,7 +4492,7 @@ def learn_job(folder, cli=None):
 
     def f(d):
         lr = d.get("learn") or {}
-        if lr.get("state") == "reading":   # it never posted: say so, never an empty list
+        if lr.get("state") == "reading" and lr.get("job") == mine:   # it never posted: say so, never an empty list
             lr.update(state="failed", why=why or "Claude finished without posting any rules.")
     update(rj, f)
 
@@ -4973,7 +5132,7 @@ def demo_layers(tmp):
         f"http://127.0.0.1:{srv.server_address[1]}{p}?t=tok", json.dumps(b).encode(), method="POST")).read())
     save(f / "sounds.json", {"items": [{"id": "a1", "t": 2.0, "sound": "s.wav", "kind": "clip", "in": 0, "dur": 0.5, "vol": 0.5}]})
     assert post("/text/add", {"text": "yo", "style": "plain", "x_pct": 50, "y_pct": 50, "start": 1, "end": 2})["ok"]
-    assert post("/sfx/move", {"placed": "a1", "t": 2.5, "in": 0, "dur": 0.5, "vol": 0.4}) == {"ok": True}
+    assert post("/sfx/move", {"placed": "a1", "t": 2.5, "in": 0, "dur": 0.5, "vol": 0.4}).keys() == {"ok", "j"}
     assert post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]]})["cuts"]["gone"] == [[1.0, 2.0]]
     st = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/state?t=tok").read())
     assert st["layer"] is True and st["comments"] == [] and st["bake"]["state"] == "waiting", st
@@ -4988,6 +5147,74 @@ def demo_layers(tmp):
     set_ui(videos=vs)   # not one of the user's first videos (the main demo counts those)
     d = load(f / "review.json")
     assert "base_video" not in d and d["video"] == str(f / "review" / "v-edit4.mp4") and layer_of(f, d) == Path(d["video"]), d
+
+
+def demo_ripple(tmp):
+    """The ripple timeline's server side: cuts keep the ripple choice; a plan draft's bake takes the cut pieces out of
+    its render (render.cut.mp4), still plays live, and needs no note; every hand edit is journaled, and Undo and Redo
+    put its files back byte for byte, on its own draft only."""
+    assert timeline_cuts({"splits": [1], "gone": [[1, 2]], "ripple": 0}) == {"splits": [1.0], "gone": [[1.0, 2.0]], "ripple": False}
+    assert "ripple" not in timeline_cuts({"splits": [1], "gone": []}) and on_cut(2.5, [[1.0, 2.0]]) == (1.5, False)
+    f = tmp / "ripple"
+    (f / "review" / "snap-edit1").mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=4", "-f", "lavfi", "-i", "sine=duration=4",
+                    "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(f / "render.mp4")], check=True)
+    plan = {"fps": 30, "durationInFrames": 120, "width": 64, "height": 36, "texts": [], "cards": []}
+    for p in (f / "plan.json", f / "render.plan.json", f / "review" / "snap-edit1" / "plan.json"):
+        p.write_text(json.dumps(plan), encoding="utf-8")
+    (f / "render.stamp.json").write_text(json.dumps({"size": (f / "render.mp4").stat().st_size,
+                                                     "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
+    clone(f / "render.mp4", f / "review" / "v-edit1.mp4")
+    save(f / "review.json", {"stage": "edit", "round": 1, "sent": False, "stills": False, "events": [], "comments": [],
+                             "plan": str(f / "plan.json"), "snap": "snap-edit1", "video": str(f / "review" / "v-edit1.mp4")})
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    post = lambda p, b: json.loads(urllib.request.urlopen(urllib.request.Request(
+        f"http://127.0.0.1:{srv.server_address[1]}{p}?t=tok", json.dumps(b).encode(), method="POST")).read())
+    state = lambda: json.loads(urllib.request.urlopen(f"http://127.0.0.1:{srv.server_address[1]}/state?t=tok").read())
+    start, js = hand_files(f), []
+    js.append(post("/timeline/cut", {"splits": [1, 2], "gone": [], "ripple": True})["j"])
+    assert BAKE.get(str(f), {}).get("state") != "waiting", "a split alone bakes nothing"
+    js.append(post("/timeline/cut", {"splits": [1, 2], "gone": [[1, 2]], "ripple": True})["j"])
+    st = state()
+    assert st["comments"] == [] and st["bake"]["state"] == "waiting" and st["cuts"]["ripple"] is True, "a plan draft bakes its cut, no note"
+    BAKE[str(f)]["timer"].cancel()
+    js.append(post("/text/add", {"text": "hi", "style": "box", "x_pct": 50, "y_pct": 30, "start": 2.5, "end": 3.5})["j"])
+    js.append(post("/timeline/lanes", {"kind": "text", "state": [{"hidden": True}]})["j"])
+    end = hand_files(f)
+    assert js == [0, 1, 2, 3] and post("/theme", {"theme": "dark"}).get("j") is None, "only hand edits are journaled"
+    post("/timeline/restore", {"j": js[0], "side": "before"})
+    assert hand_files(f) == start and not (f / "texts.json").exists(), "undo all: the files as they were, byte for byte"
+    post("/timeline/restore", {"j": js[-1], "side": "after"})
+    assert hand_files(f) == end, "redo all"
+    BAKE[str(f)]["timer"].cancel()
+    ran = []
+
+    def fake(cmd, **k):   # the patch render: the render as it is
+        ran.append(cmd[2])
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+    assert bake(f, run=fake) is None and ran == ["patch"], ran
+    d = load(f / "review.json")
+    assert abs(duration(d["video"]) - 3) < 0.1 and abs(duration(f / "render.mp4") - 4) < 0.1, "the round's video has the piece out"
+    assert live_ready(f, d) is None and layer_of(f, d) is None, "still plays live from the plan, not as a layer draft"
+    p = load(f / "plan.json")
+    p["cards"] = [{"start": 0.5, "end": 1.5, "trigger_word": "repo", "box": [30, 60, 40, 20]}]
+    save(f / "plan.json", p)
+    (f / "review" / "snap-edit1" / "plan.base.json").unlink()
+    j = post("/card/edit", {"key": "repo@0.500", "t": 0.5, "t_end": 1.5, "deleted": True})["j"]
+    BAKE[str(f)]["timer"].cancel()
+    assert bake(f, run=fake) is None and load(f / "plan.json")["cards"] == [], "the bake takes the card out"
+    post("/timeline/restore", {"j": j, "side": "before"})
+    BAKE[str(f)]["timer"].cancel()
+    assert bake(f, run=fake) is None and len(load(f / "plan.json")["cards"]) == 1, "undo of the delete: back after the next bake"
+    update(f / "review.json", lambda d: d.update(round=2))
+    try:
+        post("/timeline/restore", {"j": 0, "side": "before"})
+        raise AssertionError("undid an edit made on another draft")
+    except urllib.error.HTTPError as e:
+        assert e.code == 409
+    srv.shutdown()
+    srv.server_close()
 
 
 def demo_learn_edits(tmp):
@@ -5142,6 +5369,7 @@ def demo():
     demo_bake(tmp)
     demo_live(tmp)
     demo_layers(tmp)
+    demo_ripple(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
@@ -5220,9 +5448,13 @@ def demo():
     def get(p, **h):
         return urllib.request.urlopen(urllib.request.Request(base + p + ("&" if "?" in p else "?") + "t=" + tok, headers=h))
 
+    jn = []   # the hand edits' journal ids (Undo): taken off each answer so the checks below read as before
+
     def post(p, b):
-        return json.loads(urllib.request.urlopen(urllib.request.Request(
-            base + p + "?t=" + tok, json.dumps(b).encode(), method="POST")).read())
+        r = json.loads(urllib.request.urlopen(urllib.request.Request(base + p + "?t=" + tok, json.dumps(b).encode(), method="POST")).read())
+        if isinstance(r, dict) and "j" in r:
+            jn.append(r.pop("j"))
+        return r
 
     def waited():
         o = io.StringIO()
@@ -5258,6 +5490,20 @@ def demo():
     OPEN = webbrowser.open
     r = get("/")
     assert b"review" in r.read() and "HttpOnly" in r.headers["Set-Cookie"]
+    # the keyboard shortcuts (shortcuts.py): one table in shortcuts.js, the user's changes in $AI_EDITOR_HOME/keys.json
+    assert '<script src="/shortcuts.js">' in HTML.read_text(encoding="utf-8") and b"KM_TABLE" in get("/shortcuts.js").read()
+    assert json.loads(get("/keys").read()) == {"keys": {}} and post("/keys", {"action": "split", "combo": "Mod+K"}) == {"keys": {"split": ["Mod+K"]}}
+    assert get("/shortcuts.js").read().startswith(b'const KM_USER={"split": ["Mod+K"]};'), "the page's first key press already has it"
+    assert json.loads((tmp / "home" / "keys.json").read_text(encoding="utf-8")) == {"split": ["Mod+K"]}, "only the changed action"
+    for bad in ({"action": "nope", "combo": "K"}, {"action": "split", "combo": "Mod+Q"}, {"action": "split", "combo": "k"}, {"action": "cancel", "combo": "K"}):
+        try:
+            post("/keys", bad)
+            raise AssertionError(f"took {bad}")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400 and json.loads(e.read())["error"]
+    assert post("/keys", {"action": "fit", "combo": []})["keys"] == {"split": ["Mod+K"], "fit": []}
+    assert post("/keys", {"reset": "split"})["keys"] == {"fit": []} and post("/keys", {"reset_all": True})["keys"] == {}
+    assert post("/keys", {"replace": {"split": ["Mod+K", "Mod+B"]}})["keys"] == {"split": ["Mod+K", "Mod+B"]} and post("/keys", {"reset_all": True})
     # Claude's question (askhook.py): posted, polled by the showing page, answered in its own words, cleared
     assert '<script src="/ask.js">' in HTML.read_text(encoding="utf-8") and b"askq" in get("/ask.js").read()
     qs = [{"question": "Keep the intro?", "header": "Intro", "options": [{"label": "Keep", "description": ""}], "multiSelect": False}]
@@ -5521,6 +5767,20 @@ def demo():
     assert (row["font"], row["color"], row["start"], row["end"]) == ("Anton", "#FF3B30", 5.0, 7.5), row
     post("/text/edit", {"id": nt["id"], "font": "TikTok Sans", "color": "#FFFFFF"})   # back to the default: the keys go
     assert not {"font", "color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    # the inspector's extras: kept only off today's look, laid into the live plan's label, back to none drops the keys
+    post("/text/edit", {"id": nt["id"], "style": "box", "rotation": 370, "opacity": 0.5, "anim": "pop", "align": "left", "text_color": "#ffd60a"})
+    row = load(folder / "texts.json")["items"][-1]
+    assert {k: row[k] for k in ("rotation", "opacity", "anim", "align", "text_color")} == \
+        {"rotation": 10.0, "opacity": 0.5, "anim": "pop", "align": "left", "text_color": "#FFD60A"}, row
+    assert typed_labels(folder)[-1]["anim"] == "pop" and typed_labels(folder)[-1]["rotation"] == 10.0, typed_labels(folder)
+    post("/text/edit", {"id": nt["id"], "style": "plain", "rotation": 0, "opacity": 1, "anim": "none", "align": "center"})
+    assert not {"rotation", "opacity", "anim", "align", "text_color"} & set(load(folder / "texts.json")["items"][-1]), load(folder / "texts.json")
+    for bad in ({"anim": "spin"}, {"align": "middle"}, {"opacity": "x"}):
+        try:
+            post("/text/edit", {"id": nt["id"], **bad})
+            raise AssertionError(bad)
+        except urllib.error.HTTPError as e:
+            assert e.code == 400, bad
     bad = urllib.request.Request(base + "/text/edit?t=" + tok, json.dumps({"id": nt["id"], "font": "Comic Sans"}).encode(), method="POST")
     try:
         urllib.request.urlopen(bad)
@@ -5618,6 +5878,13 @@ def demo():
         post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
         clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
         assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip
+        post("/sfx/move", {"placed": clip["id"], "fade_in": 0.3, "fade_out": 9, "muted": True})   # the inspector: fades held to half its length
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert (clip["fade_in"], clip["fade_out"], clip["muted"]) == (0.3, 0.5, True), clip
+        assert live_sound(clip)["fade_in"] == 0.3 and live_sound({"t": 1, "sound": "pop.wav", "vol": 0.5})["vol"] == 0.5
+        post("/sfx/move", {"placed": clip["id"], "fade_in": 0, "fade_out": 0.01, "muted": False})
+        clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
+        assert not {"fade_in", "fade_out", "muted"} & set(clip), clip
         sm = post("/sfx/remove", {"t": 3, "placed": clip["id"], "src": "my song.wav"})
         assert sm["lines"] == ["remove pop at 0:03.5"], sm   # dropped, moved and removed: still one line
         post("/delete", {"id": sa["id"]})   # the sounds note, so the next one starts clean
@@ -5707,6 +5974,11 @@ def demo():
     assert pend == [{"key": k0, "box": [10.0, 12.0, 50.0, 30.0], "start": 4.0, "end": 6.5}], pend
     post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "box": c0["box"], "start": c0["s"], "end": c0["e"]})   # an undo: back where the video has it
     assert json.loads(get("/state").read())["cards_pending"] == [], "back in place is not pending"
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "rotation": -370, "opacity": 0.4})   # the inspector: kept, and in /state
+    assert {k: load(folder / "overrides.json")["cards"][k0][k] for k in ("rotation", "opacity")} == {"rotation": -10.0, "opacity": 0.4}
+    assert json.loads(get("/state").read())["cards_pending"] == [{"key": k0, "rotation": -10.0, "opacity": 0.4}]
+    post("/card/edit", {"key": k0, "t": 1, "t_end": 2, "rotation": 0, "opacity": 1})   # upright and solid again: None, which apply_overrides drops
+    assert json.loads(get("/state").read())["cards_pending"] == [], "upright again is not pending"
     for bad in ({"start": -1, "end": 2}, {"start": 3, "end": 3.1}, {"start": 3}, {"start": "x", "end": 4}, {}):
         try:
             post("/card/edit", {"key": k0, "t": 1, "t_end": 2, **bad})

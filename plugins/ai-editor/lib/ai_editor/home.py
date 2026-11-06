@@ -84,7 +84,9 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import askhook  # noqa: E402
+import shortcuts  # noqa: E402
 import assets  # noqa: E402
+import brandkit  # noqa: E402
 import broll  # noqa: E402
 import custom  # noqa: E402
 import keys  # noqa: E402
@@ -2083,6 +2085,10 @@ def make_handler(token):
             path = unquote(urlsplit(self.path).path)
             if askhook.route(self, "GET", path, {k: v[0] for k, v in parse_qs(urlsplit(self.path).query).items()}):   # Claude's questions
                 return
+            if shortcuts.route(self, "GET", path):   # the keyboard shortcuts, Settings edits them (shortcuts.py)
+                return
+            if brandkit.route(self, "GET", path, parse_qs(urlsplit(self.path).query)):   # the Brand page
+                return
             if path == "/":
                 return self.send(200, themed(HTML.read_bytes()), "text/html; charset=utf-8", cookie=True)
             if path == "/post/accounts":   # Settings, Auto-post your videos: asked when the card opens and on return from a sign-in, never per poll
@@ -2105,7 +2111,7 @@ def make_handler(token):
                 d["getting_started"] = getting_started(d)
                 import launcher   # a Claude of its own per video only where a terminal window can be opened
                 d["new_claude"] = bool(launcher.terminal(d["root"], ["claude"], platform.system()))
-                d["page"] = f'{live.page_version(HTML, HTML.with_name("ask.js"))}-{my_version()}'   # the tab reloads when this changes (an update too)
+                d["page"] = f'{live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)}-{my_version()}'   # the tab reloads when this changes (an update too)
                 lk = d.get("lookup") or {}
                 if lk.get("handle"):
                     lk["listing"] = listing(d["root"], lk["handle"])
@@ -2277,11 +2283,15 @@ def make_handler(token):
                 with live.busy():   # no live-reload restart under an upload
                     return self.upload() if path == "/upload" else self.cover()
             try:
-                cap = askhook.MAX_BODY if path in ("/ask/answer", "/job") else 1 << 20   # an answer or a new video can carry images
+                cap = askhook.MAX_BODY if path in ("/ask/answer", "/job", "/brand/claude") else 1 << 20   # an answer or a new video can carry images
                 body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), cap)) or b"{}")
             except ValueError:
                 return self.send(400, {"error": "not json"})
             if askhook.route(self, "POST", path, {}, body):
+                return
+            if shortcuts.route(self, "POST", path, {}, body):
+                return
+            if brandkit.route(self, "POST", path, {}, body):
                 return
             if path == "/post/connect":   # one more account: Zernio's sign-in opens in a new tab, Settings re-lists on return
                 try:
@@ -3238,6 +3248,31 @@ def demo():
     assert get("/state")["theme"] == "system" and b"<html data-theme" not in urllib.request.urlopen(base + "/?t=" + tok).read()
     assert post("/theme", {"theme": "light"})["theme"] == "light" and get("/state")["theme"] == "light"
     assert b'<html data-theme="light" lang="en">' in urllib.request.urlopen(base + "/?t=" + tok).read()
+    # the Brand page (brandkit.py): the template, import / Edit > Save, the switch, Make one with Claude on a stub CLI
+    assert get("/brand")["kit"] is None and b"## Colours" in urllib.request.urlopen(base + "/brand/template?t=" + tok).read()
+    bs = post("/brand/save", {"md": "## Colours\n- Background: #F5F2EC\n- Accent: #E5482C\n## Fonts\n- Display: Fraunces\n- Body: IBM Plex Sans\n"})
+    assert bs["use"] and [c["role"] for c in bs["kit"]["colors"]] == ["ground", "accent"] and bs["kit"]["fonts"]["body"] == "IBM Plex Sans", bs
+    assert json.loads((tmp / "home" / "profile.json").read_text(encoding="utf-8"))["brand"]["font_body"] == "IBM Plex Sans"
+    assert post("/brand/use", {"on": False})["use"] is False and post("/brand/use", {"on": True})["use"] is True
+    try:
+        post("/brand/save", {"md": "  "})
+        raise AssertionError("an empty file saved")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+    keep_cli = os.environ.get("AI_EDITOR_CLAUDE")
+    os.environ["AI_EDITOR_CLAUDE"] = shutil.which("true") or "/usr/bin/true"
+    try:
+        assert post("/brand/claude", {"url": "example.com", "about": "calm"})["job"]["state"] in ("running", "failed")
+        for _ in range(100):
+            if get("/brand")["job"]["state"] != "running":
+                break
+            time.sleep(0.05)
+        assert "without writing" in get("/brand")["job"]["why"], get("/brand")["job"]
+        assert post("/brand/claude", {"clear": True})["job"] is None
+    finally:
+        os.environ.pop("AI_EDITOR_CLAUDE") if keep_cli is None else os.environ.__setitem__("AI_EDITOR_CLAUDE", keep_cli)
+    (tmp / "home" / "profile.json").unlink()   # the checks below start with no profile
+    shutil.rmtree(tmp / "home" / "brand")
     try:
         post("/theme", {"theme": "pink"})
         raise AssertionError("a made-up theme was saved")
@@ -3251,6 +3286,17 @@ def demo():
         raise AssertionError("a connect link without a key")
     except urllib.error.HTTPError as e:
         assert e.code == 400
+    # the keyboard shortcuts (shortcuts.py): Settings edits the same keys.json every review page reads
+    assert b'src="/shortcuts.js"' in HTML.read_bytes() and b"KM_TABLE" in urllib.request.urlopen(base + "/shortcuts.js?t=" + tok).read()
+    assert get("/keys") == {"keys": {}} and post("/keys", {"action": "play", "combo": "Shift+Space"})["keys"] == {"play": ["Shift+Space"]}
+    assert json.loads((Path(os.environ["AI_EDITOR_HOME"]) / "keys.json").read_text(encoding="utf-8")) == {"play": ["Shift+Space"]}
+    for bad in ({"action": "nope", "combo": "K"}, {"action": "play", "combo": "Mod+W"}, {"reset": "nope"}):
+        try:
+            post("/keys", bad)
+            raise AssertionError(f"took {bad}")
+        except urllib.error.HTTPError as e:
+            assert e.code == 400
+    assert post("/keys", {"reset": "play"})["keys"] == {} and post("/keys", {"reset_all": True})["keys"] == {} and get("/keys") == {"keys": {}}
     # Claude's question (askhook.py): the hook posts it, the showing page polls it and answers, the hook clears it
     assert b'src="/ask.js"' in HTML.read_bytes() and b"askq" in urllib.request.urlopen(base + "/ask.js?t=" + tok).read()
     assert askhook.live() == []   # served, but no page has polled yet
@@ -4242,7 +4288,7 @@ def demo():
     assert is_output(root / "edits" / "x" / "render.mp4") and is_output(tmp / "v-edit2.mp4") and is_output(root / "edits" / "x" / "review" / "a.mp4")
     assert is_output(ed / "anything.mp4", [ed]) and not is_output(root / "videos" / "drop.mp4", [ed])
     assert all("raw" in v for v in get("/recent")["videos"])
-    assert get("/state")["page"] == f'{live.page_version(HTML, HTML.with_name("ask.js"))}-{my_version()}', "the tab's reload key"
+    assert get("/state")["page"] == f'{live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)}-{my_version()}', "the tab's reload key"
     # hide or trash a listed clip, remove an edit: only what the page listed, to the Trash (faked here), never a folder
     assert library.trash_cmd("/a b/x.mov", "Darwin")[-1] == "/a b/x.mov" and "item 1 of argv" in " ".join(library.trash_cmd("x", "Darwin"))
     assert library.trash_cmd("C:/x y.mp4", "Windows")[-1] == "C:/x y.mp4" and library.trash_cmd("/x", "Linux") == ["gio", "trash", "/x"]
