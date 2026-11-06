@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.39, creator-teardown 2.7.39 (2026-11-05)
+- Export. Edit, then press Export: it renders exactly what the page shows and saves the video, with Show in Finder and Download. No feedback to Claude, no approve, and it works while Claude is busy (it exports what you see now). Exports also go to your library's exports folder, and home shows when a video was exported.
+- Drag on the video like Canva. Press on a text or a picture and drag it straight away; a click picks it, a double-click types. Texts win over the picture under them; Cmd-click reaches the picture. Bigger handles with their own cursors, corners that never hide under another item, and the video no longer jumps while you drag.
+- A text that is already in the video picture shows as "In the video" instead of a second copy you could drag. Sounds already mixed in are not played twice.
+
 ## ai-editor 2.7.38, creator-teardown 2.7.38 (2026-11-05)
 - Ripple. A magnet on the Video lane (on by default) takes a cut piece out of the timeline and pulls everything after it left, as the video will play. A join mark sits where pieces meet: double-click it or press Delete on it to bring the piece back. Cuts now come out of cooked.'s own drafts too, by themselves.
 - One undo for everything. Every hand edit undoes and redoes, deleting a picture too, and the button says what it will undo.
