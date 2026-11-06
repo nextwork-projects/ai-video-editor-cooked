@@ -45,7 +45,7 @@ python3 "<plugin>/lib/ai_editor/review.py" edits/<name> wait
 
 ## Safe zone
 
-Vertical 1080x1920: every caption, card, logo and title inside x 60-940, y 250-1440 (the top bar, the right
+Vertical 1080x1920: every caption, card, logo and title inside x 30-1010, y 150-1640 (the top bar, the right
 button rail and the bottom caption block cover the rest). Wide 1920x1080: 3% left, 5% top, 3% right, 10% bottom.
 Check a still with the box drawn before a full render.
 

@@ -72,7 +72,7 @@ Each moving format above is the fallback: the motion skill builds a bespoke clip
 - Crop a screenshot to the band's shape (about 2:1) round what the line is about, so it fills the band's
   width. A 16:10 window shrinks to half the width.
 - Subjects at least 200 px; a subject logo about 240 px. Cards 800 px wide.
-- Everything inside the reels safe zone, x 60-940, y 250-1440.
+- Everything inside the reels safe zone, x 30-1010, y 150-1640.
 
 ## Motion
 

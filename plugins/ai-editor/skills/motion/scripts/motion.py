@@ -605,7 +605,7 @@ def status(edit):
 
 def strips(video, times, out, before=0.4, after=1.1, fps=10, safe=False, width=240):
     """One row per time: consecutive frames at `fps` from t-before to t+after. With safe, the reels safe zone
-    (x 60-940, y 250-1440 of 1080x1920) is drawn on every frame."""
+    (x 30-1010, y 150-1640 of 1080x1920) is drawn on every frame."""
     tmp = Path(tempfile.mkdtemp(prefix="strips-"))
     try:
         rows = []

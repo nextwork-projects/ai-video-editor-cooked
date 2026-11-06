@@ -85,7 +85,7 @@ skill from its step 2 on that folder.
 
 The look in every version:
 
-- **Inside the safe zone.** Every element inside x 60-940, y 250-1440 of a 1080x1920 frame: the like and comment
+- **Inside the safe zone.** Every element inside x 30-1010, y 150-1640 of a 1080x1920 frame: the like and comment
   buttons sit on the right, the header on top, the caption and username at the bottom.
 - **Never over the face.** Look at frames of the opening before placing a photo row or a title. Head high: put
   the row mid-frame with the hook under it. Never at the bottom (the caption covers it).
