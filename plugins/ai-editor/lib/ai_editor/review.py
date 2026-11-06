@@ -1377,8 +1377,40 @@ def layer_plan(folder, base):
     from preview import read_ov
     return {"video": base.resolve().relative_to(Path(folder).resolve()).as_posix(), "width": m["width"], "height": m["height"],
             "fps": m["fps"], "durationInFrames": max(1, round(m["duration"] * m["fps"])), "layer": True,
-            "captions": {"style": {}, "chunks": []}, "zooms": [], "cards": [], "texts": typed_labels(folder), "sfx": [],
+            "captions": {"style": {}, "chunks": []}, "zooms": [], "cards": [], "sfx": [],
+            "texts": [x for x in typed_labels(folder) if burn_key(x) not in burned_labels(folder, base)],
             "gone": (read_ov(folder).get("cuts") or {}).get("gone") or []}
+
+
+def burn_key(x):
+    return str(x.get("text")), round(float(x.get("start") or 0), 2), round(float(x.get("end") or 0), 2)
+
+
+def burned_labels(folder, base, sounds=False):
+    """The texts a layer draft's base already has burned in: the labels of the plan it was rendered from, when it is a
+    plan render (render*.plan.json beside a render the same size as the base, or a .plan.json beside the base itself).
+    layer_plan leaves them out, so they are never drawn twice (a render that came back without its stamp).
+    sounds=True: the placed sounds (sounds.json ids) mixed into it, never played twice either."""
+    keys, n = set(), base.stat().st_size
+    for pj in {base.with_suffix(".plan.json"), *Path(folder).glob("render*.plan.json")}:
+        mp4 = pj.with_name(pj.name[:-len(".plan.json")] + ".mp4")
+        if mp4.stem.endswith(("-layers", "-export")) or not mp4.is_file() or mp4.stat().st_size != n:
+            continue
+        try:
+            keys |= {c["placed"] for c in load(pj).get("sfx") or [] if c.get("placed")} if sounds else \
+                {burn_key(x) for x in load(pj).get("texts") or [] if x.get("kind") == "label"}
+        except (OSError, ValueError, AttributeError):
+            pass
+    return keys
+
+
+def texts_burned(folder, d):
+    """texts.json ids a layer draft's base already shows (burned_labels): the timeline marks them In the video."""
+    base, f = layer_of(folder, d), Path(folder) / "texts.json"
+    if not base or not f.exists():
+        return []
+    keys = burned_labels(folder, base)
+    return [x["id"] for x in load(f).get("items") or [] if burn_key(x) in keys] if keys else []
 
 
 def on_cut(t, gone):
@@ -1446,8 +1478,10 @@ def live_plan(folder, d):
         from preview import apply_overrides
         p = apply_overrides(p, folder, plan_f.name)
     from preview import laned, read_ov   # a muted Sounds lane leaves its placed sounds out, as plan.py placed_sounds does
+    mixed = burned_labels(folder, base, sounds=True) if base else set()   # in a layer draft's base already
     p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")] + [live_sound(x) for x in laned(
-        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x and not x.get("muted")], read_ov(folder), "snd", lambda x: x.get("id"))]
+        [x for x in placed_raw(folder) if isinstance(x, dict) and "sound" in x and not x.get("muted")
+         and x.get("id") not in mixed], read_ov(folder), "snd", lambda x: x.get("id"))]
     for c in p["sfx"]:   # how long each one plays, so the player holds an audio tag only while it does
         if not c["src"].startswith("/") and "_d" not in c:
             c["_d"] = sound_shape(folder / c["src"]).get("d") or 2
@@ -1524,6 +1558,30 @@ def bake(folder, run=subprocess.run):
         return bake_now(folder, run)
 
 
+def bake_plan(folder, d, plan_f, keep=False):
+    """A plan draft's plan as the page shows it: plan_base with texts.json's labels, overrides.json, this video's caption
+    style and the placed sounds in, as plan.py lays them (bake_now saves it over plan.json; an export renders it)."""
+    p = plan_base(folder, d, plan_f, keep=keep)
+    p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import apply_overrides   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
+    from plan import placed_sounds
+    cap = captions_info(folder, plan_f)
+    p = apply_overrides(p, folder, plan_f.name)
+    lay_captions(p, cap)   # what the live player shows goes in the video: this video's caption style and the placed sounds
+    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")]
+    return placed_sounds(p, folder)
+
+
+def edits_key(folder):
+    """The hand edits as they are now (texts, sounds, overrides and this video's caption settings), to tell whether the
+    draft on the page already has them baked in."""
+    h = hashlib.sha1(json.dumps(captions_info(Path(folder)), sort_keys=True).encode())
+    for n, b in hand_files(folder).items():
+        h.update(n.encode() + b"\0" + (b if b is not None else b"-") + b"\0")
+    return h.hexdigest()
+
+
 def plan_base(folder, d, plan_f, keep=False):
     """The plan this round's bakes start from: plan.json as it was before the first bake (kept then in
     review/<snap>/plan.base.json, keep=True), so overrides.json alone decides the rest and an Undo that puts it back
@@ -1540,26 +1598,20 @@ def bake_now(folder, run=subprocess.run):
     folder, rj = Path(folder), Path(folder) / "review.json"
     b = BAKE.setdefault(str(folder), {})
     with BAKE_LOCK:
+        if b.get("timer"):
+            b["timer"].cancel()
         b.update(state="working", why=None, timer=None, again=False)
+    key = edits_key(folder)   # what this bake puts in: an export finds the draft already has it
     d = load(rj)
     why = bake_ready(folder, d)
     if why:
         b.update(state="off", why=why)
         return why
     if layer_of(folder, d):
-        return bake_layers(folder, layer_of(folder, d), b, run)
+        return bake_layers(folder, layer_of(folder, d), b, run, key)
     plan_f = Path(d["plan"])
-    p = plan_base(folder, d, plan_f, keep=True)
-    p["texts"] = [x for x in p.get("texts") or [] if x.get("kind") != "label"] + typed_labels(folder)
-    sys.path.insert(0, str(EDIT_PY.parent))
-    from preview import apply_overrides, read_ov   # the cards moved, resized or deleted on the page (overrides.json), as plan.py does
-    from plan import placed_sounds
-    cap = captions_info(folder, plan_f)
-    p = apply_overrides(p, folder, plan_f.name)
-    lay_captions(p, cap)   # what the live player shows goes in the video: this video's caption style and the placed sounds
-    p["sfx"] = [c for c in p.get("sfx") or [] if not c.get("placed")]
-    p = placed_sounds(p, folder)
-    save(plan_f, p)
+    save(plan_f, bake_plan(folder, d, plan_f, keep=True))
+    from preview import read_ov
     r = run([sys.executable, str(EDIT_PY), "patch", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
     if r.returncode and "not local" in (r.stderr or "") + (r.stdout or ""):   # a caption style reaches every frame: all of it
         r = run([sys.executable, str(EDIT_PY), "render", str(folder), "--plan", plan_f.name], capture_output=True, text=True)
@@ -1585,7 +1637,7 @@ def bake_now(folder, run=subprocess.run):
             new = data_of(folder, d["data"])
             new["changes"] = old["changes"]
             save(folder / "review" / d["data"], new)
-        d["baked"] = d.get("baked", 0) + 1
+        d["baked"], d["baked_key"] = d.get("baked", 0) + 1, key
     update(rj, swap)
     return bake_done(folder, b)
 
@@ -1611,33 +1663,44 @@ def cut_mp4(base, gone, out):
     return (r.stderr.strip().splitlines() or ["the cut stopped"])[-1] if r.returncode else None
 
 
-def bake_layers(folder, base, b, run=subprocess.run):
-    """A layer draft's bake: its base MP4 with the Video row's cut pieces taken out (what comes after one moves earlier
-    by its length; a text inside one is clipped or dropped, a sound starting in one dropped), the typed texts and the
-    placed sounds over it, rendered by `edit.py render` from plan-layers.json into render-layers.mp4, kept beside the
-    round's video as <name>.layers.mp4 and made the round's video. With no layers the round's video is the base again."""
+def layers_render_plan(folder, base, work=".layers"):
+    """A layer draft's render plan (bake_layers, an export): (plan, layered, why). The base with the cut pieces out goes
+    into <work>/, the texts and sounds moved onto its clock."""
     p = layer_plan(folder, base)
     gone = p.pop("gone")
     sys.path.insert(0, str(EDIT_PY.parent))
     from plan import placed_sounds
     p = placed_sounds(p, folder)
-    out = base.with_name(base.stem + ".layers.mp4")
+    p["sfx"] = [c for c in p["sfx"] if c.get("placed") not in burned_labels(folder, base, sounds=True)]
     layered = bool(p["texts"] or p["sfx"] or gone)
     if layered:
         audio = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries", "stream=channels", "-of", "csv=p=0",
                                 str(base)], capture_output=True, text=True).stdout.split()
         if gone or audio == ["1"]:   # the cut pieces out of the base, sound and picture, so the render is the shorter video
-            cut = folder / ".layers" / base.name
+            cut = folder / work / base.name
             cut.parent.mkdir(exist_ok=True)
             why = cut_mp4(base, gone, cut)
             if why:
-                b.update(state="failed", why=why)
-                return why
+                return p, layered, why
             m = probed(cut)
             p.update(video=cut.relative_to(folder).as_posix(), durationInFrames=max(1, round(m["duration"] * p["fps"])))
             texts = [{**x, "start": on_cut(x["start"], gone)[0], "end": on_cut(x["end"], gone)[0]} for x in p["texts"]]
             p["texts"] = [x for x in texts if x["end"] - x["start"] >= 0.05]
             p["sfx"] = [{**c, "t": on_cut(c["t"], gone)[0]} for c in p["sfx"] if not on_cut(c["t"], gone)[1]]
+    return p, layered, None
+
+
+def bake_layers(folder, base, b, run=subprocess.run, key=None):
+    """A layer draft's bake: its base MP4 with the Video row's cut pieces taken out (what comes after one moves earlier
+    by its length; a text inside one is clipped or dropped, a sound starting in one dropped), the typed texts and the
+    placed sounds over it, rendered by `edit.py render` from plan-layers.json into render-layers.mp4, kept beside the
+    round's video as <name>.layers.mp4 and made the round's video. With no layers the round's video is the base again."""
+    out = base.with_name(base.stem + ".layers.mp4")
+    p, layered, why = layers_render_plan(folder, base)
+    if why:
+        b.update(state="failed", why=why)
+        return why
+    if layered:
         save(folder / "plan-layers.json", p)
         r = run([sys.executable, str(EDIT_PY), "render", str(folder), "--plan", "plan-layers.json"], capture_output=True, text=True)
         if r.returncode:
@@ -1649,7 +1712,7 @@ def bake_layers(folder, base, b, run=subprocess.run):
         if d.get("sent") or d["stage"] != "edit" or Path(d.get("base_video") or d["video"]) != base:   # Claude took it, or a new round
             return
         d.update(base_video=str(base), video=str(out if layered else base))
-        d["baked"] = d.get("baked", 0) + 1
+        d["baked"], d["baked_key"] = d.get("baked", 0) + 1, key
     update(Path(folder) / "review.json", swap)
     return bake_done(folder, b)
 
@@ -1662,6 +1725,142 @@ def bake_done(folder, b):
             b["again"] = False
             threading.Thread(target=bake_soon, args=(folder,), daemon=True).start()
     return None
+
+
+# ---------------------------------------------------------------- Export: the page as one MP4, no Claude needed
+EXPORT = {}   # folder -> {"state": "working" | "done" | "failed", "at", "log", "since", "file", "why", "note", "done_at"}
+
+
+def export_left_out(folder, d):
+    """What the export cannot put in, as one plain line (None: everything the page shows goes in). A layer draft's
+    base has its cards and captions burned in: moving one or retyping a caption needs Claude's next draft."""
+    if not layer_of(folder, d):
+        return None
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import read_ov
+    ov, was = read_ov(folder), snap_file(folder, d.get("snap"), "overrides.json") or {}   # changed on this draft only
+    ch = lambda *ks: any((ov.get(k) or None) != (was.get(k) or None) for k in ks)
+    what = [w for w, on in (("card", ch("cards", "added_cards")), ("caption", ch("words", "cap_times"))) if on]
+    return f"Your {' and '.join(what)} changes need Claude on this draft, so the export leaves them out." if what else None
+
+
+def exports_dir(folder):
+    return Path(folder) / "exports"
+
+
+def last_export(folder):
+    """The newest MP4 in <edit>/exports/, or None."""
+    fs = [f for f in exports_dir(folder).glob("*.mp4") if f.is_file()]
+    return max(fs, key=lambda f: f.stat().st_mtime) if fs else None
+
+
+def export_state(folder, d):
+    """/state's export: the running or last export and what it would leave out."""
+    ex = dict(EXPORT.get(str(folder)) or {})
+    if not ex and last_export(folder):
+        ex = {"state": "done", "file": str(last_export(folder)), "done_at": last_export(folder).stat().st_mtime}
+    if ex.get("state") == "working":
+        ex["elapsed"] = round(time.time() - ex["since"])
+        lg = Path(ex.get("log") or "-")
+        ex["pct"] = log_pct(lg) if lg.is_file() and lg.stat().st_mtime >= ex["since"] else None
+    if ex.get("file"):
+        ex["name"] = Path(ex["file"]).name
+    return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at")} | {"left_out": export_left_out(folder, d)}
+
+
+def start_export(folder):
+    """Export pressed: one export at a time per edit, in its own thread. False when one is running."""
+    with BAKE_LOCK:
+        if (EXPORT.get(str(folder)) or {}).get("state") == "working":
+            return False
+        EXPORT[str(folder)] = {"state": "working", "since": time.time()}
+    threading.Thread(target=export_job, args=(Path(folder),), daemon=True).start()
+    return True
+
+
+def export_job(folder, run=subprocess.run):
+    ex = EXPORT[str(folder)]
+    try:
+        with live.busy():
+            src = export_src(folder, ex, run)
+        if isinstance(src, str):
+            return ex.update(state="failed", why=src)
+        name = download_name(folder, load(folder / "review.json"))
+        out = exports_dir(folder) / name
+        out.parent.mkdir(exist_ok=True)
+        clone(src, out)
+        os.utime(out)   # a clone keeps the draft's time: the export's own is when it was made (home's Exported)
+        try:   # the library's exports folder, beside edits/
+            import library
+            lib = library.path() / "exports"
+            lib.mkdir(exist_ok=True)
+            clone(src, lib / name)
+        except OSError as e:
+            ex["note"] = f"Saved in the video's folder only: the library copy did not save ({e.strerror or e})."
+        ex.update(state="done", file=str(out), done_at=out.stat().st_mtime)
+    except Exception as e:   # noqa: BLE001  the page says it stopped, never a silent spinner
+        ex.update(state="failed", why=str(e) or type(e).__name__)
+
+
+def export_src(folder, ex, run=subprocess.run):
+    """The MP4 that is the page now (or why it stopped): the draft itself when its last bake has every hand edit in
+    (instant), else the bake those edits would run, waited for. While Claude has the round it never touches the draft:
+    the page's plan renders on its own (export_render)."""
+    b = BAKE.setdefault(str(folder), {})
+    while True:   # a bake running finishes first; one waiting runs now instead of after its timer
+        with BAKE_LOCK:
+            if b.get("state") != "working":
+                pending = b.get("state") == "waiting"
+                if b.get("timer"):
+                    b["timer"].cancel()
+                    b["timer"] = None
+                break
+        time.sleep(0.3)
+    d = load(folder / "review.json")
+    if not pending and d.get("baked_key") == edits_key(folder) and Path(d.get("video") or "-").is_file():
+        return Path(d["video"])
+    why = bake_ready(folder, d)
+    if why is None:
+        ex.update(log=str(folder / ("render-layers" if layer_of(folder, d) else
+                                    "render" + Path(d["plan"]).stem[len("plan"):]) ) + ".renderer.log")
+        why = bake(folder, run)
+        return why or Path(load(folder / "review.json")["video"])
+    if why == "Claude has this draft":
+        ex["note"] = "Claude is still working on a new draft. This exports what you see now."
+        return export_render(folder, d, ex, run)
+    return Path(d["video"])   # not the edit (a cut): the video as it is
+
+
+def export_render(folder, d, ex, run=subprocess.run):
+    """The page's draft rendered beside the draft, not into it (Claude has the round): plan-export.json into
+    render-export.mp4, by a patch of a copy of the draft when it can, else in full."""
+    pf, out = folder / "plan-export.json", folder / "render-export.mp4"
+    ex["log"] = str(out.with_name(out.stem + ".renderer.log"))
+    base = layer_of(folder, d)
+    if base:
+        p, layered, why = layers_render_plan(folder, base, ".export")
+        if why or not layered:
+            return why or base
+        save(pf, p)
+        gone = []
+    else:
+        shown = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name   # the plan of the video on the page
+        p = bake_plan(folder, d, shown)
+        save(pf, p)
+        clone(Path(d["video"]), out)   # patched when the draft is that plan's render (no cut pieces in it), else in full
+        shutil.copy2(shown, out.with_suffix(".plan.json"))
+        sys.path.insert(0, str(EDIT_PY.parent))
+        from preview import read_ov
+        gone = (read_ov(folder).get("cuts") or {}).get("gone") or []
+    r = None if base else run([sys.executable, str(EDIT_PY), "patch", str(folder), "--plan", pf.name], capture_output=True, text=True)
+    if r is None or r.returncode:
+        r = run([sys.executable, str(EDIT_PY), "render", str(folder), "--plan", pf.name], capture_output=True, text=True)
+    if r.returncode:
+        return ((r.stderr or r.stdout).strip().splitlines() or ["the render stopped"])[-1]
+    if gone:
+        why = cut_mp4(out, gone, out.with_suffix(".cut.mp4"))
+        return why or out.with_suffix(".cut.mp4")
+    return out
 
 
 def on_screen(plan, t):
@@ -2442,7 +2641,8 @@ def make_handler(folder, token):
                 snap_plan = folder / "review" / Path(d["snap"]).name / Path(d["plan"]).name if d.get("snap") and d.get("plan") else None
                 d["captions_ui"] = captions_info(folder, snap_plan) if d.get("stage") == "edit" else None   # the Captions panel, its base the video shown
                 d["texts"] = (load(folder / "texts.json").get("items") or []) if (folder / "texts.json").exists() else []   # the Text tab
-                d["texts_baked"] = baked_texts(folder, d) if d.get("stage") == "edit" else []   # the rest the page draws live
+                d["texts_burned"] = texts_burned(folder, d) if d.get("stage") == "edit" else []   # in a layer draft's base: In the video
+                d["texts_baked"] = baked_texts(folder, d) + d["texts_burned"] if d.get("stage") == "edit" else []   # the rest the page draws live
                 d["cards_pending"] = cards_pending(folder, d) if d.get("stage") == "edit" else []   # moved, not in the video yet
                 d["cards_added"] = cards_added(folder, d) if d.get("stage") == "edit" else []   # dropped on, not in the video yet
                 try:   # the Media panel: uploads, what was added for Claude, and the pictures the draft already shows
@@ -2453,6 +2653,7 @@ def make_handler(folder, token):
                 b = BAKE.get(str(folder)) or {}
                 d["bake"] = {"state": b.get("state"), "why": b.get("why")}   # putting the texts in the video
                 d["layer"] = layer_of(folder, d) is not None   # plays base_video with the hand edits as layers (layer_plan)
+                d["export"] = export_state(folder, d) if d.get("stage") == "edit" else None   # Export, top right
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
                 d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)   # the tab reloads when this changes
@@ -2517,6 +2718,9 @@ def make_handler(folder, token):
                 d = load(rj)
                 p = Path(alt_of(d, q.get("alt", ""), d)["video"])
                 return self.file(p, "video/mp4", download_name(folder, d)) if p.exists() else self.send(404, {})
+            if path == "/export/file":   # the last export, saved as "<video name> - <style name>.mp4"
+                p = Path((EXPORT.get(str(folder)) or {}).get("file") or last_export(folder) or "-")
+                return self.file(p, "video/mp4", p.name) if p.is_file() else self.send(404, {})
             if path == "/data":   # the round's transcript, segments and tracks (round_data)
                 d = load(rj)
                 r = next((r for r in d.get("rounds", []) if f"{r['stage']}-{r['round']}" == q.get("k")), None)
@@ -3314,6 +3518,18 @@ def make_handler(folder, token):
                 return self.send(200, {})
             if path == "/update":   # the rail's Update: the window installs it; this server then moves onto it (live.py)
                 return self.send(200 if start_update() else 409, {})
+            if path == "/export":   # Export: what the page shows, as one MP4 (export_job); never a note, never Claude
+                d = load(rj)
+                if d.get("stage") != "edit" or d.get("stills") or d.get("raw"):
+                    return self.send(409, {"error": "Export opens on the edit."})
+                return self.send(200, {"ok": True}) if start_export(folder) else self.send(409, {"error": "An export is running."})
+            if path == "/export/reveal":   # Show in Finder: the last export, picked in its folder
+                p = Path((EXPORT.get(str(folder)) or {}).get("file") or last_export(folder) or "-")
+                if not p.is_file():
+                    return self.send(404, {})
+                import library
+                subprocess.Popen(library.reveal_cmd(p), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                return self.send(200, {"ok": True})
             if path == "/event":
                 if body.get("type") not in ("send", "approve", "stop"):
                     return self.send(400, {})
@@ -4935,6 +5151,11 @@ def demo_bake(tmp):
                                                                      "mtime_ns": (f / "render.mp4").stat().st_mtime_ns}), encoding="utf-8")
     assert live_ready(f, d) == "the render was finished by hand" and layer_of(f, d) == Path(d["video"]), "no stamp: never patched over"
     assert bake_ready(f, d) is None and not tell_claude(f, d, True) and tell_claude(f, d), "its layers bake themselves, a card edit is a note"
+    burnt = {**plan, "texts": plan["texts"] + [{"kind": "label", "text": "hi", "start": 0.5, "end": 1.5}]}
+    (f / "render.plan.json").write_text(json.dumps(burnt), encoding="utf-8")   # the base is that plan's render: "hi" is in it
+    assert texts_burned(f, d) == ["t1"] and layer_plan(f, layer_of(f, d))["texts"] == [], "a burned-in text is never laid on again"
+    (f / "render.plan.json").write_text(json.dumps(plan), encoding="utf-8")
+    assert texts_burned(f, d) == [] and len(layer_plan(f, layer_of(f, d))["texts"]) == 1
     stamp()
     assert layer_of(f, d) is None and not tell_claude(f, d), "a plan draft: as before"
     assert baked_texts(f, d) == [] and bake_ready(f, d) is None, bake_ready(f, d)
@@ -4959,6 +5180,28 @@ def demo_bake(tmp):
     d = load(f / "review.json")
     assert d["baked"] == 1 and baked_texts(f, d) == ["t1"] and BAKE[str(f)]["state"] == "done", d
     assert filecmp.cmp(f / "render.mp4", d["video"], shallow=False), "the round's video is the patched render"
+    # Export: the draft as it is when its last bake has every edit in; else the bake first; then into exports/
+    n = len(ran)
+    assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n, "nothing new: the baked draft, no render"
+    t = load(f / "texts.json")
+    t["items"][0]["text"] = "hey"
+    save(f / "texts.json", t)
+    assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n + 1, "a new edit: baked first"
+    assert load(f / "plan.json")["texts"][1]["text"] == "hey" and export_left_out(f, d) is None
+    EXPORT[str(f)] = {"state": "working", "since": time.time()}
+    export_job(f, run=fake)
+    import library
+    x = export_state(f, load(f / "review.json"))
+    assert x["state"] == "done" and x["name"] == download_name(f) and (f / "exports" / x["name"]).is_file(), x
+    assert (library.path() / "exports" / x["name"]).is_file() and last_export(f) == f / "exports" / x["name"]
+    update(f / "review.json", lambda d: d.update(sent=True))   # Claude has the round: rendered beside the draft, never into it
+    v0 = Path(load(f / "review.json")["video"]).read_bytes()
+    t["items"][0]["text"] = "yo"
+    save(f / "texts.json", t)
+    ex = {}
+    assert export_src(f, ex, run=fake) in (f / "render-export.mp4", f / "render-export.cut.mp4") and "Claude is still" in ex["note"]
+    assert ran[-1][:3] == ["patch", str(f), "--plan"] and ran[-1][3] == "plan-export.json" and Path(load(f / "review.json")["video"]).read_bytes() == v0
+    update(f / "review.json", lambda d: d.update(sent=False))
     # a picture dropped from the Media panel: appended to the plan's cards once, however often it bakes
     (f / "media").mkdir()
     (f / "media" / "p.png").write_bytes(b"p")
@@ -4966,13 +5209,14 @@ def demo_bake(tmp):
     ov["added_cards"] = [{"key": "media1@0.200", **media_card(f, "media/p.png", 0.2, 2.0, [20, 30, 60, 30], [4, 2])}]
     assert ov["added_cards"][0]["end"] == 2.0, "a picture stops at the end of the video"
     (f / "overrides.json").write_text(json.dumps(ov), encoding="utf-8")
+    n = len(ran)
     for _ in range(2):
         assert bake(f, run=fake) is None
     cs = load(f / "plan.json")["cards"]
     assert [c.get("override") for c in cs] == ["media1@0.200", "repo@0.500"] and cs[0]["src"] == "media/p.png" and cs[0]["format"] == "plain", cs
     assert cards_added(f, load(f / "review.json")) == [], "baked: the video shows it"
     update(f / "review.json", lambda d: d.update(sent=True))
-    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == 3
+    assert bake(f, run=fake) == "Claude has this draft" and len(ran) == n + 2
 
 
 def demo_live(tmp):
