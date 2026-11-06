@@ -80,7 +80,8 @@ async function prepare(publicDir, planPath) {
   const t0 = Date.now();
   let serveUrl = path.resolve(publicDir);
   if (!fs.existsSync(path.join(serveUrl, "bundle.js"))) {
-    serveUrl = await bundle({ entryPoint: ENTRY, publicDir: serveUrl });
+    // a scene's public folder holds hard links to its media (scene.py stage): linked in, never copied
+    serveUrl = await bundle({ entryPoint: ENTRY, publicDir: serveUrl, symlinkPublicDir: inputProps.composition === "Scene" });
     // The bundle is a temp folder holding a copy of the video and images (150 MB+ per render) that
     // Remotion never deletes; left alone, a few dozen renders fill the disk.
     process.on("exit", () => { try { fs.rmSync(serveUrl, { recursive: true, force: true }); } catch {} });
@@ -166,7 +167,7 @@ async function local(publicDir, planPath, out) {
     enforceAudioTrack: true, concurrency: concurrency(), scale, ...hwOpts(composition, scale), timeoutInMilliseconds: TIMEOUT_MS,
     onProgress: progress(composition.durationInFrames) });
   const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-i", tmp, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-    "-shortest", "-movflags", "+faststart", out], { stdio: "inherit" });
+    "-t", (composition.durationInFrames / composition.fps).toFixed(6), "-movflags", "+faststart", out], { stdio: "inherit" });   // -shortest dropped the last B-frames
   fs.rmSync(tmp, { force: true });
   if (r.status !== 0) throw new Error(`ffmpeg could not write ${out}`);
   console.log(`rendered ${out} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

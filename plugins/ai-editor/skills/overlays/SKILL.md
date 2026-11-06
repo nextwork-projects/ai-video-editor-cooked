@@ -151,6 +151,21 @@ FAILs at your moments go back to step 2 or 3; at most two fix rounds, then hand 
 still listed. A FAIL far from your beats was there before: say so, do not chase it here. What each
 FAIL means: style-edit `references/plan.md` "What the checks FAIL and WARN".
 
+## On a scene draft
+
+When `wait` printed `SCENE:`, steps 3 to 6 change: no patch render. After step 2's json and the plan (step 3), put the
+new or changed card on the scene and hand it back:
+
+```bash
+L="${CLAUDE_PLUGIN_ROOT}/lib/ai_editor"
+python3 "$L/scene.py" cards edits/<name> --at <beat time> --why "<one line>"   # plan.json's card there, as an item
+python3 "$L/scene.py" ops edits/<name> '[{"op": "remove", "item": "<old card id>"}]' --why "..."   # a swap: the old one off
+python3 "$L/review.py" edits/<name> round --scene
+```
+
+A move or resize is one `set` op on the item (`scene.py show --at <t>` gives its id and box), with no plan at all. A
+plain picture is `scene.py add edits/<name> image --src <file> --start <t> --end <t>`.
+
 ## 7. Hand over on the review page
 
 ```bash

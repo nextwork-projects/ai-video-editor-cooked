@@ -156,12 +156,10 @@ the rendered edit. Moving cards by hand only when the user asks: `references/ren
 python3 "$S/edit.py" estimate edits/<name>
 ```
 
-Prints `Laptop:`, `Modal:` and two `Other:` lines (GitHub Actions, Lambda) with this video's time and
-cost, then `Recommended:`: Modal once it is connected, the video is over a minute and Modal is quicker; the
+Prints `Laptop:`, `Modal:` and two `Other:` lines (GitHub Actions, Lambda) with this video's time and cost, then `Recommended:`: Modal once it is connected, the video is over a minute and Modal is quicker; the
 laptop otherwise. `render` in the profile, or `Recommended: Laptop`: render there with no question, one line
 with the time ("Rendering on your laptop, about 14 s. Say 'render on Modal' to change"). Not set and
-`Recommended: Modal`: ask once, three options in this order with the printed numbers, Modal marked
-(Recommended), then `profile.py set render='"laptop|modal|github|lambda"'`.
+`Recommended: Modal`: ask once, three options in this order with the printed numbers, Modal marked (Recommended), then `profile.py set render='"laptop|modal|github|lambda"'`.
 
 1. **Laptop**: its time, free.
 2. **Modal**: its time and cost ($30 free credit a month). Not connected: label it **Connect Modal**; on that
@@ -175,7 +173,9 @@ with the time ("Rendering on your laptop, about 14 s. Say 'render on Modal' to c
 Modal picked but not connected: `setup.py modal-connect` first (above). Lambda picked and
 `aws sts get-caller-identity` fails: the setup skill's Lambda section first.
 
-## 7. Render and check
+## 7. A scene, or a render
+
+**Write elements, not pixels.** After the stills the draft is the scene: skip step 6 and the render, run `python3 "${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/scene.py" from-plan edits/<name>` once, hand over with `round --stage edit --scene` (`references/review.md` "A scene draft"). Render as below only when `from-plan` refuses (split, board, cover, cutouts) or the user wants the MP4 now.
 
 ```bash
 python3 "$S/edit.py" render edits/<name>            # laptop
@@ -209,7 +209,7 @@ Only on the second answer: `python3 "$S/quality.py" normalize edits/<name>/rende
 
 ## 8. Hand over
 
-Hand over on the review page (`references/review.md`), `serve` and `wait` in the background:
+Hand over on the review page (`references/review.md`), `serve` and `wait` in the background: the scene with `round --stage edit --scene` (step 7), or a render with
 `python3 "${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/review.py" edits/<name> round --stage edit --video edits/<name>/render.mp4`
 (no page: `start`, same flags). On `APPROVE`: motion skill `save`, then one AskUserQuestion: Post it / Not now (the post skill). Card and visual changes later: overlays skill (a motion clip: motion skill `note`); caption, zoom: plan, stills, render, `round`; cut: cut skill.
 

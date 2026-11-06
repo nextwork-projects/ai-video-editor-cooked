@@ -156,7 +156,7 @@ lands at about 10 px, and a container left at 2.5 px dissolves beside it.
 ## The safe zone
 
 A clip is judged inside a phone app that draws its own furniture over it. Everything a viewer must read
-stays inside **x 60-940, y 250-1440** of the 1080x1920 frame (style-edit's `SAFE`, checked by `check.py`).
+stays inside **x 30-1010, y 150-1640** of the 1080x1920 frame (style-edit's `SAFE`, checked by `check.py`).
 A card already sits inside it; a whole-frame clip keeps its art inside it. Check a render with the box
 drawn: `motion.py strips <render> --at <t> --safe`. The speaker's body may run below the line; the face,
 the artwork, the marks and the captions may not.

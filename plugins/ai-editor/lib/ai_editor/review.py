@@ -45,7 +45,12 @@ product video). Notes save with the edit, never in the plugin:
                                      ["hooks"|"same"|"rewind"|"section"|"animations", ...], "line"}], "idea"?, "reply"?}.
                                      `wait` prints the user's Make (TRIALS), Skip, or question (TRIALS ASK);
                                      each render goes up with `alt t1 --video t1.mp4 --trial`
+    python3 review.py <folder> round --scene [--alt t1]   the notes were answered in the scene (scene.py, SCENE.md): a
+                                     round on the same video with no render (--alt: on that version's scene)
     python3 review.py demo                         self-check on a generated 6 s clip
+
+AI_EDITOR_NO_REOPEN=1 (tests only): the server never opens, resumes or types into a Claude Code session (reopen()),
+so a test that posts notes or approves with no `wait` listening cannot start one on the real Mac.
 
 A note that reads as a lasting preference ("always ...", "never ...", "too many zooms") is offered as a rule: the page
 ticks "Keep as a rule for <style>" (POST /keep unticks it) and `wait` marks it [keep as a rule for <style>]. Every
@@ -117,6 +122,7 @@ import askhook  # noqa: E402
 import shortcuts  # noqa: E402
 import assets  # noqa: E402
 import live  # noqa: E402
+import scene  # noqa: E402
 
 HTML = Path(__file__).with_name("review.html")
 LOCK = threading.RLock()   # re-entrant: /edits holds it across apply_edits and update
@@ -1023,7 +1029,8 @@ def words_of(transcript):
         return []
     d = load(transcript)
     ws = d.get("words", []) if isinstance(d, dict) else d
-    return [w for w in ws if isinstance(w, dict) and w.get("type", "word") == "word"]
+    ws = [{"text": w["w"], "start": w["s"], "end": w["e"]} if isinstance(w, dict) and {"w", "s", "e"} <= w.keys() else w for w in ws]   # a voiceover's {w, s, e}
+    return [w for w in ws if isinstance(w, dict) and w.get("type", "word") == "word" and {"text", "start", "end"} <= w.keys()]
 
 
 def words_at(transcript, t0, t1):
@@ -1454,13 +1461,13 @@ def lane_out(kind, m):
     return off, (m.get("of") or {}) if kind != "snd" or off else None
 
 
-def live_plan(folder, d):
+def live_plan(folder, d, plan=False):
     """GET /live/plan: the draft's plan as the next bake makes it (texts.json's labels in, overrides.json applied), with
     the timeline's placed sounds and this video's caption style laid on as plan.py lays them, footage the browser plays
     smoothly (live_video), and each card's overrides.json key ("_key"). {"why": ...} when the page plays the MP4.
     Made again only when one of its files changed: the page asks after every change it sees. A layer draft (layer_of):
     layer_plan, always on its base_video, never on a video its layers were baked into (they would draw twice)."""
-    why, base = live_ready(folder, d), layer_of(folder, d)
+    why, base = (None, None) if plan else (live_ready(folder, d), layer_of(folder, d))   # plan: as a plan draft (plan_draft)
     if why and not base:
         return {"why": why}
     plan_f = folder / "plan-layers.json" if base else Path(d["plan"])
@@ -1494,6 +1501,128 @@ def live_plan(folder, d):
     return p
 
 
+SCENE_LOCK, PROXY_BUSY = threading.Lock(), {}   # PROXY_BUSY: folder -> the thread making a lost seek copy again
+
+
+def scene_mode(folder, d):
+    """The page edits this draft as a scene (SCENE.md): every draft on the edit, not the cut and not the stills sheet."""
+    return d.get("stage") == "edit" and not d.get("stills") and not d.get("raw")
+
+
+def plan_draft(folder, d):
+    """The draft is its plan's render, so scene.from_plan can draw it: render.mp4 was made from plan.json (its stamp, or
+    render.plan.json is plan.json) and the draft is that render (or its cut copy), or the round came from render.mp4.
+    A render that came back without its stamp (a Mac mini render) still counts."""
+    pf = Path(d.get("plan") or "-")
+    src = pf.with_name("render" + pf.stem[len("plan"):] + ".mp4")
+    v = Path(d.get("video") or "-")
+    if not pf.is_file() or not pf.stem.startswith("plan") or not src.is_file() or not v.is_file():
+        return False
+    if d.get("src") and Path(d["src"]) == src:
+        return True
+    try:
+        made = render_stamped(src) or load(src.with_suffix(".plan.json")) == load(pf)
+    except (OSError, ValueError):
+        made = False
+    cut = src.with_suffix(".cut.mp4")
+    return made and v.stat().st_size in (src.stat().st_size, *([cut.stat().st_size] if cut.is_file() else []))
+
+
+def video_scene(folder, d):
+    """Any other draft as a scene (scene.from_video): its untouched MP4 (base_video) as clips, the Video row's cuts the
+    gaps, and every hand edit already on it as items: the typed texts and placed sounds not already burned or mixed into
+    it (burned_labels), moved onto the cut's clock as the layer bake moves them, a track per lane."""
+    base = Path(d.get("base_video") or d.get("video") or "-")
+    sys.path.insert(0, str(EDIT_PY.parent))
+    from preview import lanes_of, read_ov
+    ov = read_ov(folder)
+    gone = (ov.get("cuts") or {}).get("gone") or []
+    f, keep = folder / "texts.json", ("text", "start", "end", *TEXT_KEYS)
+    burned, mixed = burned_labels(folder, base), burned_labels(folder, base, sounds=True)
+    lane, off = lanes_of(ov, "text")
+    texts = []
+    for x in (load(f).get("items") or []) if f.exists() else []:
+        x = {"kind": "label", "size_pct": TEXT_SIZE, **{k: x[k] for k in keep if k in x}, "lane": lane(x.get("id")), "lane_off": lane(x.get("id")) in off}
+        if burn_key(x) not in burned:
+            x["start"], x["end"] = on_cut(x["start"], gone)[0], on_cut(x["end"], gone)[0]
+            texts += [x] if x["end"] - x["start"] >= 0.05 else []
+    lane, off = lanes_of(ov, "snd")
+    sounds = [{**x, "t": on_cut(x["t"], gone)[0], "lane": lane(x.get("id")), "lane_off": lane(x.get("id")) in off} for x in placed_raw(folder)
+              if isinstance(x, dict) and "sound" in x and x.get("id") not in mixed and not on_cut(x["t"], gone)[1]]
+    return scene.from_video(folder, base, gone=gone, texts=texts, sounds=sounds, library=sfx_mod().library_dir())
+
+
+def scene_for(folder, d, alt=None):
+    """scene.json for a draft on the edit (scene_mode), made on the first ask and never over one that is there: a plan
+    draft (plan_draft) through scene.from_plan with this page's live plan (texts.json, overrides.json, placed sounds),
+    any other draft, or a plan from_plan refuses, through video_scene. None off the edit. The raw take's seek-friendly
+    copy is made in the background; until then the page plays the take itself."""
+    if not scene_mode(folder, d):
+        return None
+    name = scene.name_of(alt)
+    with SCENE_LOCK:
+        if (folder / name).exists():
+            sc = scene.load(folder, name)
+            k = f"{folder}|{name}"
+            if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()) and not PROXY_BUSY.get(k):
+                PROXY_BUSY[k] = threading.Thread(target=lambda: (scene.ensure_proxies(folder, sc), PROXY_BUSY.pop(k, None)), daemon=True)
+                PROXY_BUSY[k].start()   # a copy lost (a clone, a cleanup): made again once
+            return sc
+        sc = None
+        if alt:   # another version (a trial reel): its own plan when it has one, else its MP4 as a clip
+            a = next((a for a in d.get("alts") or [] if a["name"] == alt), None)
+            if not a:
+                raise scene.SceneError(f"no version {alt}")
+            try:
+                sc = scene.from_plan(folder, load(Path(a["plan"]))) if a.get("plan") and Path(a["plan"]).is_file() else None
+            except Exception as e:   # noqa: BLE001
+                print(f"scene: from-plan ({alt}): {e}; the version as a video instead", file=sys.stderr)
+            sc = scene.save(folder, sc or scene.from_video(folder, Path(a["video"])), name)
+        elif plan_draft(folder, d):
+            try:
+                lp = live_plan(folder, d, plan=True)
+                p = load(Path(d["plan"])) if lp.get("why") else lp
+                sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
+            except Exception as e:   # noqa: BLE001  any refusal (split, board, cover, cutouts) or failure: the draft's MP4
+                print(f"scene: from-plan: {e}; the draft as a video instead", file=sys.stderr)
+        if not alt:
+            sc = scene.save(folder, sc or video_scene(folder, d))
+    if any(a.get("proxy") for a in sc["assets"].values()):
+        threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
+    return sc
+
+
+def claude_changes(folder, d):
+    """Claude's changes to the scene on this draft (scene.py ops, review/claude.json, a version's review/claude.<alt>.json):
+    the ones made on it, and on the round a `round --scene` came from. What the page lists and undoes: n, why, t, undone,
+    items, and alt (the version it was made on, None for the main draft)."""
+    on, out = [x for x in ([d.get("stage"), d.get("round")], d.get("scene_from")) if x], []
+    for alt in [None, *(a["name"] for a in d.get("alts") or [] if a.get("name"))]:
+        try:
+            log = load(folder / scene.changes_of(alt))
+        except (OSError, ValueError):
+            continue
+        out += [{**{k: x.get(k) for k in ("n", "why", "t", "undone", "items")}, "alt": alt} for x in log if isinstance(x, dict) and x.get("at") in on]
+    return out
+
+
+def scene_vs(folder, d):
+    """/state.scene_v: each version's scene file's stamp ("" the main draft), so the page fetches the one it shows when
+    Claude changed it."""
+    alts = ["", *(a["name"] for a in d.get("alts") or [] if a.get("name"))]
+    return {a: (folder / scene.name_of(a)).stat().st_mtime_ns if (folder / scene.name_of(a)).exists() else None for a in alts}
+
+
+def scene_out(folder, sc, alt=None):
+    """The scene as the page gets it: each asset on /scene/asset/<id>, versioned by the file it plays (a proxy that
+    lands is a new URL). Never saved."""
+    sc = json.loads(json.dumps(sc))
+    for k, a in sc["assets"].items():
+        f = scene.path_of(folder, a)
+        a["url"] = f"/scene/asset/{quote(k)}?v={f.stat().st_mtime_ns if f.exists() else 0}" + (f"&alt={quote(alt)}" if alt else "")
+    return sc
+
+
 LIVE_JS = {"lock": threading.Lock()}
 
 
@@ -1523,14 +1652,16 @@ def render_stamped(src):
 
 
 # the page's undo: every hand edit's files before and after it, so Undo and Redo put them back byte for byte
-HAND_FILES = ("texts.json", "sounds.json", "overrides.json")
-HAND_PATHS = {"/text/add", "/text/delete", "/text/edit", "/sfx/add", "/sfx/remove", "/sfx/move", "/sfx/split", "/audio/upload",
+HAND_FILES = ("texts.json", "sounds.json", "overrides.json", "scene.json")
+HAND_PATHS = {"/scene/ops", "/text/add", "/text/delete", "/text/edit", "/sfx/add", "/sfx/remove", "/sfx/move", "/sfx/split", "/audio/upload",
               "/captions/text", "/captions/time", "/card/edit", "/timeline/lanes", "/timeline/cut", "/media/add"}
 JOURNAL, JOURNAL_LOCK = {}, threading.Lock()   # folder -> [{"at": (stage, round), "before", "after"}], one edit at a time
 
 
 def hand_files(folder):
-    return {n: (Path(folder) / n).read_bytes() if (Path(folder) / n).exists() else None for n in HAND_FILES}
+    """The hand-edit files as they are now: HAND_FILES, and every version's scene (scene.<alt>.json)."""
+    ns = (*HAND_FILES, *sorted(f.name for f in Path(folder).glob("scene.*.json")))
+    return {n: (Path(folder) / n).read_bytes() if (Path(folder) / n).exists() else None for n in ns}
 
 
 BAKE = {}   # folder -> {"state": "waiting" | "working" | "done" | "failed" | "off", "why", "timer", "again"}
@@ -1765,15 +1896,18 @@ def export_state(folder, d):
         ex["pct"] = log_pct(lg) if lg.is_file() and lg.stat().st_mtime >= ex["since"] else None
     if ex.get("file"):
         ex["name"] = Path(ex["file"]).name
-    return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at")} | {"left_out": export_left_out(folder, d)}
+    return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at", "alt")} | {
+        "left_out": None if scene_mode(folder, d) else export_left_out(folder, d),   # a scene has every edit in it
+        "url": "/export/file" if ex.get("state") == "done" and ex.get("file") else None}
 
 
-def start_export(folder):
-    """Export pressed: one export at a time per edit, in its own thread. False when one is running."""
+def start_export(folder, alt=None):
+    """Export pressed: one export at a time per edit (alt: that version's scene), in its own thread. False when one is
+    running."""
     with BAKE_LOCK:
         if (EXPORT.get(str(folder)) or {}).get("state") == "working":
             return False
-        EXPORT[str(folder)] = {"state": "working", "since": time.time()}
+        EXPORT[str(folder)] = {"state": "working", "since": time.time(), "alt": alt or None}
     threading.Thread(target=export_job, args=(Path(folder),), daemon=True).start()
     return True
 
@@ -1781,14 +1915,23 @@ def start_export(folder):
 def export_job(folder, run=subprocess.run):
     ex = EXPORT[str(folder)]
     try:
-        with live.busy():
-            src = export_src(folder, ex, run)
-        if isinstance(src, str):
-            return ex.update(state="failed", why=src)
-        name = download_name(folder, load(folder / "review.json"))
+        d, alt = load(folder / "review.json"), ex.get("alt")
+        name = download_name(folder, d)
+        name = f"{name[:-4]} - {alt}.mp4" if alt else name   # a version's export carries its name
         out = exports_dir(folder) / name
         out.parent.mkdir(exist_ok=True)
+        with live.busy():
+            if scene_for(folder, d, alt) is not None:   # a scene: the Scene composition renders it (scene.render)
+                ex["log"] = str(exports_dir(folder) / ".export.log")
+                src = scene.render(folder, out.with_name(".export.mp4"), log=ex["log"], name=scene.name_of(alt))
+            else:
+                src = export_src(folder, ex, run)
+        if isinstance(src, str):
+            return ex.update(state="failed", why=src)
         clone(src, out)
+        if src.name == ".export.mp4":
+            src.unlink()
+            src = out
         os.utime(out)   # a clone keeps the draft's time: the export's own is when it was made (home's Exported)
         try:   # the library's exports folder, beside edits/
             import library
@@ -2249,6 +2392,8 @@ def reopen(folder, rj, force=False):
     Only with neither, a new Claude (`/ai-editor:start carry on edits/<name>`, in the library). Never while a `wait`
     listens; force (the page's "Open a new Claude") also when a Claude worked here lately, since it may have stopped.
     Kept on review.json as "claude": {opened, how, command, session, at} so the page says where it went."""
+    if os.environ.get("AI_EDITOR_NO_REOPEN"):   # tests: never a real Terminal or Claude Code session (the docstring up top)
+        return None
     if listening(folder) or not force and (busy(folder) or time.time() - ((load(rj).get("claude") or {}).get("at") or 0) < REOPEN_S):
         return None
     import launcher
@@ -2656,8 +2801,11 @@ def make_handler(folder, token):
                 d["export"] = export_state(folder, d) if d.get("stage") == "edit" else None   # Export, top right
                 d["session_cmd"] = resume_cmd(last_claude(folder)) or (d.get("claude") or {}).get("resume") or ""   # Start's fallback
                 d["claude_ui"] = claude_state(folder)   # the Claude control: working, waiting, open or off
-                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS)   # the tab reloads when this changes
+                d["page"] = live.page_version(HTML, HTML.with_name("ask.js"), shortcuts.JS, HTML.with_name("review-scene.js"))   # the tab reloads when this changes
                 d["cutcheck"] = (folder / "cut-check.html").exists()
+                d["scene"] = scene_mode(folder, d)   # the page edits the scene (SCENE.md)
+                d["scene_v"] = scene_vs(folder, d) if d["scene"] else None   # a change from Claude: the page fetches its version's scene
+                d["claude_changes"] = claude_changes(folder, d) if d["scene"] else []   # Claude's changes on this draft, each undoable
                 d["rawvideo"] = raw_video(folder, d) is not None   # the transcript editor's preview plays the raw take
                 d["home"] = home_url()   # the Home button: back to the editor's window, or how to start it
                 d["update"] = _HOME.get("update") if d["home"] else None   # the rail's Update
@@ -2695,6 +2843,8 @@ def make_handler(folder, token):
                 if making_edit(d):
                     d["making"] = {"style": making_style(folder), "steps": EDIT_STEPS}
                 return self.send(200, d)
+            if path == "/review-scene.js":   # the edit page on a scene (review-scene.js)
+                return self.send(200, HTML.with_name("review-scene.js").read_bytes(), "text/javascript; charset=utf-8")
             if path == "/live/plan":   # the live player's plan (live_plan), or why the page plays the MP4
                 return self.send(200, live_plan(folder, load(rj)))
             if path == "/live/live.js" or re.fullmatch(r"/live/chunks/[\w-]+\.js", path):   # the live player and its chunks
@@ -2706,6 +2856,21 @@ def make_handler(folder, token):
                 if not p.is_file() or not p.is_relative_to(folder.resolve()):
                     return self.send(404, {})
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
+            if path == "/scene":   # the scene (scene.json; ?alt=: that version's scene.<alt>.json), made on the first ask
+                try:
+                    sc = scene_for(folder, load(rj), q.get("alt"))
+                    return self.send(200, scene_out(folder, sc, q.get("alt"))) if sc else self.send(404, {"error": "Only a draft on the edit is a scene."})
+                except (scene.SceneError, OSError, KeyError) as e:
+                    return self.send(400, {"error": str(e)})
+            if path.startswith("/scene/asset/"):   # an asset the scene names: its seek-friendly copy once made
+                try:
+                    a = scene.load(folder, scene.name_of(q.get("alt")))["assets"][unquote(path[len("/scene/asset/"):])]
+                except (scene.SceneError, OSError, KeyError, ValueError):
+                    return self.send(404, {})
+                p = scene.path_of(folder, a)
+                return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream") if p.is_file() else self.send(404, {})
+            if path == "/export":   # the export's state (export_state, the same as /state's export)
+                return self.send(200, export_state(folder, load(rj)))
             if path == "/video":
                 d = load(rj)
                 if q.get("k") == "raw":
@@ -3372,6 +3537,29 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True, "key": key, "start": card["start"], "end": card["end"]})
                 return self.comment({"t": card["start"], "t_end": card["end"], "text": f"Add {Path(src).name} on screen as shown on the page: "
                                      f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
+            if path == "/scene/ops":   # the page's edit of the scene: ops applied in order, kept for Undo (j); no note for Claude.
+                # by "claude": scene.py ops, Claude's change (SCENE.md): its items marked, listed under Claude's changes
+                by = "claude" if body.get("by") == "claude" else None
+                try:
+                    alt = body.get("alt") or None   # a version's own scene
+                    sc0 = scene_for(folder, load(rj), alt)
+                    if sc0 is None:
+                        return self.send(409, {"error": "Only a draft on the edit is a scene."})
+                    sc = scene.save(folder, scene.apply(sc0, body.get("ops") or [], edit=folder, by=by), scene.name_of(alt))
+                    ch = scene.log_change(folder, sc0, sc, body.get("why"), alt) if by else None
+                except (scene.SceneError, TypeError, ValueError, AttributeError) as e:
+                    return self.send(400, {"error": str(e)})
+                if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()):
+                    threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
+                return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt), **({"change": ch} if by else {})})
+            if path == "/scene/claude":   # Undo or Redo of one of Claude's changes, by its own ops: {"n", "undo": true | false, "alt"}
+                alt = body.get("alt") or None
+                try:
+                    with JOURNAL_LOCK:
+                        sc = scene.undo_change(folder, int(body["n"]), bool(body.get("undo", True)), alt)
+                except (scene.SceneError, KeyError, TypeError, ValueError) as e:
+                    return self.send(400, {"error": str(e) if isinstance(e, scene.SceneError) else "scene/claude takes n and undo"})
+                return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt)})
             if path == "/timeline/restore":   # Undo or Redo of a hand edit: its files as they were before it, or after it
                 d, js = load(rj), JOURNAL.get(str(folder)) or []
                 try:
@@ -3388,7 +3576,8 @@ def make_handler(folder, token):
                             (folder / n).unlink(missing_ok=True)
                         elif not (folder / n).exists() or (folder / n).read_bytes() != b:
                             (folder / n).write_bytes(b)
-                bake_soon(folder)
+                if any(j["before"].get(n) != j["after"].get(n) for n in HAND_FILES if not n.startswith("scene")):   # a scene edit bakes nothing
+                    bake_soon(folder)
                 return self.send(200, {"ok": True})
             if path == "/card/dup":   # Alt-drag on the video: a copy of a card at a new box, an added card like a dropped picture
                 d = load(rj)
@@ -3522,7 +3711,7 @@ def make_handler(folder, token):
                 d = load(rj)
                 if d.get("stage") != "edit" or d.get("stills") or d.get("raw"):
                     return self.send(409, {"error": "Export opens on the edit."})
-                return self.send(200, {"ok": True}) if start_export(folder) else self.send(409, {"error": "An export is running."})
+                return self.send(200, {"ok": True}) if start_export(folder, body.get("alt")) else self.send(409, {"error": "An export is running."})
             if path == "/export/reveal":   # Show in Finder: the last export, picked in its folder
                 p = Path((EXPORT.get(str(folder)) or {}).get("file") or last_export(folder) or "-")
                 if not p.is_file():
@@ -3915,10 +4104,12 @@ def cmd_start(a, folder):
 
 
 def open_round(folder, video, stage=None, transcript=None, plan=None, note="", stills=False, name=None, changed=(),
-               back_to=None, src=None, check=None):
+               back_to=None, src=None, check=None, alts=None):
     """The next round: the new render kept, the edit's files snapshotted, notes queued meanwhile moved onto it.
-    check(d) runs under the lock first and may refuse (raise ValueError) before anything changes."""
+    check(d) runs under the lock first and may refuse (raise ValueError) before anything changes. alts: the versions
+    the round keeps (round --scene: the same videos)."""
     def f(d):
+        d.pop("scene_from", None)   # set again by round --scene's check
         if check:
             check(d)
         prev = None if stage and stage != d["stage"] else next(
@@ -3934,7 +4125,7 @@ def open_round(folder, video, stage=None, transcript=None, plan=None, note="", s
             d["transcript"] = str(Path(transcript).resolve())
         if plan:
             d["plan"] = str(Path(plan).resolve())
-        d["note"], d["sent"], d["alts"] = note or "", False, []   # versions belong to a round: add them again
+        d["note"], d["sent"], d["alts"] = note or "", False, list(alts or [])   # versions belong to a round: add them again
         d["stills"] = bool(stills)   # the stills (edit.py storyboard) before the render
         d["label"] = name or d.get("label")
         own = (folder / "review").resolve() in Path(video).resolve().parents   # a kept round's copy: never written back to
@@ -3992,8 +4183,29 @@ def cmd_round(a, folder):
                          f"  python3 {q} {shlex.quote(str(folder))} resolve {c['id']} fixed --reply \"<what you changed>\"   "
                          f"# {c['text'][:60]}" for c in unanswered)
                      + "\n  (wontfix --reply \"<why>\" when you left it as is)")
-    d = open_round(folder, a.video, a.stage, a.transcript, a.plan, a.note, getattr(a, "stills", False), a.name,
-                   getattr(a, "changed", None))
+    changed, check, alts = getattr(a, "changed", None), None, None
+    if getattr(a, "scene", False):   # the draft is scene.json, no render: the page plays and edits it, Export renders it
+        alt = getattr(a, "alt", None)   # the notes on a version (a trial reel) were answered in its scene.<alt>.json
+        if alt and not any(x["name"] == alt for x in d0.get("alts") or []):
+            sys.exit(f"REFUSED: this round has no version {alt}: " + (", ".join(x["name"] for x in d0.get("alts") or []) or "no versions"))
+        if not (folder / scene.name_of(alt)).exists():
+            sys.exit(f"REFUSED: round --scene needs {scene.name_of(alt)} (scene.py show edits/<name>{' --alt ' + alt if alt else ''} "
+                     "with the page open makes it, or scene.py from-plan); or render and use --video")
+        if a.stage == "edit" and d0["stage"] != "edit":   # the first edit: style-edit's plan as a scene, the cut as its video
+            a.video, frm = a.video or str(folder / "cut.mp4"), None
+        elif scene_mode(folder, d0):   # Claude answered the notes in the scene (scene.py ops): the same video, its scene
+            a.video, a.plan, a.stage, frm = d0["video"], a.plan or d0.get("plan"), None, [d0["stage"], d0["round"]]
+            alts = d0.get("alts") or []   # the same videos: the versions and their scenes stay on the next round
+        else:
+            sys.exit("REFUSED: this draft is not on the edit, so not a scene: render and use --video")
+
+        def check(d):
+            if frm:
+                d["scene_from"] = frm   # the next round: Claude's changes made on this one stay listed and undoable there
+    elif not a.video:
+        sys.exit("round takes --video <the new render>, or --scene when the notes were answered in scene.json")
+    d = open_round(folder, a.video, a.stage, a.transcript, a.plan, a.note, getattr(a, "stills", False), a.name, changed, check=check,
+                   alts=alts)
     still = [str(c["id"]) for c in d["comments"]
              if c["status"] == "open" and c["stage"] == d["stage"] and c["round"] < d["round"]]
     print(f"{stage_name(d['stage'], d.get('stills'))}, round {d['round']}" + (f"; still open: {', '.join(still)}" if still else ""))
@@ -4466,7 +4678,10 @@ def cmd_wait(folder, poll=1.0):
         print(f"#{c['id']} {span} ({c['t']}s){ver}{card}: {c['text']}{keep}\n    said: \"{c['words']}\""
               f"\n    frame: {folder / 'review' / c['frame']}"
               + "".join(f"\n    image: {folder / 'review' / x}" for x in c.get("images") or []))
-    typed = put_texts(folder, cs)
+    handoff = e["type"] == "send" and cs and scene_mode(folder, d)
+    if handoff:   # a scene answers [add text] notes with text items too, never texts.json and a plan
+        print(scene_handoff(folder, sorted({c["alt"] for c in cs if c.get("alt") not in (None, "*")})))
+    typed = put_texts(folder, cs) if not handoff else 0
     if typed:
         print(f"texts: {folder / 'texts.json'} ({typed} on-screen text{'' if typed == 1 else 's'} the user typed with the Text tool, "
               "the notes marked [add text]. plan.py puts every one in plan.json as typed: plan again and render. "
@@ -4486,6 +4701,29 @@ def cmd_wait(folder, poll=1.0):
     elif cs:
         print(learn_hint(folder, [c["id"] for c in cs if c.get("keep")]))
     return e["type"]
+
+
+def scene_handoff(folder, alts=()):
+    """What `wait` tells Claude when the draft is a scene: answer the notes as items the user can drag, never a render.
+    alts: the versions (trial reels) notes were left on, each its own scene."""
+    sp, q = shlex.quote(str(Path(scene.__file__).resolve())), shlex.quote(str(folder))
+    return (f"SCENE: this draft is a scene ({folder / scene.NAME}). Every element on it is an item the user drags, resizes and "
+            f"undoes on the page. Answer the notes with scene changes, never a render: do not run edit.py render, plan.py or "
+            f"style-edit's render steps for this draft, and never burn anything into the footage.\n"
+            f"  look:   python3 {sp} show {q} --at <t>   (the items on screen then: ids, times, boxes; and the words said)\n"
+            f"  change: python3 {sp} add {q} text --text \"Link in bio\" --start <t> --end <t> [--x --y --w] "
+            f"[--json '{{\"box\": {{\"color\": \"#FFFFFF\", \"pad\": [24, 12], \"radius\": 12, \"block\": true}}, \"color\": \"#000000\"}}'] --why \"<one line>\"\n"
+            f"          python3 {sp} add {q} image|video|audio --src <file> --start <t> [--end <t>] [--x --y --w --h] --why \"<one line>\"\n"
+            f"          python3 {sp} ops {q} '<json ops>' --why \"<one line>\"   (set, add, remove, move, trim, split: SCENE.md)\n"
+            f"  An image or screenshot is an image item. An animated graphic (a motion clip, a HyperFrames or Blender shot) is a "
+            f"video with alpha: hyperframes render --format webm on a transparent ground (VP9 with alpha), added as a video item "
+            f"the user can move, scale, crop and trim. Text is a text item (anim, keys for motion). A sound is an audio item. A zoom "
+            f"is scale keys on the footage clip under it. Each command is one change on the page, marked Claude, undoable; the open "
+            f"page draws it within a few seconds. Fields and ops: {Path(scene.__file__).with_name('SCENE.md')}.\n"
+            f"  Then answer each note (resolve <id> fixed --reply \"<what you changed>\") and hand the draft back with no render:\n"
+            f"  python3 {shlex.quote(str(Path(__file__).resolve()))} {q} round --scene"
+            + "".join(f"\n  Notes marked [{x}] are on the version {x}, its own scene ({folder / scene.name_of(x)}): add --alt {shlex.quote(x)} "
+                      f"to every show, add and ops for them, and hand back with round --scene --alt {shlex.quote(x)}." for x in alts))
 
 
 def edits_text(folder, e):
@@ -5180,7 +5418,14 @@ def demo_bake(tmp):
     d = load(f / "review.json")
     assert d["baked"] == 1 and baked_texts(f, d) == ["t1"] and BAKE[str(f)]["state"] == "done", d
     assert filecmp.cmp(f / "render.mp4", d["video"], shallow=False), "the round's video is the patched render"
-    # Export: the draft as it is when its last bake has every edit in; else the bake first; then into exports/
+    # scene mode (SCENE.md): every draft on the edit is a scene; a plan draft goes through from_plan, its stamp lost or not
+    assert scene_mode(f, d) and plan_draft(f, d) and not scene_mode(f, {**d, "stills": True}) and not scene_mode(f, {**d, "stage": "cut"})
+    st0 = (f / "render.stamp.json").read_bytes()
+    (f / "render.stamp.json").unlink()
+    assert live_ready(f, d) == "the render was finished by hand" and plan_draft(f, d), "a render back without its stamp: still the plan's"
+    assert not plan_draft(f, {**d, "video": str(f / "cut.mp4"), "src": None}), "a draft that is not the render: a video"
+    (f / "render.stamp.json").write_bytes(st0)
+    # export_src (a draft's bake into one MP4), which Export used before every draft was a scene
     n = len(ran)
     assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n, "nothing new: the baked draft, no render"
     t = load(f / "texts.json")
@@ -5189,7 +5434,11 @@ def demo_bake(tmp):
     assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n + 1, "a new edit: baked first"
     assert load(f / "plan.json")["texts"][1]["text"] == "hey" and export_left_out(f, d) is None
     EXPORT[str(f)] = {"state": "working", "since": time.time()}
+    r0, scene.render = scene.render, lambda e, out, log=None, name=None: Path(shutil.copy2(d["video"], out))   # Remotion faked
     export_job(f, run=fake)
+    scene.render = r0
+    assert (f / scene.NAME).is_file(), "Export renders the scene"
+    (f / scene.NAME).unlink()
     import library
     x = export_state(f, load(f / "review.json"))
     assert x["state"] == "done" and x["name"] == download_name(f) and (f / "exports" / x["name"]).is_file(), x
@@ -5350,6 +5599,18 @@ def demo_layers(tmp):
         True, [], [], [[1.0, 1.5]], 64, 36, 120), lp
     assert [x["text"] for x in lp["texts"]] == ["hi", "in"] and [c["placed"] for c in lp["sfx"]] == ["a1", "a2"], lp
     assert lp["video"] in ("review/v-edit3.mp4", ".live/review/v-edit3.mp4") and lp["sfx"][0]["src"] == "/audio/s.wav"
+    # as a scene (video_scene): the MP4 as two clips round the cut piece, the text after it 0.5 s earlier, the one and the
+    # sound inside it out, the other sound on the cut's clock; nothing burned in is laid on again
+    assert scene_mode(f, d) and not plan_draft(f, d)
+    sc = video_scene(f, d)
+    v, tx, au = ([it for t in sc["tracks"] if t["name"] == n for it in t["items"]] for n in ("Video", "Text", "Placed sounds"))
+    assert [(x["start"], x["end"], x["in"]) for x in v] == [(0, 1, 0), (1, 3.5, 1.5)] and v[1]["cut"]["before"]["reason"] == "by hand", v
+    assert [(x["text"], x["start"], x["end"]) for x in tx] == [("hi", 2.0, 3.0)] and [(x["start"], x["volume"]) for x in au] == [(1.5, 0.5)], (tx, au)
+    # a version (a trial reel) is its own scene, scene.<alt>.json: its MP4 as one clip, none of the main draft's hand edits
+    sv = scene_for(f, {**d, "alts": [{"name": "t1", "video": str(base)}]}, "t1")
+    assert (f / "scene.t1.json").is_file() and not (f / scene.NAME).exists() and [t["name"] for t in sv["tracks"]] == ["Video"], sv["tracks"]
+    assert "scene.t1.json" in hand_files(f) and scene_out(f, sv, "t1")["assets"]["draft"]["url"].endswith("&alt=t1")
+    (f / "scene.t1.json").unlink()
     ran = []
 
     def fake(cmd, **k):   # edit.py render: the plan's own video as the render
@@ -5391,6 +5652,80 @@ def demo_layers(tmp):
     set_ui(videos=vs)   # not one of the user's first videos (the main demo counts those)
     d = load(f / "review.json")
     assert "base_video" not in d and d["video"] == str(f / "review" / "v-edit4.mp4") and layer_of(f, d) == Path(d["video"]), d
+
+
+def demo_claude_scene(tmp):
+    """Claude's work on a scene (SCENE.md, Claude edits the scene): wait hands over scene ops, scene.py ops goes through
+    the page's server as by "claude" (marked, listed, undone and redone by its own ops), round --scene makes no MP4."""
+    f, ui0 = (tmp / "claude-scene").resolve(), _ui_json().read_bytes() if _ui_json().exists() else None
+    (f / "review").mkdir(parents=True)
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x36:r=30:d=4", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    str(f / "render.mp4")], check=True)
+    (f / "plan.json").write_text(json.dumps({"fps": 30, "durationInFrames": 120, "width": 64, "height": 36, "texts": [], "cards": []}), encoding="utf-8")
+    clone(f / "render.mp4", f / "review" / "v-edit1.mp4")
+    save(f / "review.json", {"folder": str(f), "name": "claude-scene", "stage": "edit", "round": 1, "sent": True, "stills": False,
+                             "comments": [{"id": 1, "stage": "edit", "round": 1, "t": 3.0, "t_end": None, "text": "add Link in bio at the end",
+                                           "status": "open", "alt": None, "words": "", "frame": "x.jpg"}],
+                             "events": [{"type": "send", "stage": "edit", "round": 1, "at": now(), "handled": False}],
+                             "plan": str(f / "plan.json"), "video": str(f / "review" / "v-edit1.mp4")})
+    S = scene.Scene(64, 36, 30, edit=f)
+    S.video("render.mp4", 0, 4, track="Video")
+    S.save(f)
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        cmd_wait(f, poll=0.05)
+    assert "SCENE: this draft is a scene" in out.getvalue() and "round --scene" in out.getvalue() and "never a render" in out.getvalue(), out.getvalue()
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(f, "tok"))
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{srv.server_address[1]}"
+    (f / "review" / ".server").write_text(f"{base}/?t=tok", encoding="utf-8")
+    post = lambda p, b: json.loads(urllib.request.urlopen(urllib.request.Request(f"{base}{p}?t=tok", json.dumps(b).encode(), method="POST")).read())
+    state = lambda: json.loads(urllib.request.urlopen(f"{base}/state?t=tok").read())
+    v0 = state()["scene_v"]
+    sp = str(Path(scene.__file__).resolve())
+    r = subprocess.run([sys.executable, sp, "add", str(f), "text", "--text", "Link in bio", "--start", "3", "--end", "4", "--why", "Link in bio at the end"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "Claude change 1: Link in bio at the end" in r.stdout and "next poll" in r.stdout, r.stdout + r.stderr
+    st = state()
+    assert st["scene_v"] != v0 and [c["why"] for c in st["claude_changes"]] == ["Link in bio at the end"], st["claude_changes"]
+    it = next(i for t in scene.load(f)["tracks"] for i in t["items"] if i["type"] == "text")
+    assert it["by"] == "claude" and it["text"] == "Link in bio" and JOURNAL[str(f)], "marked, and in the page's journal"
+    assert post("/scene/claude", {"n": 1, "undo": True})["ok"] and not any(i["type"] == "text" for t in scene.load(f)["tracks"] for i in t["items"])
+    assert state()["claude_changes"][0]["undone"] and post("/scene/claude", {"n": 1, "undo": False})["ok"]
+    assert post("/scene/ops", {"ops": [{"op": "set", "item": it["id"], "props": {"y": 9}}]})["ok"]
+    it = next(i for t in scene.load(f)["tracks"] for i in t["items"] if i["id"] == it["id"])
+    assert it["y"] == 9 and "by" not in it, "the user's touch clears Claude's mark"
+    # a version (a trial reel): its own scene.t1.json, its own change log, its own scene_v; the main draft's stay as they are
+    clone(f / "render.mp4", f / "review" / "v-edit1-t1.mp4")
+    update(f / "review.json", lambda d: d.update(alts=[{"name": "t1", "video": str(f / "review" / "v-edit1-t1.mp4")}]))
+    main0 = (f / scene.NAME).read_bytes()
+    r = subprocess.run([sys.executable, sp, "add", str(f), "--alt", "t1", "text", "--text", "Trial hook", "--start", "0", "--end", "1", "--why", "t1 hook"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "Claude change 1: t1 hook" in r.stdout, r.stdout + r.stderr
+    st = state()
+    assert (f / scene.NAME).read_bytes() == main0 and (f / "scene.t1.json").is_file() and (f / "review" / "claude.t1.json").is_file()
+    assert set(st["scene_v"]) == {"", "t1"} and [(c["alt"], c["why"]) for c in st["claude_changes"]] == [(None, "Link in bio at the end"), ("t1", "t1 hook")]
+    assert "[by claude]" in subprocess.run([sys.executable, sp, "show", str(f), "--alt", "t1"], capture_output=True, text=True).stdout
+    assert post("/scene/claude", {"n": 1, "undo": True, "alt": "t1"})["ok"] and (f / scene.NAME).read_bytes() == main0
+    assert not any(i["type"] == "text" for t in scene.load(f, "scene.t1.json")["tracks"] for i in t["items"]), "undone on t1 only"
+    assert post("/scene/claude", {"n": 1, "undo": False, "alt": "t1"})["ok"]
+    bad = subprocess.run([sys.executable, sp, "ops", str(f), '[{"op": "wat"}]'], capture_output=True, text=True)
+    assert bad.returncode and "unknown op" in bad.stderr, bad.stderr
+    rp = str(Path(__file__).resolve())
+    r = subprocess.run([sys.executable, rp, str(f), "round", "--scene"], capture_output=True, text=True)
+    assert r.returncode and "answer every note" in r.stderr, "the note is answered first"
+    subprocess.run([sys.executable, rp, str(f), "resolve", "1", "fixed", "--reply", "Added Link in bio"], check=True, capture_output=True)
+    mp4s = sorted(x.name for x in f.glob("*.mp4"))
+    r = subprocess.run([sys.executable, rp, str(f), "round", "--scene"], capture_output=True, text=True)
+    d = load(f / "review.json")
+    assert r.returncode == 0 and d["round"] == 2 and d["scene_from"] == ["edit", 1] and sorted(x.name for x in f.glob("*.mp4")) == mp4s, r.stderr
+    assert (f / "review" / "snap-edit2" / "scene.json").is_file(), "the round keeps the scene"
+    assert [(c["alt"], c["n"]) for c in state()["claude_changes"]] == [(None, 1), ("t1", 1)], "Claude's changes stay undoable on the round after"
+    assert [x["name"] for x in d["alts"]] == [x["name"] for x in d["rounds"][-1]["alts"]] == ["t1"] and (f / "review" / "snap-edit2" / "scene.t1.json").is_file(), "the versions stay on the round"
+    r = subprocess.run([sys.executable, rp, str(f), "round", "--scene", "--alt", "t9"], capture_output=True, text=True)
+    assert r.returncode and "no version t9" in r.stderr, r.stderr
+    srv.shutdown()
+    _ui_json().write_bytes(ui0) if ui0 is not None else _ui_json().unlink(missing_ok=True)   # its /state counted it as a first video
 
 
 def demo_ripple(tmp):
@@ -5614,6 +5949,7 @@ def demo():
     demo_live(tmp)
     demo_layers(tmp)
     demo_ripple(tmp)
+    demo_claude_scene(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
@@ -5621,6 +5957,7 @@ def demo():
         opened.append((folder, prompt, resume)) or True, "claude '" + prompt + "'")
     typed, keep_type = [], launcher.type_into
     launcher.type_into = lambda tty, text: typed.append((tty, text)) or tty == "/dev/ttys-open"
+    os.environ.pop("AI_EDITOR_NO_REOPEN", None)   # the launcher is faked above: reopen() itself is what is checked
     rf = tmp / "lib" / "edits" / "solo"
     (rf / "review").mkdir(parents=True)
     save(rf / "review.json", {})
@@ -5647,7 +5984,11 @@ def demo():
     assert r2["how"] == "resumed" and opened[-1] == (tmp, "/ai-editor:start carry on edits/solo", True), (r2, opened[-1])
     (rf / "review" / ".claude").write_text(json.dumps({**me, "app": "Cursor"}), encoding="utf-8")
     assert reopen(rf, rf / "review.json", force=True)["how"] == "new", "open in an app that cannot be typed into: a new one"
+    n_open = len(opened)
     globals()["claude_alive"], launcher.type_into = keep_alive, keep_type
+    os.environ["AI_EDITOR_NO_REOPEN"] = "1"
+    assert reopen(rf, rf / "review.json", force=True) is None and len(opened) == n_open, "AI_EDITOR_NO_REOPEN: nothing opens"
+    os.environ.pop("AI_EDITOR_NO_REOPEN")   # off for the rest: launcher.open_claude stays the recorder above
     w = who_claude()   # this demo's own process tree: a `claude` above it only when Claude Code runs it
     assert not w or (w["pid"] and "session" in w), w
     # a page no session owns takes only questions with no session: another project's Claude never asks there
@@ -7035,7 +7376,9 @@ def main():
     sp.add_parser("wait")
     sp.add_parser("final", help="the cut is the finished video: no styled edit follows its approve")
     s = sp.add_parser("round")
-    s.add_argument("--video", required=True)
+    s.add_argument("--video", help="the new render (not with --scene)")
+    s.add_argument("--scene", action="store_true", help="the notes were answered in scene.json: a round with no new render")
+    s.add_argument("--alt", help="with --scene: the notes on this version were answered in its scene.<alt>.json")
     s.add_argument("--stage", choices=["cut", "edit"])
     s.add_argument("--stills", action="store_true", help="the stills before the render (edit.py storyboard): approve renders")
     s.add_argument("--transcript")

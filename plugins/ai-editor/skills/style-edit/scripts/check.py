@@ -944,10 +944,11 @@ def demo():
     # an overlay in the band above the head may span 4-96% and start 10% down (plan.free_regions)
     band = {**plan, "cards": [{"src": "images/a.png", "start": 0.5, "end": 2, "trigger_word": "a", "box": [13, 13.1, 74, 16.9], "layout": "box"}]}
     assert not any(f["level"] == "FAIL" and "'a'" in f["what"] for f in check_plan(band, face)), check_plan(band, face)
-    for extra in ({}, {"layer": "behind"}):   # the reels safe zone (x 60-940, y 250-1440), behind cards too
+    for extra in ({}, {"layer": "behind"}):   # the reels safe zone (x 30-1010, y 150-1640), behind cards too
         wide = {**band, "cards": [{**band["cards"][0], "box": [4, 10, 92, 16.9], **extra}]}
         assert any("reaches under the app's UI" in f["what"] for f in check_plan(wide, face)), extra
-    assert any("captions 86% wide" in f["what"] for f in check_plan({**band, "captions": {**band["captions"], "style": {"y_pct": 68}}}, face))
+    assert not any("% wide reach past" in f["what"] for f in check_plan({**band, "captions": {**band["captions"], "style": {"y_pct": 68}}}, face))
+    assert any("captions 92% wide" in f["what"] for f in check_plan({**band, "captions": {**band["captions"], "style": {"y_pct": 68, "width_pct": 92}}}, face))
     assert any(f["level"] == "FAIL" and "'cloud' up 3.0 s" in f["what"] for f in got), got
     assert has("FAIL", "d", "text fits at") and has("WARN", "d", "only text"), got
     assert any(f["level"] == "WARN" and "static for 9.5 s" in f["what"] for f in got), got

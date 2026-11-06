@@ -315,7 +315,7 @@ The pick-to-beat table and its rules: `shapes.md`.
 
 ## Safe areas
 
-On vertical, nothing a plan draws leaves the reels safe zone: x 60-940, y 250-1440 of 1080x1920
+On vertical, nothing a plan draws leaves the reels safe zone: x 30-1010, y 150-1640 of 1080x1920
 (`plan.py` SAFE: 5.6% left, 13.1% top, 13% right, 25% bottom). Cards and captions are centred, so they
 keep the 13% margin on both sides (x 140-940); an overlay beside the head may reach x 60. That keeps
 the top bar, the like and share rail and the username and description clear, and `check.py plan`

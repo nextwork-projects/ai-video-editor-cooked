@@ -21,6 +21,8 @@ the beat shape for every pick. There are no type cards (words on a ground); they
 | `logo` | a `logo` beat: `brand`, `domain` when Simple Icons may lack it |
 | `logo_cluster`, `chat`, `terminal`, `toasts`, `side_by_side`, `video_card`, `flow`, `likes`, `progress`, `curve`, `notes` | an `anim` beat of that `type` with its props (`flow`: real logos or capture files as nodes, each landing on its word; `likes`: counts up to the number said) |
 
+On a scene draft the beats you write reach the screen as items (`scene.py cards`, run by the caller): the JSON is the same.
+
 Rules:
 
 1. Only words and numbers the speaker said in that sentence, or the product's own words on its page.

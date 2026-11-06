@@ -282,7 +282,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 
 body.asidex #rszside{display:none}
 body.edro .eitem{pointer-events:none}body.edro .ehd button{display:none}
-body.edalt .etrack:not([data-row="vid"]),body.edalt .ehd:not(:first-child){display:none}
+
 /* the edit, tidied (body.edcalm, calm()): edit tools only on the rail, transcript left, video big, one control row, one timeline */
 #railtx{display:none}body.edcalm #railtx{display:flex}
 body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd:not(.rupd),body.edcalm #railtog{display:none}
@@ -485,6 +485,7 @@ body.asidex aside{display:none}body:not(.asidex) .popen{background:var(--railon)
 .chg{display:flex;align-items:flex-start;gap:8px;padding:6px 8px;margin:0 -8px;border-radius:8px;text-align:left;font-size:13px;line-height:20px;color:var(--ink2)}
 .chg:hover{background:var(--hover)}.chg .tchip{background:var(--chip)}
 .chg.back{color:var(--strong);font-weight:600}
+.ccl{align-items:center;cursor:pointer}.ccl>span:not(.tchip){flex:1}.ccl.off>span:not(.tchip){text-decoration:line-through;color:var(--muted)}.ccl .obtn{flex-shrink:0}
 .pfoot{flex-shrink:0;padding:16px;display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line)}
 /* Anything to add?: the images and links added to this video (assets.json), each with a remove x */
 #adds{display:flex;flex-direction:column;gap:6px}
@@ -640,7 +641,7 @@ body.tside #tside{display:flex}
 .tl.ed [data-h=n],.tl.ed [data-h=s]{left:50%;width:16px;height:6px;margin-left:-8px;border-radius:3px;cursor:ns-resize}.tl.ed [data-h=n]{top:-7px}.tl.ed [data-h=s]{bottom:-7px}
 .tl.ed [data-h=rot],.csel [data-h=rot]{left:50%;top:-30px;margin-left:-6px;border-radius:50%;cursor:grab}.tl.ed [data-h=rot]{top:-34px;margin-left:-6px}
 .csel [data-h=n]{left:50%;top:0;cursor:ns-resize}.csel [data-h=s]{left:50%;bottom:0;cursor:ns-resize}.csel [data-h=w]{left:0;top:50%;cursor:ew-resize}.csel [data-h=e]{right:0;top:50%;cursor:ew-resize}
-#guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}#guides .szone{position:absolute;left:5.56%;top:13.02%;width:81.48%;height:61.98%;outline:1px dashed rgba(255,255,255,.4)}
+#guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 #ibody{flex:1;overflow:auto;padding:12px 16px}.ihead{margin:0 0 4px;display:flex;flex-direction:column;gap:2px}.ihead b{font-size:14px;line-height:18px;color:var(--strong)}.ihead span{font-size:12px;color:var(--muted)}
 .tf>span{flex-shrink:0;width:84px;font-size:12px;color:var(--muted)}.tfv .inum{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
 .tfv em{font-style:normal;font-size:12px;color:var(--muted);width:24px}.tfv output.wide{width:56px}.ifull{width:100%;height:36px;border-radius:8px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink)}.ifull:hover{border-color:var(--ink)}
@@ -928,8 +929,8 @@ body.making #making{display:flex}
  <div id="stage">
   <div id="pair">
    <figure class="pl" id="p2"><figcaption id="cap2"></figcaption><div class="player"><video id="v2" preload="auto" muted playsinline></video><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
-   <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><div id="live"></div><video id="v" preload="auto" playsinline></video>
-    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div class="hits" id="guides"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
+   <figure class="pl" id="p1"><figcaption id="cap1"></figcaption><div class="player"><div id="live"></div><div id="scl"></div><video id="v" preload="auto" playsinline></video>
+    <div class="hits" id="hits"></div><div class="hits" id="tlayer"></div><div class="hits" id="tedit"></div><div class="hits" id="clayer"></div><div class="hits" id="cplayer"></div><div class="hits" id="guides"></div><div id="scover"></div><div id="oldbadge"></div><div id="making" aria-live="polite"></div>
     <div class="fsbar" id="fsbar"><div class="fsscrub" id="fsscrub"><i id="fsfill"></i><b id="fsknob"></b><span id="fshover"></span></div><div class="fsrow"><button id="fsplay" aria-label="play or pause"></button><button id="fsback" title="j">-5s</button><button id="fsfwd" title="l">+5s</button><span id="fstime" class="num"></span><span class="grow"></span><button id="fsexit" title="esc">Exit full screen</button></div></div><div class="sz"><i class="zt"></i><i class="zb"></i><i class="zl"></i><i class="zr"></i><b></b></div></div></figure>
   </div>
   <div class="rsz" id="rsztx" role="separator" aria-label="drag to resize the video and the transcript" title="drag to resize"></div>
@@ -1122,7 +1123,7 @@ async function load(force){const sent=performance.now();
     view=cur();followNew=false;if(was&&was!==key(cur()))tab='notes'}   // follow a new round when it lands
   if(S.baked&&S.baked!==DATA._baked){DATA._baked=S.baked;delete DATA[key(S)]}   // a bake remade this round's data (cards moved)
   for(const r of S.rounds||[])if(!(key(r) in DATA)){DATA[key(r)]=null;fetch('/data?k='+key(r)).then(x=>x.json()).then(j=>{DATA[key(r)]=j;txSig='';render()}).catch(()=>{})}
-  setVideo();render();liveFetch();
+  setVideo();render();SC.check().then(on=>{if(!on)liveFetch();else scClaude()});   // a scene (review-scene.js) or the plan's live player
   if(landing===2){landing=0;toast(S.stills?'The preview is ready':'The edit is ready')}
 }
 // Claude's words reach the page as written. Check output never should ("Render check: 1 FAIL left", "-12.7 LUFS",
@@ -1184,7 +1185,7 @@ async function liveFetch(){if(!S||S.stage!=='edit'||LV.failed)return;
   try{const r=await (await fetch('/live/plan')).text();if(r!==LV.text){LV.text=r;const j=JSON.parse(r);LV.why=j.why||'';LV.off=j.lane_off||{};LV.raw=j.why?'':r;renderEdTracks()}
     if(LV.raw&&!window.CookedLive)await import('/live/live.js')}catch(e){LV.failed=true;console.warn('live player off:',e)}
   liveSwitch();liveSync()}
-const liveWanted=()=>!!(LV.raw&&window.CookedLive&&!LV.failed&&S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!alt&&!cmp&&!previewOn);
+const liveWanted=()=>!!(!SC.on&&LV.raw&&window.CookedLive&&!LV.failed&&S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!alt&&!cmp&&!previewOn);
 function liveSwitch(){const on=liveWanted();if(on===LV.on)return;LV.on=on;document.body.classList.toggle('live',on);
   if(on&&!LV.shim){try{LV.shim=CookedLive.mount($('live'),liveNow());LV.sent=''}catch(e){LV.failed=LV.on=false;document.body.classList.remove('live');console.warn('live player off:',e);return}}
   v.use(on?LV.shim:null);if(!on)LV.shim.pause();tsig=null;$('clayer')._s=null;placeSafe();drawCard();drawCapPrev();renderTexts();liveAudio()}
@@ -1409,10 +1410,11 @@ function capWords(cs){const T=TO(),pps=Math.max(1,$('edtracks').clientWidth-140)
   for(const c of cs){const t=capText(c).text;if(!t||inGone(...capAt(c)))continue;const[s,e]=capAt(c).map(so);if(a==null)a=s;b=e;words.push(t);if((b-a)*pps>=70)flush()}
   flush();return out.join('')}
 function renderEdTracks(){const E=$('edtracks'),T=D();
-  // an approved draft or another version still shows it, to look and scrub (body.edro). A version has only its video here, so just its own bar (body.edalt)
+  // an approved draft still shows it, to look and scrub (body.edro). A version is edited like the main draft (its own scene)
   const on=!!(S&&view&&view.stage==='edit'&&isCur()&&!previewOn&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
-  document.body.classList.toggle('edro',on&&(!noteOk()||!!alt));document.body.classList.toggle('edalt',on&&!!alt);
+  document.body.classList.toggle('edro',on&&!noteOk());
   if(!on){E.innerHTML='';E._h='';return}
+  if(window.SC&&SC.on)return SC.tl();   // a scene: one row per track (review-scene.js)
   const TT=TO(),pc=t=>Math.max(0,Math.min(100,so(t)/TT*100)),it=data().items||{};   // pc: on the output clock (ripple)
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
@@ -1530,7 +1532,7 @@ $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eit
 // the Video row: split at the playhead (s), click a piece, Delete cuts it (or puts a cut one back). The page plays the
 // draft without the cut pieces at once; review.py /timeline/cut keeps them in overrides.json and tells Claude the words
 let vsel=null,edDragged=0;
-const cuts=()=>(S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
+const cuts=()=>(!(window.SC&&SC.on)&&S&&S.cuts&&S.cuts.gone)?S.cuts:{splits:[],gone:[]};
 // ripple (the Video row's magnet, on unless turned off, overrides.json cuts.ripple): the timeline runs on the output clock,
 // the video with its cut pieces out, as the bake renders it. Everything is kept on the source clock; so maps a source time
 // onto the output clock (inside a cut piece: its join), os back. With ripple off both are t and a cut piece keeps its place
@@ -1582,12 +1584,20 @@ const EH={u:[],r:[]};let edAt=0,txAt=0;
 let JQ=[];
 function edPush(what,undo,redo,key){const j=JQ.splice(0),l=EH.u[EH.u.length-1];if(key&&l&&l.key===key&&performance.now()-edAt<4000){l.redo=redo;l.j=[...(l.j||[]),...j]}else{EH.u.push({what,undo,redo,key,j});if(EH.u.length>60)EH.u.shift()}EH.r=[];edAt=performance.now();edBtns()}
 const jPush=what=>edPush(what,async()=>{},async()=>{});   // an edit undone by its journal alone
+// Claude's changes to the scene (scene.py ops, SCENE.md): drawn on the poll that sees scene.json change, each one Undo
+// ("Claude: <why>") that takes it off by its own ops (POST /scene/claude), so the user's edits since stay
+const CL={v:{},seen:new Set()},clMine=()=>(S.claude_changes||[]).filter(c=>(c.alt||'')===(alt||''));   // each version: its own scene, its own changes
+async function clUndo(n,undo){const r=await post('/scene/claude',{n,undo,alt:alt||null});if(!r.ok)throw new Error(r.error||'That did not save.');if(r.scene&&SC.on){SC.s=r.scene;SC.show()}}
+async function scClaude(){if(!SC.on)return;
+  const sv=(S.scene_v||{})[alt||''];if(sv!==CL.v[alt||'']&&!SC.busy&&!SC.drag&&!SC.edit){if((alt||'') in CL.v)await SC.fetch();CL.v[alt||'']=sv}
+  for(const c of clMine())if(!CL.seen.has((alt||'')+'|'+c.n)){CL.seen.add((alt||'')+'|'+c.n);if(!c.undone){EH.u.push({what:'Claude: '+c.why,undo:()=>clUndo(c.n,true),redo:()=>clUndo(c.n,false),j:[]});EH.r=[];edBtns()}}
+  const sig=JSON.stringify(clMine());if(sig!==CL.sig){CL.sig=sig;renderList()}}   // the list drew before the scene was on
 function edBtns(){const u=EH.u.at(-1),r=EH.r.at(-1);$('undob').disabled=!u;$('redob').disabled=!r;$('undob').title=u?`Undo ${u.what} (⌘Z)`:'Undo (⌘Z)';$('redob').title=r?`Redo ${r.what} (⇧⌘Z)`:'Redo (⇧⌘Z)'}
 const edSave=(path,b)=>post(path,b).then(r=>{if(!(r.ok||r.id))throw new Error(r.error||'');$('edtracks')._h=null;return load()});
 async function edUndo(redo){if(tx)await textAuto();const h=(redo?EH.r:EH.u).pop();if(!h)return;(redo?EH.u:EH.r).push(h);h.key=null;edAt=performance.now();edBtns();
   if(csel){csel=null;drawCard()}if(tx)setText(null);   // what was picked may be what changes: let go, so the old box is not drawn over it
   try{if(h.j&&h.j.length){const r=await post('/timeline/restore',{j:redo?Math.max(...h.j):Math.min(...h.j),side:redo?'after':'before'});if(!r.ok)throw new Error('That change was on another draft.')}
-    else await (redo?h.redo:h.undo)();JQ.length=0;$('cbody')._s=null;$('edtracks')._h=null;await load(true);toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
+    else await (redo?h.redo:h.undo)();JQ.length=0;$('cbody')._s=null;$('edtracks')._h=null;await load(true);if(SC.on)await SC.fetch();toast((redo?'Redone: ':'Undone: ')+h.what+'.')}catch(e){toast(e.message||'That did not save.')}}
 $('undob').onclick=()=>edUndo();$('redob').onclick=()=>edUndo(true);
 $('tx').addEventListener('pointerdown',()=>txAt=performance.now(),true);
 // Cmd+Z, Shift+Cmd+Z: a slider or a colour keeps the focus after a change, so they do not count as typing
@@ -1978,6 +1988,8 @@ function renderList(){
     if(vr.note&&!vr.back_to)h+=`<div class="sum"><p>${esc(vr.note)}</p></div>`;
     if(mine.length)h+=`<p class="sub">Your notes on ${dn(viewRound())}</p>`;
   }else if((vr.note||cc)&&!(isCur()&&p==='send'))h+=`<div class="claude"><div><b>Claude</b><p>${esc(vr.note||'')}${cc}</p></div></div>`;
+  const CC=isCur()&&SC.on?clMine():[];   // Claude's changes to the scene on this draft, each undoable
+  if(CC.length)h+=`<div class="chhead"><b>Claude's changes</b></div>`+CC.map(c=>`<div class="chg ccl${c.undone?' off':''}"${c.t!=null?` data-t="${c.t}" title="jump to ${fmt(c.t)}"`:''}>${c.t!=null?`<span class="tchip num">${fmt(c.t)}</span>`:''}<span>${esc(c.why)}</span><button class="obtn" data-cln="${c.n}" data-clu="${c.undone?0:1}">${c.undone?'Redo':'Undo'}</button></div>`).join('');
   h+=mine.map(noteHtml).join('');
   if(mine.length&&isCur()&&!p)h+=`<p class="unsent">${plural(mine.length,'note')} not sent yet. Press Submit feedback to Claude when you are done.</p>`;
   if(!mine.length&&!prev.length&&!(S.raw&&isCur())&&!(isCur()&&(makingEdit()||p==='approve')))h+=isCur()?'<div class="empty"><b>Your feedback</b>Pause where something is off and type what to change below. Each note is pinned to that moment. Claude sees nothing until you press Submit feedback to Claude.</div>':'<p class="empty2">No notes on this draft.</p>';
@@ -2208,6 +2220,8 @@ $('list').addEventListener('click',async e=>{
     sureBack=null;bk.disabled=true;const r=await fetch('/back',{method:'POST',body:JSON.stringify({round:n})}),j=await r.json().catch(()=>({}));
     if(!r.ok)return alert(j.error||'Could not go back');toast('Back to '+dn(roundOf(S.stage,+n)));tab='notes';followNew=true;return load(true)}
   const r=e.target.closest('.rnd');if(r){const[stage,n]=r.dataset.k.split('-');seekTo=mapT(v.currentTime,key(view),r.dataset.k);view={stage,round:+n};inT=outT=null;setVideo();render();return}
+  const cl=e.target.closest('[data-cln]');if(cl){e.stopPropagation();const undo=cl.dataset.clu==='1',c=clMine().find(c=>c.n===+cl.dataset.cln);cl.disabled=true;
+    try{await clUndo(c.n,undo);toast((undo?'Undone: ':'Redone: ')+'Claude: '+c.why+'.')}catch(x){toast(x.message)}return load(true)}
   const ch=e.target.closest('.chg[data-t]');if(ch){v.currentTime=+ch.dataset.t;return}
   const sc=e.target.closest('[data-scope]');
   if(sc){e.stopPropagation();const c=S.comments.find(c=>c.id===+sc.dataset.scope);
@@ -2497,7 +2511,7 @@ const fsAt=e=>{const r=$('fsscrub').getBoundingClientRect();return Math.min(1,Ma
 $('fsscrub').addEventListener('pointerdown',e=>{fsDrag=true;$('fsscrub').setPointerCapture(e.pointerId);v.currentTime=fsAt(e)*D()});
 $('fsscrub').addEventListener('pointermove',e=>{const h=$('fshover'),f=fsAt(e);h.style.display='block';h.style.left=f*100+'%';h.textContent=fmtx(f*D());if(fsDrag)v.currentTime=f*D()});
 $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscrub').addEventListener('pointerleave',()=>{if(!fsDrag)$('fshover').style.display='none'});
-$('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render()};
+$('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
 // the version menu: the app's own list, built from the select (renderMeta fills that), roomy rows, opens up when it has no room below
 {const M=document.createElement('div'),B=$('vbtn');M.id='vmenu';M.hidden=true;M.setAttribute('role','listbox');document.body.append(M);
   const TK='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -2684,15 +2698,10 @@ function cardPress(e,el){const k=!e.target.dataset.h&&document.elementsFromPoint
   const cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   if(h==='rot')return rotDrag(e,el,[r.left+(b0[0]+b0[2]/2)/100*r.width,r.top+(b0[1]+b0[3]/2)/100*r.height],csel.rot,a=>{csel.rot=a;el.style.transform=a?`rotate(${a}deg)`:'';liveSync()},a=>inspCommit('rotation',a));
   el.onpointermove=ev=>{if(!go&&Math.hypot(ev.clientX-x0,ev.clientY-y0)<3)return;go=true;const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;guides(true);
-    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r,ev)}   // frame centre, the other items, the safe zone
+    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r,ev)}   // frame centre, the other items
     else{const keep=ev.shiftKey||!!cpic(csel.x)&&h.length===2,l=h.includes('w'),t=h.includes('n'),hz=h!=='n'&&h!=='s',vt=h!=='w'&&h!=='e';   // a corner keeps a picture's shape, Shift any card's
       w=hz?Math.max(4,b0[2]+(l?-dx:dx)):b0[2];ht=keep?w*ar:vt?Math.max(4,b0[3]+(t?-dy:dy)):b0[3];if(keep&&!hz){ht=Math.max(4,b0[3]+(t?-dy:dy));w=ht/ar}
       if(l)x=b0[0]+b0[2]-w;else if(!hz)x=b0[0]+(b0[2]-w)/2;if(t)y=b0[1]+b0[3]-ht;else if(!vt)y=b0[1]+(b0[3]-ht)/2;[x,y,w,ht]=[x,y,w,ht].map(q=>Math.round(q*10)/10)}
-    if(v.videoHeight>v.videoWidth){   // reels: inside the safe zone (x 60-940, y 250-1440 of 1080x1920)
-      const X0=5.6,X1=87,Y0=13,Y1=75,keep=!!h&&!!cpic(csel.x);if(w>X1-X0){w=X1-X0;if(keep)ht=w*ar}if(ht>Y1-Y0){ht=Y1-Y0;if(keep)w=ht/ar}
-      if(h){const l=h.includes('w'),t=h.includes('n'),fx=l?b0[0]+b0[2]:x,fy=t?b0[1]+b0[3]:y,mw=l?fx-X0:X1-fx,mh=t?fy-Y0:Y1-fy,k=Math.min(1,mw/w,mh/ht);   // a resize stops at the edge, the other side stays put
-        if(k<1){if(keep){w*=k;ht*=k}else{w=Math.min(w,mw);ht=Math.min(ht,mh)}}if(l)x=fx-w;if(t)y=fy-ht}
-      x=Math.round(Math.min(X1-w,Math.max(X0,x))*10)/10;y=Math.round(Math.min(Y1-ht,Math.max(Y0,y))*10)/10}
     csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync();inspVals()};
   el.onpointerup=ev=>{el.onpointermove=null;guides(false);if(dup&&cmoved())return cardDup();if(cmoved())return cardSave(false);const c=!h&&(ev.metaKey||ev.ctrlKey)&&cardUnder(ev.clientX,ev.clientY,csel.x.key);if(c)return selectCard(c);drawCard()}}   // let go: saved; Alt: a copy there, the card stays
 document.addEventListener('keydown',e=>{if(!csel||/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||'')||KM.off())return;
@@ -3007,7 +3016,7 @@ async function libUpload(fs){fs=[...fs].filter(f=>/^audio\//.test(f.type)||/\.(w
       x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Add it again.'});x.send(f)});
     if(!r.ok){toast(r.error||`${f.name} was not added.`);continue}n++;S.sounds_ui=r.sounds;$('sbody')._s=null;renderSndPanel()}
   if(n)toast(n===1?'Added to your sounds.':`${n} sounds added.`)}
-async function libAdd(name,t){const r=await post('/sfx/add',{t,sound:name});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
+async function libAdd(name,t){if(SC.on)return SC.addSound(name,t);const r=await post('/sfx/add',{t,sound:name});if(!r.id&&!r.ok)return toast(r.error||'That did not save.');
   toast(`${sndName(name)} added at ${fmtx(t)}. Play to hear it.`);$('edtracks')._h=null;await load();sndAddedUndo(name)}
 // the sound just put on the timeline is the newest of that name in S.placed_sounds (the server gives it its id)
 function sndAddedUndo(name){const x=[...(S.placed_sounds||[])].reverse().find(y=>y.sound===name);if(x)edPush('add sound',()=>edSave('/sfx/remove',{t:x.t,src:x.sound,placed:x.id}),()=>edSave('/sfx/add',{t:x.t,item:x}))}
@@ -3060,7 +3069,7 @@ function medBox(iw,ih,px,py){const FW=v.videoWidth||1080,FH=v.videoHeight||1920,
   let cx=px??50,cy=py??(Y0+Y1)/2;if(Math.abs(cx-50)<12)cx=50;
   const x=Math.min(X1-w,Math.max(X0,cx-w/2)),y=Math.min(Y1-h,Math.max(Y0,cy-h/2)),q=n=>Math.round(n*10)/10;return [q(x),q(y),q(w),q(h)]}
 const medSize=m=>new Promise(res=>{const i=new Image();i.onload=()=>res([i.naturalWidth||16,i.naturalHeight||9]);i.onerror=()=>res([16,9]);i.src=medPic(m)});
-async function medAdd(m,t,px,py){medAdd.busy=1;try{const size=await medSize(m),r=await post('/media/add',{src:m.src,t:Math.round(t*100)/100,box:medBox(size[0],size[1],px,py),size});
+async function medAdd(m,t,px,py){if(SC.on)return SC.addMedia(m,t,px,py);medAdd.busy=1;try{const size=await medSize(m),r=await post('/media/add',{src:m.src,t:Math.round(t*100)/100,box:medBox(size[0],size[1],px,py),size});
   if(!r.key&&!r.id)return toast(r.error||'That did not go on. Media goes on the edit, before it is approved.');jPush('add media');
   toast(r.id?'Added. Claude has this draft: it puts it in the next one.':`${m.kind==='video'?'Clip':'Picture'} added at ${fmtx(r.start)}. Drag it to move, a corner to resize.`);
   $('edtracks')._h=null;await load();const x=r.key&&cardsAll().find(c=>c.key===r.key);if(x){v.currentTime=x.s+.02;selectCard(x)}}finally{medAdd.busy=0}}
@@ -3131,11 +3140,11 @@ function textPress(e,el,was){const sp=el.firstChild,h=e.target.dataset.h;v.pause
   if(h){const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,s0=tx.size,d=ev=>Math.hypot(ev.clientX-cx,ev.clientY-cy),d0=Math.max(8,d(e));
     return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner, the top or the bottom scales it from its centre
   end(textMove(x0,y0))}
-// the text follows the mouse from where the press began; reels: inside the safe zone
-function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),vert=v.videoHeight>v.videoWidth,ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
+// the text follows the mouse from where the press began
+function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   const tr=$('tprev')&&$('tprev').getBoundingClientRect(),hw=tr?tr.width/2/L.width*100:0,hh=tr?tr.height/2/L.height*100:0,lines=snapLines('t'+(tx.edit?tx.edit.id:''));
   return ev=>{guides(true);let x=ox+(ev.clientX-x0)/L.width*100,y=oy+(ev.clientY-y0)/L.height*100;[x,y]=snapBox([x-hw,y-hh,hw*2,hh*2],lines,L,ev).map((q,i)=>q+[hw,hh][i]);
-    tx.x=cl(x,vert?20:12,vert?73:88);tx.y=cl(y,vert?16:8,vert?72:92);renderTexts();txMoreVals()}}
+    tx.x=cl(x,0,100);tx.y=cl(y,0,100);renderTexts();txMoreVals()}}
 function textDrag(x0,y0,ev0){const f=textMove(x0,y0),up=()=>{document.removeEventListener('pointermove',f);document.removeEventListener('pointerup',up);textSoon(250)};
   f(ev0);document.addEventListener('pointermove',f);document.addEventListener('pointerup',up)}
 // a trial reel on screen (its version picked, after Make): the note goes to that trial on the Trial reels tab, at this moment
@@ -3168,7 +3177,7 @@ function renderExport(){const on=exOn(),x=on?S.export:{},w=x.state==='working',b
   else if(x.state==='failed')h=`<b>The export stopped.</b><p>${esc(x.why||'')}</p><div class="exb"><button class="go" data-exgo>Try again</button></div>`;
   box.hidden=!exOpen||!h;h=h&&h+'<button class="exx" data-exclose aria-label="close" title="Close">×</button>';
   if(box._h!==h){box._h=h;box.innerHTML=h}}
-async function exportNow(){exAsk=false;exOpen=true;const r=await fetch('/export',{method:'POST',body:'{}'});
+async function exportNow(){exAsk=false;exOpen=true;const r=await fetch('/export',{method:'POST',body:JSON.stringify({alt})});
   if(!r.ok){const j=await r.json().catch(()=>({}));toast(j.error||'The export did not start.')}await load(true)}
 $('mexport').onclick=()=>{const x=S&&S.export||{};exOpen=true;if(x.left_out){exAsk=true;renderExport()}else exportNow()};
 $('exbox').onclick=e=>{const t=e.target.closest('button');if(!t)return;
@@ -3252,7 +3261,7 @@ function inspTarget(){if(!S||!view||view.stage!=='edit')return null;if(msel.size
   return csel?{k:'card'}:ssel&&placed(ssel)?{k:'snd'}:vsel!=null?{k:'vid'}:null}
 const inspSoon=()=>{if(!IN.raf)IN.raf=requestAnimationFrame(()=>{IN.raf=0;inspSync()})};
 {const f=renderEdTracks;renderEdTracks=function(){f.apply(this,arguments);inspSoon()}}   // every pick redraws the rows: the inspector follows
-function inspSync(){if(PH)return;const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
+function inspSync(){if(window.SC&&SC.on||PH)return;const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
   if(!t||tx&&t.k!=='multi'){if(tool==='insp')openTool(IN.prev);return}
   if(tool!=='insp'){IN.prev=tool==='text'?null:tool;openTool('insp')}
   if(IN.sig!==sig){IN.sig=sig;renderInsp(t)}else inspVals()}
@@ -3334,9 +3343,8 @@ $('ibody').addEventListener('click',e=>{const t=inspTarget();if(!t)return;const 
 function rotDrag(e,el,c,a0,live,done){const ang=ev=>Math.atan2(ev.clientY-c[1],ev.clientX-c[0])*180/Math.PI,s0=ang(e);let a=a0;IN.rot0=a0;
   el.onpointermove=ev=>{a=a0+ang(ev)-s0;a=((a+180)%360+360)%360-180;if(ev.shiftKey)a=Math.round(a/15)*15;else for(const q of [-180,-90,0,90,180])if(Math.abs(a-q)<3)a=q;a=Math.round(a);live(a);inspVals()};
   el.onpointerup=()=>{el.onpointermove=el.onpointerup=null;if(a!==a0)done(a)}}
-// snap lines while moving, % of the frame: its centre lines, the other items' edges and centres up now, and on 9:16 the reels safe zone
+// snap lines while moving, % of the frame: its centre lines, the other items' edges and centres up now
 function snapLines(self){const t=v.currentTime,L={x:[50],y:[50]};
-  if(FH()>FW()){L.x.push(5.56,87.04);L.y.push(13.02,75)}
   for(const c of cardsAll()){if(c.key===self||!(c.s<=t&&t<c.e))continue;const p=(S.cards_pending||[]).find(p=>p.key===c.key&&p.box),[x,y,w,h]=p?p.box:c.box;L.x.push(x,x+w/2,x+w);L.y.push(y,y+h/2,y+h)}
   for(const x of textItems())if('t'+x.id!==self&&x.start<=t&&t<x.end){L.x.push(x.x_pct??50);L.y.push(x.y_pct??40)}
   return L}
@@ -3344,7 +3352,7 @@ function snapBox(b,L,r,ev){const th=[6/r.width*100,6/r.height*100];IN.g={x:[],y:
   [['x',0,2],['y',1,3]].forEach(([k,i,j],n)=>{let best=null;for(const q of [b[i],b[i]+b[j]/2,b[i]+b[j]])for(const l of L[k]){const d=l-q;if(Math.abs(d)<th[n]&&(!best||Math.abs(d)<Math.abs(best.d)))best={d,l}}
     if(best){out[n]=b[i]+best.d;IN.g[k]=[best.l]}});drawGuides();return out}
 function guides(on){if(IN.gon===on)return;IN.gon=on;if(!on)IN.g={x:[],y:[]};drawGuides()}
-function drawGuides(){const G=$('guides');G.innerHTML=!IN.gon?'':(FH()>FW()?'<div class="szone"></div>':'')+IN.g.x.map(x=>`<div class="sgl" style="left:${x}%;top:0;width:1px;height:100%"></div>`).join('')+IN.g.y.map(y=>`<div class="sgl" style="top:${y}%;left:0;height:1px;width:100%"></div>`).join('')}
+function drawGuides(){const G=$('guides');G.innerHTML=!IN.gon?'':IN.g.x.map(x=>`<div class="sgl" style="left:${x}%;top:0;width:1px;height:100%"></div>`).join('')+IN.g.y.map(y=>`<div class="sgl" style="top:${y}%;left:0;height:1px;width:100%"></div>`).join('')}
 // Alt-drag a card: a copy lands where it was let go (review.py /card/dup), the card stays
 async function cardDup(){const c=csel,nb=c.box.slice();c.box=c.orig.slice();cardLive();const r=await post('/card/dup',{key:c.x.key,box:nb});
   if(!r.key)return toast(r.error||'That did not save.');let cur=r.key;edPush('image copied',()=>edSave('/card/edit',{key:cur,label:'the copy',t:r.start,t_end:r.end,deleted:true}),async()=>{const a=await post('/card/dup',{key:c.x.key,box:nb});cur=a.key;await load()});
@@ -3374,4 +3382,4 @@ load();setInterval(load,3000);
     if(document.body.classList.contains('vertical'))keep('--plw',Math.round(Math.max(20,Math.min(75,(e.clientX-r.left)/r.width*100)))+'cqw');
     else keep('--txsplit',Math.round(Math.max(20,Math.min(85,(e.clientY-r.top)/r.height*100)))+'%')},clear('--txsplit','--plw'));
 })();
-</script><script src="/ask.js"></script></body></html>
+</script><script src="/review-scene.js"></script><script src="/ask.js"></script></body></html>

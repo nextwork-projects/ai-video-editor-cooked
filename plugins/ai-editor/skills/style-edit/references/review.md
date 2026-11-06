@@ -163,6 +163,13 @@ python3 "$R" edits/<name> resolve 2 wontfix --reply "<why>" --new-t 8.0
 python3 "$R" edits/<name> round --video edits/<name>/cut.mp4 --changed "Captions one size smaller"
 ```
 
+**A scene draft** (`wait` prints `SCENE:`): every note is answered on the scene, as the `SCENE:` block says:
+`scene.py show --at <t>` to see what is there, `scene.py add` / `ops` / `cards` with `--why` (each one change on the
+page, marked Claude, undoable), `resolve`, then `round --scene`. No plan, no render: a picture is an image item, an
+animation a video item with alpha (VP9 WebM), text a text item, a sound an audio item, a zoom scale keys on the
+footage clip. A note marked `[t1]` is on that version: add `--alt t1` to each scene.py command and to `round --scene`.
+Every draft on the edit is a scene; the table below is for the stills sheet, which still goes through plan.json.
+
 What each kind of note changes, so the fix survives the next re-plan (plan.py rewrites plan.json, so never
 hand-edit plan.json alone):
 

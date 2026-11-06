@@ -153,7 +153,10 @@ def terminal(folder, cmd, os_name):
 
 
 def start(argv, folder, os_name):
-    """Run terminal()'s command. True only when the window opened (as far as the OS says)."""
+    """Run terminal()'s command. True only when the window opened (as far as the OS says). AI_EDITOR_NO_REOPEN (tests,
+    review.py): never."""
+    if os.environ.get("AI_EDITOR_NO_REOPEN"):
+        return False
     try:
         if os_name == "Darwin":   # osascript returns once Terminal has the window, non-zero when it is refused
             return subprocess.run(argv, capture_output=True, timeout=60).returncode == 0
@@ -189,7 +192,7 @@ def open_claude(folder, prompt, os_name=None, run=start, session=None, resume=Fa
 def type_into(tty, text, os_name=None, run=None):
     """Type text and Enter into the Terminal tab on that tty (a Claude Code already open there takes it as a
     message). True when a Terminal tab had that tty. Terminal.app only: other apps cannot be typed into from here."""
-    if (os_name or platform.system()) != "Darwin" or not tty:
+    if (os_name or platform.system()) != "Darwin" or not tty or run is None and os.environ.get("AI_EDITOR_NO_REOPEN"):
         return False
     q = lambda x: str(x).replace("\\", "\\\\").replace('"', '\\"')
     script = (f'tell application "Terminal"\nrepeat with w in windows\nrepeat with t in tabs of w\n'
@@ -205,7 +208,7 @@ def type_into(tty, text, os_name=None, run=None):
 def show_tab(tty, os_name=None, run=None):
     """Bring the Terminal tab on that tty to the front (the page's Show Claude). True when a Terminal tab had it.
     Terminal.app only, like type_into."""
-    if (os_name or platform.system()) != "Darwin" or not tty:
+    if (os_name or platform.system()) != "Darwin" or not tty or run is None and os.environ.get("AI_EDITOR_NO_REOPEN"):
         return False
     q = lambda x: str(x).replace("\\", "\\\\").replace('"', '\\"')
     script = (f'tell application "Terminal"\nrepeat with w in windows\nrepeat with t in tabs of w\n'

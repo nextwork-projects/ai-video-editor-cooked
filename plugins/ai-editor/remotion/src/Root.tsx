@@ -5,6 +5,7 @@ import { resolveLook, useFonts } from "./look";
 import { SplitText, pickMotion, useTl } from "./motion";
 import { footageX } from "./Scene";
 import { ProductVideo, ProductPlan, productMeta } from "./product/ProductVideo";
+import { SceneDoc, SceneEdit, sceneMeta } from "./SceneEdit";
 
 // Real values come from plan.json via --props; these only let the studio open.
 const empty: Plan = {
@@ -87,6 +88,9 @@ export const Root: React.FC = () => (
     <Composition id="Preview" component={Preview} calculateMetadata={previewMeta} width={1080} height={1920} fps={30} durationInFrames={90}
       defaultProps={{ width: 1080, height: 1920, dur: 3, card: { anim: { type: "logo_sting", props: { src: "images/logo.svg" } }, start: 0, end: 3, entrance: "pop",
         box: [8, 20, 84, 30] } } as PreviewProps} />
+    {/* scene.json (lib/ai_editor/SCENE.md): every element an item, the same live in the page and for the export */}
+    <Composition id="Scene" component={SceneEdit} calculateMetadata={sceneMeta} width={1080} height={1920} fps={30} durationInFrames={90}
+      defaultProps={{ width: 1080, height: 1920, fps: 30, duration: 3, assets: {}, tracks: [] } as SceneDoc} />
     <Composition id="Proof" component={Proof} width={1080} height={1080} fps={30} durationInFrames={60} defaultProps={{ plugin: "drawsvg" }} />
     {/* product-video skill: a website's real UI as a launch video (plan from skills/product-video/scripts/product.py) */}
     <Composition id="ProductVideo" component={ProductVideo} calculateMetadata={productMeta} width={1920} height={1080} fps={30}
