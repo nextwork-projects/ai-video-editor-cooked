@@ -56,9 +56,23 @@ each line. `outline.width` is the CSS text stroke (half of it shows outside the 
   probed). The page gets each asset with `url` (`/scene/asset/<id>?v=`, never saved).
 - `window.CookedLive.mountScene(el, scene)` returns the same player stand-in `mount()` does; `.update(scene)`
   redraws at once without a reload.
-- `POST /export` renders the scene with Remotion (`Scene` composition) to `<edit>/exports/<download name>`;
-  `GET /export` is `{state: working | done | failed, pct, file, why}`; `POST /export/reveal` shows it in Finder.
-  `/state` has `"scene": true` once scene.json exists. A scene edit never writes a note for Claude.
+- Export is one route family for both editors. `POST /export` starts it; in scene mode it renders the scene with
+  Remotion (the `Scene` composition, `scene.render`), in the Classic editor it is 2.7.39's `export_src` (the draft, or
+  its bake). Either way it lands in `<edit>/exports/<download name>` and the library's `exports/`. `GET /export` and
+  `/state`'s `export` are the same `{state: working | done | failed, pct, elapsed, why, note, name, done_at, left_out,
+  url}` (`left_out` is always null on a scene). `GET /export/file` downloads it (`url` points there once done);
+  `POST /export/reveal` shows it in Finder. A scene edit never writes a note for Claude.
+
+## When a draft is a scene
+
+- A draft opens in scene mode when `scene.json` is there, or when it is a cooked. plan draft that `scene.from_plan`
+  converts: the edit (not the stills sheet), `plan.json` there, the cut it was made from, and not a draft finished by
+  hand (a layer draft). A plan `from_plan` refuses (split, board, cover, cutouts) opens in the Classic editor.
+- Every other draft opens in the Classic editor (texts.json, overrides.json, the bake) until `from_video` is proven.
+- The ⋯ menu's "Classic editor" puts this video back in the old editor, and "Back to the scene editor" undoes it. It is
+  the file `<edit>/.classic` (`POST /scene/classic {"on": true | false}`). scene.json stays as it was while the video
+  is in the Classic editor: edits made there do not reach it.
+- `/state` has `scene` (the page edits the scene now), `scene_able` (the switch shows) and `classic`.
 
 ## The AI's cuts are clips
 

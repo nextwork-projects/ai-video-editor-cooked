@@ -22,14 +22,12 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .eitem.sc::before,.eitem.sc::after{content:"";position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}.eitem.sc::before{left:-1px}.eitem.sc::after{right:-1px}
 .eitem.sc img{height:18px;width:auto;max-width:32px;border-radius:3px;margin-right:4px;pointer-events:none}.eitem.sc.shp{background:#4A3B2A;border-color:#8A6A44;color:#FFFFFF;padding:0 6px}
 .eitem.sc.cut0{border-left:3px solid #FFD60A}.sck{position:absolute;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;transform:rotate(45deg);background:#FFD60A;pointer-events:none}
-.scj{position:absolute;top:-7px;height:9px;width:12px;margin-left:-6px;z-index:4;cursor:help;border-radius:3px 3px 0 0;background:#FFD60A}.scj::before{content:"";position:absolute;left:5px;top:9px;height:26px;width:2px;background:#FFD60A;pointer-events:none}   /* the tab above the join takes the hover; the edges stay free to trim */
+.scj{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;z-index:4;background:#FFD60A;pointer-events:none}.scj::after{content:"";position:absolute;left:-5px;top:-8px;width:12px;height:16px;pointer-events:auto;cursor:help}   /* a 2 px line on each AI cut; its top end takes the hover, the edges stay free to trim */
+.scj>b{display:none;position:absolute;left:-5px;top:-7px;width:12px;height:7px;border-radius:3px 3px 0 0;background:#FFD60A;pointer-events:none}.scj.t>b,.scj:hover>b{display:block}   /* the tab: on hover, or when the joins are far enough apart (zoomed in) */
 .scj>span{display:none;position:fixed;font-style:normal;z-index:9;width:max-content;max-width:300px;flex-direction:column;gap:6px;padding:10px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:12px;font-weight:500;line-height:16px;color:var(--strong);white-space:normal;cursor:default}
-.scj:hover>span{display:flex}.scj em{font-style:normal;color:var(--muted)}.scj>span::after{content:"";position:absolute;left:0;right:0;top:100%;height:10px}.scj button{align-self:flex-start;height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.scj button:hover{border-color:var(--ink)}
+.scj:hover>span{display:flex}.scj>span{pointer-events:auto}.scj em{font-style:normal;color:var(--muted)}.scj>span::after{content:"";position:absolute;left:0;right:0;top:100%;height:10px}.scj button{align-self:flex-start;height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.scj button:hover{border-color:var(--ink)}
 #edtracks[data-ld="scv"] .newl[data-row="scv"],#edtracks[data-ld="sca"] .newl[data-row="sca"]{display:flex}.etrack.scdrop{outline:2px dashed var(--ink);outline-offset:-2px}
 .scadd{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0 0 4px}.scadd button{height:24px;padding:0 7px;white-space:nowrap;border-radius:6px;border:1px solid var(--line2);font-size:11px;font-weight:600;color:var(--body)}.scadd button:hover{border-color:var(--ink);color:var(--ink)}
-#scexp{display:none;height:34px;padding:0 16px;border-radius:9px;background:var(--ink);color:var(--onink);font-size:13px;font-weight:600;white-space:nowrap;margin-left:8px}body.scene #scexp{display:block}#scexp:disabled{opacity:.7}
-#scexpop{position:fixed;right:16px;top:60px;z-index:50;display:flex;flex-direction:column;gap:8px;padding:14px;border-radius:10px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:13px;color:var(--strong);max-width:360px}
-#scexpop[hidden]{display:none}#scexpop div{display:flex;gap:8px}#scexpop a,#scexpop button{height:32px;padding:0 12px;border-radius:8px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink);display:inline-flex;align-items:center;text-decoration:none}
 .sckey{width:24px;height:24px;flex-shrink:0;border-radius:6px;display:grid;place-items:center;color:var(--muted)}.sckey::before{content:"";width:8px;height:8px;transform:rotate(45deg);border:1.5px solid currentColor}.sckey.on{color:#FFD60A}.sckey.on::before{background:currentColor}.sckey:hover{background:var(--hover)}
 #ibody textarea.scta{width:100%;min-height:64px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:8px;font:inherit;font-size:13px;resize:vertical}
 #ibody input[type=color]{width:40px;height:28px;border:1px solid var(--line2);border-radius:6px;background:none;padding:2px}`;document.head.appendChild(st)}
@@ -67,7 +65,7 @@ SC.check=async function(){const want=!!(S&&view&&isCur()&&S.stage==='edit'&&!S.s
   if(k===SC.last)return SC.on;SC.last=k;if(!want)return SC.off();
   try{const r=await fetch('/scene');const j=r.ok?await r.json():null;if(!j||!Array.isArray(j.tracks))return SC.off();SC.s=j;
     if(!window.CookedLive||!CookedLive.mountScene)await import('/live/live.js');if(!SC.pl)SC.pl=CookedLive.mountScene($('scl'),SC.s);else SC.pl.update(SC.s);
-    if(!SC.on){SC.on=true;if(LV.on){LV.on=false;LV.shim&&LV.shim.pause();document.body.classList.remove('live')}document.body.classList.add('scene');v.use(SC.pl);SC.size();SC.draw();SC.insp();SC.expResume()}
+    if(!SC.on){SC.on=true;if(LV.on){LV.on=false;LV.shim&&LV.shim.pause();document.body.classList.remove('live')}document.body.classList.add('scene');v.use(SC.pl);SC.size();SC.draw();SC.insp()}
     $('edtracks')._h=null;renderEdTracks();return true}catch(e){console.warn('scene mode off:',e);return SC.off()}};
 SC.off=function(){if(SC.on){SC.on=false;document.body.classList.remove('scene');v.use(null);SC.pl&&SC.pl.pause();SC.sel.clear();SC.crop=false;$('edtracks')._h=null;$('scover').innerHTML=''}return false};
 SC.fetch=async function(){try{const j=await (await fetch('/scene')).json();if(j&&j.tracks){SC.s=j;SC.show()}}catch(e){}};
@@ -152,8 +150,10 @@ SC.tl=function(){const E=$('edtracks');if(!SC.on||!SC.s)return;const T=TO()||scD
   const item=(it,tr)=>{const a=it.start,b=it.end,k=it.keys?[...new Set(Object.values(it.keys).flat().map(q=>q[0]))]:[],A=it.asset&&SC.s.assets[it.asset]||{},src=A.src;
     const nm=it.type==='text'&&it.text||it.name||(it.type==='captions'?'Captions':src?String(src).split('/').pop():it.type);
     return `<div class="eitem sc ${SCCLS[it.type]||'img'}${SC.sel.has(it.id)?' sel':''}" data-sid="${esc(it.id)}" data-lkey="${esc(it.id)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(nm)} · ${fmtx(a)}–${fmtx(b)} · drag to move, an edge to trim${/video|audio/.test(it.type)?', Alt-drag to slip':''}">${it.type==='image'&&(A.url||src)?`<img src="${esc(A.url||'/live/media/'+encodeURI(src))}" alt="">`:''}<span>${esc(nm)}</span>${k.map(u=>`<i class="sck" style="left:${u/(b-a||1)*100}%"></i>`).join('')}</div>`};
-  const joins=tr=>tr.items.filter(i=>i.cut&&i.cut.before&&i.cut.before.dur>0).map(i=>{const c=i.cut.before,why=String(c.reason||'cut').replace(/^./,m=>m.toUpperCase());
-    return `<i class="scj" data-cj="${esc(i.id)}" style="left:${pc(i.start)}%"><span><b>${esc(why)}${c.words?`: "${esc(c.words)}"`:''}</b><em class="num">${(+c.dur).toFixed(1)} s taken out</em><button data-back="${esc(i.id)}">Bring back</button></span></i>`}).join('');
+  const pps=Math.max(200,($('edtracks').clientWidth||900)-120)*(zm||1)/T;   // pixels a second at this zoom
+  const joins=tr=>{const js=tr.items.filter(i=>i.cut&&i.cut.before&&i.cut.before.dur>0);return js.map((i,n)=>{const c=i.cut.before,why=String(c.reason||'cut').replace(/^./,m=>m.toUpperCase());
+    const room=Math.min(n?i.start-js[n-1].start:1e9,n<js.length-1?js[n+1].start-i.start:1e9)*pps;   // the tab shows once neighbours are 40 px apart
+    return `<i class="scj${room>=40?' t':''}" data-cj="${esc(i.id)}" style="left:${pc(i.start)}%"><b></b><span><b>${esc(why)}${c.words?`: "${esc(c.words)}"`:''}</b><em class="num">${(+c.dur).toFixed(1)} s taken out</em><button data-back="${esc(i.id)}">Bring back</button></span></i>`}).join('')};
   const row=(tr,cls)=>{L.push(head(tr,cls));R.push(`<div class="etrack${cls||''}${(tr.kind==='audio'?tr.muted:tr.hidden)?' lhid':''}${tr.locked?' llock':''}" data-sctk="${tr.id}" data-kind="${tr.kind}">${tr.items.map(i=>item(i,tr)).join('')}${joins(tr)}</div>`)};
   L.push('<div class="ehd newl" data-row="scv"></div>');R.push('<div class="etrack newl" data-row="scv" data-new="visual">Drop here for a new track</div>');
   vt.forEach((t,i)=>row(t,i===vt.length-1?' l1':''));ct.forEach(t=>row(t,' l1'));at.forEach((t,i)=>row(t,i?'':' l1'));
@@ -181,7 +181,7 @@ function scTrim(s,id,side,dt){const o=scAll(s).find(o=>o.it.id===id);if(!o)retur
     if(mag){const p=it.start;it.end=+(it.end-dt).toFixed(3);scRipple(s,it,p+1e-3,-dt);if(cb(it)&&dt<0)less(it,-dt)}}
   else{dt=Math.max(dt,-(it.end-it.start-.1));if(cb(nx))dt=Math.min(dt,cb(nx).dur);const p=it.end;it.end=+(it.end+dt).toFixed(3);if(mag)scRipple(s,it,p,dt);if(cb(nx)&&dt>0)less(nx,dt)}}
 // a join's note sits above its tab, outside the rows' scroll box
-$('edtracks').addEventListener('mouseover',e=>{const j=e.target.closest('.scj');if(!j)return;const r=j.getBoundingClientRect(),sp=j.firstElementChild;sp.style.left=Math.max(8,r.left-8)+'px';sp.style.bottom=(innerHeight-r.top+6)+'px'});
+$('edtracks').addEventListener('mouseover',e=>{const j=e.target.closest('.scj');if(!j)return;const r=j.getBoundingClientRect(),sp=j.querySelector('span');sp.style.left=Math.max(8,r.left-8)+'px';sp.style.bottom=(innerHeight-r.top+6)+'px'});
 SC.bringBack=function(id){const q=scGet(id);if(!q||!q.it.cut||!q.it.cut.before)return;const d=q.it.cut.before.dur;SC.change('bring back a cut',s=>scTrim(s,id,'l',-d))};
 $('edtracks').addEventListener('pointerdown',e=>{const el=e.target.closest('.eitem.sc');if(!SC.on||!el||e.button)return;e.stopPropagation();e.preventDefault();v.pause();SC.zone='t';
   const id=el.dataset.sid,q=scGet(id);if(!q||q.tr.locked||q.it.locked)return;SC.pick=1;const r=el.getBoundingClientRect(),side=e.clientX-r.left<8?'l':r.right-e.clientX<8?'r':'m',slip=side==='m'&&e.altKey&&/^(video|audio)$/.test(q.it.type);
@@ -278,13 +278,4 @@ $('scover').addEventListener('click',e=>e.stopPropagation());
 SC.txSync=function(){if(!SC.on||typeof W==='undefined'||!W.length)return;const main=SC.s.tracks.find(tr=>tr.kind==='visual'&&tr.items.some(i=>i.cut))||null;if(!main)return;
   const rs=main.items.filter(i=>i.type==='video').map(i=>[i.in||0,(i.in||0)+(i.end-i.start)*(i.speed||1)]);
   document.querySelectorAll('#txlines .tw[data-k]').forEach(el=>{const w=W[+el.dataset.k];if(!w||w.s==null)return;el.classList.toggle('cut',!rs.some(([a,b])=>w.s>=a-.02&&w.s<b))})};
-// ---- Export: the scene rendered by the Scene composition, no Claude, no notes
-{const b=document.createElement('button');b.id='scexp';b.textContent='Export';b.title='Render this video as it is now';document.querySelector('header').appendChild(b);
- const pop=document.createElement('div');pop.id='scexpop';pop.hidden=true;document.body.appendChild(pop);
- const poll=async()=>{let j={};try{j=await (await fetch('/export')).json()}catch(e){}   // {state: working | done | failed, pct, file, why}
-   if(j.state==='done'){b.disabled=false;b.textContent='Export';const f=j.file||'';pop.innerHTML=`<b>Exported</b><span class="num">${esc(f)}</span><div><button id="screveal">Show in Finder</button>${j.url?`<a href="${esc(j.url)}" download>Download</a>`:''}<button id="scxx">Close</button></div>`;pop.hidden=false;return}
-   if(j.state==='failed'){b.disabled=false;b.textContent='Export';toast(j.why||'The export failed.');return}
-   b.textContent=`Exporting ${Math.round(j.pct||0)}%`;setTimeout(poll,800)};
- b.onclick=async()=>{b.disabled=true;b.textContent='Exporting...';pop.hidden=true;const r=await fetch('/export',{method:'POST',body:'{}'}).then(x=>x.json()).catch(()=>({}));if(r.error){b.disabled=false;b.textContent='Export';return toast(r.error)}poll()};
- SC.expResume=()=>fetch('/export').then(r=>r.json()).then(j=>{if(j.state==='working'){b.disabled=true;poll()}}).catch(()=>{});   // a reload mid-export keeps the progress
- pop.addEventListener('click',e=>{if(e.target.id==='scxx')pop.hidden=true;if(e.target.id==='screveal')fetch('/export/reveal',{method:'POST',body:'{}'})})}
+// ---- Export: review.html's one Export button (review.py export_job renders the scene when there is one)

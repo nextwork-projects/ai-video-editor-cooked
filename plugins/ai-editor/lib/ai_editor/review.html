@@ -110,6 +110,17 @@ header{position:relative;height:56px;flex-shrink:0;display:flex;align-items:cent
 #mapprove svg{width:14px;height:14px}
 #mapprove.primary{background:var(--ink);border-color:var(--ink);color:var(--onink)}
 #mapprove:disabled:not(.approved){color:var(--quiet);border-color:var(--line);cursor:default}
+#edtracks .eitem.txt.burn{opacity:.5;cursor:default}   /* In the video: burned into a layer draft's base, never moved here */
+/* Export: the page as one MP4, primary on the edit; Approve sits beside it, quieter */
+.exwrap{position:relative;display:flex;flex-shrink:0}.exwrap[hidden]{display:none}
+#mexport{display:flex;align-items:center;gap:6px;height:34px;padding:0 14px;border:1px solid var(--ink);border-radius:9px;background:var(--ink);font-size:13px;font-weight:600;color:var(--onink);white-space:nowrap;cursor:pointer}
+#mexport svg{width:14px;height:14px}
+#mexport.busy{background:var(--panel);border-color:var(--line2);color:var(--strong);cursor:default}
+#exbox{position:absolute;top:42px;right:0;z-index:40;width:300px;padding:14px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);box-shadow:var(--pop);font-size:13px;line-height:18px;color:var(--body)}
+#exbox[hidden]{display:none}#exbox b{display:block;color:var(--strong);font-weight:600}#exbox p{margin:4px 0 0}
+#exbox .exb{display:flex;gap:8px;margin-top:12px}#exbox .exb button{flex:1;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);font:inherit;font-weight:600;cursor:pointer}
+#exbox .exb button.go{background:var(--ink);border-color:var(--ink);color:var(--onink)}
+#exbox .exx{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:6px;color:var(--muted);display:grid;place-items:center}
 #how{display:none;position:fixed;top:52px;right:16px;z-index:20;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 80px);overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px;box-shadow:var(--pop)}
 #how.open{display:block}
 #how ol{margin:0 0 16px;padding:0;list-style:none;display:grid;gap:12px}
@@ -621,17 +632,20 @@ body.tside #tside{display:flex}
 .tl.ed{width:max-content;pointer-events:auto;cursor:move;touch-action:none;outline:1px solid rgba(255,255,255,.95);outline-offset:4px}
 .tl.ed [contenteditable]{outline:none;cursor:move;caret-color:currentColor}.tl.ed.typing [contenteditable]{cursor:text}
 .tl.ed [contenteditable]:empty::before{content:"Type your text";opacity:.55}
-.tl.ed i{position:absolute;width:10px;height:10px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.4);z-index:2}
-.tl.ed [data-h=nw]{left:-9px;top:-9px;cursor:nwse-resize}.tl.ed [data-h=ne]{right:-9px;top:-9px;cursor:nesw-resize}
-.tl.ed [data-h=sw]{left:-9px;bottom:-9px;cursor:nesw-resize}.tl.ed [data-h=se]{right:-9px;bottom:-9px;cursor:nwse-resize}
+.tl.ed i{position:absolute;width:12px;height:12px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.4);z-index:2}
+.tl.ed [data-h=nw]{left:-10px;top:-10px;cursor:nwse-resize}.tl.ed [data-h=ne]{right:-10px;top:-10px;cursor:nesw-resize}
+.csel i::after,.tl.ed i::after{content:'';position:absolute;inset:-6px}.csel i::after{inset:-7px}#clayer:has(#csel){z-index:4}   /* the picked card's handles over the texts */.tl.ed [data-h=n]::after,.tl.ed [data-h=s]::after,.tl.ed [data-h=w]::after,.tl.ed [data-h=e]::after{inset:-9px}.tl.ed [data-h=n],.tl.ed [data-h=s],.tl.ed [data-h=w],.tl.ed [data-h=e]{z-index:1}.csel [data-h=nw],.csel [data-h=ne],.csel [data-h=sw],.csel [data-h=se]{z-index:1}   /* a corner wins where it meets a side */   /* 24 px to grab, 12 px to see */
+.tl[data-tclick]::before,.tl.ed::before{content:'';position:absolute;inset:-6px}   /* a thin text is easy to press */
+.tl.ed [data-h=sw]{left:-10px;bottom:-10px;cursor:nesw-resize}.tl.ed [data-h=se]{right:-10px;bottom:-10px;cursor:nwse-resize}
 .tl.ed [data-h=n],.tl.ed [data-h=s]{left:50%;width:16px;height:6px;margin-left:-8px;border-radius:3px;cursor:ns-resize}.tl.ed [data-h=n]{top:-7px}.tl.ed [data-h=s]{bottom:-7px}
-.tl.ed [data-h=rot],.csel [data-h=rot]{left:50%;top:-30px;margin-left:-6px;border-radius:50%;cursor:grab}.tl.ed [data-h=rot]{top:-32px;margin-left:-5px}
+.tl.ed [data-h=rot],.csel [data-h=rot]{left:50%;top:-30px;margin-left:-6px;border-radius:50%;cursor:grab}.tl.ed [data-h=rot]{top:-34px;margin-left:-6px}
 .csel [data-h=n]{left:50%;top:0;cursor:ns-resize}.csel [data-h=s]{left:50%;bottom:0;cursor:ns-resize}.csel [data-h=w]{left:0;top:50%;cursor:ew-resize}.csel [data-h=e]{right:0;top:50%;cursor:ew-resize}
 #guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}#guides .szone{position:absolute;left:5.56%;top:13.02%;width:81.48%;height:61.98%;outline:1px dashed rgba(255,255,255,.4)}
 #ibody{flex:1;overflow:auto;padding:12px 16px}.ihead{margin:0 0 4px;display:flex;flex-direction:column;gap:2px}.ihead b{font-size:14px;line-height:18px;color:var(--strong)}.ihead span{font-size:12px;color:var(--muted)}
 .tf>span{flex-shrink:0;width:84px;font-size:12px;color:var(--muted)}.tfv .inum{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
 .tfv em{font-style:normal;font-size:12px;color:var(--muted);width:24px}.tfv output.wide{width:56px}.ifull{width:100%;height:36px;border-radius:8px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink)}.ifull:hover{border-color:var(--ink)}
-.isec{display:flex;flex-direction:column;gap:10px;padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}top:50%;width:6px;height:16px;margin-top:-8px;border-radius:3px;cursor:ew-resize}.tl.ed [data-h=w]{left:-7px}.tl.ed [data-h=e]{right:-7px}
+.isec{display:flex;flex-direction:column;gap:10px;padding-top:12px;margin-top:4px;border-top:1px solid var(--line)}
+.tl.ed [data-h=w],.tl.ed [data-h=e]{top:50%;width:6px;height:16px;margin-top:-8px;border-radius:3px;cursor:ew-resize}.tl.ed [data-h=w]{left:-7px}.tl.ed [data-h=e]{right:-7px}
 .ts-block{display:block}
 .tl.hit span{color:transparent!important;-webkit-text-stroke:0!important;background:none!important}   /* baked in the video: only the click target */
 .tpickrow{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:16px;color:var(--strong)}.tpickrow b{font-weight:600}
@@ -895,7 +909,7 @@ body.making #making{display:flex}
  <div class="brand"><button id="homebtn" class="homebtn" title="Back to your videos"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Your videos</button><span class="sl">/</span><span id="name"></span><span id="homemsg" class="homemsg" hidden></span></div>
  <div class="seg" id="stages"><button id="st1" data-go="cut"></button><svg class="chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="st2" data-go="edit"></button></div>
  <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="lrev" class="hbtn" hidden>Rules to review</button><button id="vmore" class="hbtn" popovertarget="moremenu" aria-label="more for this video" title="More for this video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
- <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="mapprove"></button><button id="popen" class="popen" title="Chat with Claude and your notes" aria-label="open the chat with Claude and your notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5a8 8 0 0 1-8 8H5l-2 1.5v-9.5a8 8 0 0 1 8-8h1"/><path d="M18 2.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/></svg><small id="ncount2"></small></button>
+ <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="mapprove"></button><span class="exwrap" id="exwrap" hidden><button id="mexport" title="Save the video as you see it now, as one MP4"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5v-8M4.5 6 8 2.5 11.5 6M3 13.5h10"/></svg><span>Export</span></button><div id="exbox" role="status" hidden></div></span><button id="popen" class="popen" title="Chat with Claude and your notes" aria-label="open the chat with Claude and your notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5a8 8 0 0 1-8 8H5l-2 1.5v-9.5a8 8 0 0 1 8-8h1"/><path d="M18 2.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/></svg><small id="ncount2"></small></button>
 </header>
 <section id="how" aria-label="how this works"><ol>
  <li><b>1. Watch and note</b>Pause where something is off and leave a note. It is pinned to that moment, with the frame. On the edit, click a card, caption or zoom on the video, or select words in the transcript, and the note starts with what it is. Paste or drop an image to show what you mean.</li>
@@ -966,7 +980,7 @@ body.making #making{display:flex}
 </div>
 <div id="toast" role="status"></div>
 <dialog id="learnov" class="ov" aria-label="teach your style"></dialog>
-<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button></div>
+<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button><button id="classicsw" role="menuitem" hidden></button></div>
 <div id="rpop" class="rpop" popover role="dialog" aria-label="make this a rule"><b>Make this a rule</b>
  <label>Rule<input id="rptext" class="lname rin" maxlength="160"></label>
  <label>Save to<select id="rpto" class="rsel"></select></label>
@@ -1178,7 +1192,7 @@ function liveNow(){const p=JSON.parse(LV.raw),cs=p.captions||(p.captions={chunks
   const open=tx&&tx.edit?String(tx.edit.id):null,lab=x=>({kind:'label',text:x.text,style:x.style,start:x._t?x._t[0]:x.start,end:x._t?x._t[1]:x.end,
     x_pct:x.x_pct??50,y_pct:x.y_pct??40,size_pct:x.size_pct??TEXT_SIZE,...(x.font&&x.font!=='TikTok Sans'?{font:x.font}:{}),
     ...(x.color&&x.color.toUpperCase()!=='#FFFFFF'?{color:x.color.toUpperCase()}:{}),...(x.width_pct!=null&&x.width_pct<84?{width_pct:x.width_pct}:{}),...txX(x,1)});
-  const ts=textItems().filter(x=>String(x.id)!==open&&!laneOff('text',String(x.id))).map(lab);   // the page's texts for the plan's labels; the one open as it is now
+  const ts=textItems().filter(x=>String(x.id)!==open&&!x.burned&&!laneOff('text',String(x.id))).map(lab);   // the page's texts for the plan's labels; the one open as it is now
   if(tx&&(tx.word||'').trim())ts.push(lab({text:tx.word,style:tx.style,start:tx.start,end:tx.end,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,...txX(tx)}));
   p.texts=[...(p.texts||[]).filter(x=>x.kind!=='label'),...ts];
   Object.assign(st,c.look&&c.look!==st.style&&(c.looks||{})[c.look]||{},c.mine||{},capLive);   // the caption style as it is being slid
@@ -1286,6 +1300,7 @@ function render(){
   sb.style.display=fin&&!undoAp?'none':'';
   if(matchMedia('(max-width:760px)').matches)$('mapprove').textContent=mk?(S.stills?'Preview approved':'Cut approved'):fin?'Approved':'Approve';else $('mapprove').innerHTML=ap.innerHTML;
   $('mapprove').className=ap.className;$('mapprove').disabled=ap.disabled;$('mapprove').title=ap.title;
+  renderExport();
   const sbar=isCur()&&S.round>0&&(S.rounds||[]).some(r=>r.stage==='cut');
   document.body.classList.toggle('staged',sbar);
   $('stagetext').innerHTML=mk?(S.stills?'<b>The preview is approved.</b> Claude is making the video.':'<b>The cut is approved.</b> Claude is adding captions, zooms and sound.')
@@ -1403,7 +1418,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
   const gone=new Set((S.sfx_removed||[]).map(t=>t.toFixed(2))),inDraft=new Set((it.sfx||[]).map(x=>x.placed).filter(Boolean));
   const sname=src=>String(src).split('/').pop().replace(/\.[a-z0-9]+$/i,'').replace(/^own-(house|skit|simple|swoop|windy|digital)-/,'').replace(/^own-/,'');
   const step=tstep(TT/zm,10),ticks=[];for(let t=0;t<TT;t+=step)ticks.push(t);
-  const texts=textItems().map(x=>({k:String(x.id),a:x.start,b:x.end,h:`<div class="eitem txt${x.fresh?' pend':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}" data-et="${esc(String(x.id))}" data-lkey="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${esc(x.text)} · ${fmtx(so(x.start))}–${fmtx(so(x.end))}${x.locked?' · Claude has it':' · click to change'}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`}));
+  const texts=textItems().map(x=>({k:String(x.id),a:x.start,b:x.end,h:`<div class="eitem txt${x.fresh?' pend':''}${x.burned?' burn':''}${tx&&tx.edit&&String(tx.edit.id)===String(x.id)?' sel':''}"${x.burned?'':` data-et="${esc(String(x.id))}"`} data-lkey="${esc(String(x.id))}" data-ef="${x.fresh?1:''}" style="left:${pc(x.start)}%;width:${pc(x.end)-pc(x.start)}%" title="${x.burned?esc(BURNED):`${esc(x.text)} · ${fmtx(so(x.start))}–${fmtx(so(x.end))}${x.locked?' · Claude has it':' · click to change'}`}"><span>${esc(x.text)}</span>${x.locked?'':`<b class="ex" data-ex="1" title="Remove">×</b>`}</div>`}));
   const clip=(t0,d,cls,attrs,name,peaks,at,k)=>({k,a:t0,b:t0+Math.max(.3,d||0),h:`<div class="eitem snd${cls}" ${attrs} data-lkey="${esc(k)}" style="left:${pc(t0)}%;width:${Math.max(.3/TT*100,pc(t0+(d||.3))-pc(t0))}%" title="${esc(name)} · ${fmtx(at)} · ${(d||0).toFixed(1)} s · click to hear it">${waveSvg(peaks)}<span>${esc(name)}</span><b class="ex" data-ex="1" title="Remove">×</b></div>`});
   const snds=[...(it.sfx||[]),...((LV.off||{}).sfx||[]).filter(c=>!(it.sfx||[]).some(x=>x.src===c.src&&Math.abs((x.start??x.t)-c.t)<.05)).map(c=>({t:+(c.event??c.t),start:c.t,d:c.d,src:c.src}))].map(x=>{const px=x.placed&&placed(x.placed),pc2=px&&px.kind==='clip';   // one the user placed, now in the draft: still its name and its handles
       return clip(x.start??x.t,x.d,(gone.has(x.t.toFixed(2))?' gone':'')+(pc2?' clip':'')+(px&&ssel===px.id?' sel':''),`data-st="${x.t}" data-ssrc="${esc(x.src)}"${x.placed?` data-sp2="${esc(x.placed)}"`:''}`,px?px.sound.replace(/\.[a-z0-9]+$/i,''):sname(x.src),x.peaks,x.t,x.placed||'t:'+(x.start??x.t).toFixed(2))}).concat(
@@ -2165,7 +2180,11 @@ $('toast').addEventListener('click',async e=>{const b=e.target.closest('[data-tu
   const r=await fetch('/undo',{method:'POST',body:JSON.stringify({id:+b.dataset.tundo})});toast(r.ok?'Rule taken out.':'That rule was already taken out.');await load(true)});
 // New style from this video (the ... menu in the top bar): a name, then POST /teach/style
 $('moremenu').addEventListener('toggle',e=>{if(e.newState!=='open')return;const M=e.target,r=$('vmore').getBoundingClientRect();
+  const c=$('classicsw');c.hidden=!(S&&S.scene_able);c.textContent=S&&S.classic?'Back to the scene editor':'Classic editor';
   M.style.top=r.bottom+6+'px';M.style.left=Math.max(16,r.right-M.offsetWidth)+'px'});
+// the Classic editor switch (review.py /scene/classic): this video opens in the old editor, or back in scenes (SCENE.md)
+$('classicsw').onclick=async()=>{$('moremenu').hidePopover();const on=!S.classic,r=await post('/scene/classic',{on});if(!r.ok)return toast(r.error||'That did not save.');
+  SC.last='';await load(true);toast(on?'Classic editor on for this video.':'Back in the scene editor.')};
 $('nsopen').onclick=()=>{$('moremenu').hidePopover();$('nsname').value='';$('nserr').textContent='';$('nsgo').disabled=false;$('styleov').showModal();$('nsname').focus()};
 $('nscancel').onclick=()=>$('styleov').close();
 $('styleov').addEventListener('keydown',e=>e.stopPropagation());
@@ -2542,7 +2561,7 @@ function startNote(text,a,b,on){
 }
 $('hits').addEventListener('click',e=>{const b=e.target.closest('[data-hit]');if(!b)return;e.stopPropagation();const u=HITS[+b.dataset.hit];
   if(u&&u.k==='texts'&&u.x.kind==='label'){const m=(S.texts||[]).find(x=>Math.abs(x.start-u.x.s)<.05&&x.text===u.x.text);if(m)return editText(m.id,false)}   /* your own text: click to change it */
- if(u&&u.k==='cards'&&u.x.key)return selectCard(u.x);
+ if(u&&u.k==='cards'&&u.x.key){if(!csel||csel.x.key!==u.x.key)selectCard(u.x);return}   /* the keyboard; a press already picked it */
  if(u&&u.k==='captions'&&(u.x.w||[]).length)return openCapLine(u.x);   /* a caption: edit its words in the Captions panel */   /* a card: select it to move, resize or delete it */
  if(u)startNote(lead(u.k,u.x),u.x.s,u.x.e,{k:u.k,text:u.x.text||u.x.label||''})});
 // a card on the video: click it to select it. Drag it to move it, a corner to resize it (a picture keeps its shape): it
@@ -2657,20 +2676,30 @@ $('clayer').addEventListener('click',e=>{const b=e.target.closest('[data-c]');if
   if(k==='cancel'){csel=null;drawCard()}else if(k==='del')cardSave(true);
   else if(k==='reset'){csel.box=csel.x.box.slice();csel.saved=false;cardSave(false,csel.x.box)}
   else if(k==='note'){const x=csel.x;csel=null;drawCard();startNote(lead('cards',x),x.s,x.e,{k:'cards',text:x.label})}});
-$('clayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#csel');if(!el||!csel)return;e.preventDefault();el.setPointerCapture(e.pointerId);
+$('clayer').addEventListener('pointerdown',e=>{const el=e.target.closest('#csel');if(el&&csel)cardPress(e,el)});
+// CapCut's press: a card under the pointer is picked and follows it at once; Cmd-click reaches the one under it
+$('hits').addEventListener('pointerdown',e=>{const b=e.target.closest('[data-hit]'),u=b&&HITS[+b.dataset.hit];if(e.button||!u||u.k!=='cards'||!u.x.key)return;e.preventDefault();pressHold();selectCard(u.x);if(csel)cardPress(e,$('csel'))});
+// a press that picks from the video: the side panel opens when it lets go, so the video stays under the pointer
+var PH=false;const pressHold=()=>{if(PH)return;PH=true;const up=()=>{removeEventListener('pointerup',up);removeEventListener('pointercancel',up);PH=false;document.body.classList.toggle('tside',!!tool);inspSoon()};addEventListener('pointerup',up);addEventListener('pointercancel',up)};
+const cardUnder=(cx,cy,skip)=>{const r=$('clayer').getBoundingClientRect(),px=(cx-r.left)/r.width*100,py=(cy-r.top)/r.height*100,t=v.currentTime,P=S.cards_pending||[];
+  return cardsAll().filter(c=>c.s<=t&&t<c.e&&c.key!==skip&&!P.some(p=>p.key===c.key&&p.deleted)).reverse().find(c=>{const p=P.find(p=>p.key===c.key&&p.box),[x,y,w,h]=p?p.box:c.box;return px>=x&&px<=x+w&&py>=y&&py<=y+h})};
+function cardPress(e,el){const k=!e.target.dataset.h&&document.elementsFromPoint(e.clientX,e.clientY).find(n=>n.matches('.tl[data-tclick]'));if(k)return tlPress(e,k);   // a text over the picked card wins
+  e.preventDefault();v.pause();el.setPointerCapture(e.pointerId);let go=false;
   const h=e.target.dataset.h,r=$('clayer').getBoundingClientRect(),b0=csel.box.slice(),x0=e.clientX,y0=e.clientY,ar=b0[3]/b0[2],dup=e.altKey&&!h,lines=snapLines(csel.x.key);
   const cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   if(h==='rot')return rotDrag(e,el,[r.left+(b0[0]+b0[2]/2)/100*r.width,r.top+(b0[1]+b0[3]/2)/100*r.height],csel.rot,a=>{csel.rot=a;el.style.transform=a?`rotate(${a}deg)`:'';liveSync()},a=>inspCommit('rotation',a));
-  el.onpointermove=ev=>{const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;guides(!!h||Math.abs(dx)+Math.abs(dy)>.3);
-    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r)}   // frame centre, the other items, the safe zone
+  el.onpointermove=ev=>{if(!go&&Math.hypot(ev.clientX-x0,ev.clientY-y0)<3)return;go=true;const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;guides(true);
+    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r,ev)}   // frame centre, the other items, the safe zone
     else{const keep=ev.shiftKey||!!cpic(csel.x)&&h.length===2,l=h.includes('w'),t=h.includes('n'),hz=h!=='n'&&h!=='s',vt=h!=='w'&&h!=='e';   // a corner keeps a picture's shape, Shift any card's
       w=hz?Math.max(4,b0[2]+(l?-dx:dx)):b0[2];ht=keep?w*ar:vt?Math.max(4,b0[3]+(t?-dy:dy)):b0[3];if(keep&&!hz){ht=Math.max(4,b0[3]+(t?-dy:dy));w=ht/ar}
       if(l)x=b0[0]+b0[2]-w;else if(!hz)x=b0[0]+(b0[2]-w)/2;if(t)y=b0[1]+b0[3]-ht;else if(!vt)y=b0[1]+(b0[3]-ht)/2;[x,y,w,ht]=[x,y,w,ht].map(q=>Math.round(q*10)/10)}
     if(v.videoHeight>v.videoWidth){   // reels: inside the safe zone (x 60-940, y 250-1440 of 1080x1920)
       const X0=5.6,X1=87,Y0=13,Y1=75,keep=!!h&&!!cpic(csel.x);if(w>X1-X0){w=X1-X0;if(keep)ht=w*ar}if(ht>Y1-Y0){ht=Y1-Y0;if(keep)w=ht/ar}
+      if(h){const l=h.includes('w'),t=h.includes('n'),fx=l?b0[0]+b0[2]:x,fy=t?b0[1]+b0[3]:y,mw=l?fx-X0:X1-fx,mh=t?fy-Y0:Y1-fy,k=Math.min(1,mw/w,mh/ht);   // a resize stops at the edge, the other side stays put
+        if(k<1){if(keep){w*=k;ht*=k}else{w=Math.min(w,mw);ht=Math.min(ht,mh)}}if(l)x=fx-w;if(t)y=fy-ht}
       x=Math.round(Math.min(X1-w,Math.max(X0,x))*10)/10;y=Math.round(Math.min(Y1-ht,Math.max(Y0,y))*10)/10}
     csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync();inspVals()};
-  el.onpointerup=()=>{el.onpointermove=null;guides(false);if(dup&&cmoved())return cardDup();if(cmoved())cardSave(false);else drawCard()}});   // let go: saved; Alt: a copy there, the card stays
+  el.onpointerup=ev=>{el.onpointermove=null;guides(false);if(dup&&cmoved())return cardDup();if(cmoved())return cardSave(false);const c=!h&&(ev.metaKey||ev.ctrlKey)&&cardUnder(ev.clientX,ev.clientY,csel.x.key);if(c)return selectCard(c);drawCard()}}   // let go: saved; Alt: a copy there, the card stays
 document.addEventListener('keydown',e=>{if(!csel||/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||'')||KM.off())return;
   if(e.key==='Escape'){csel=null;drawCard()}if(KM.is(e,'delete')&&!hoverClip()){e.preventDefault();cardSave(true)}if(e.key==='Enter'){e.preventDefault();csel=null;drawCard()}});
 $('mini').addEventListener('click',e=>{const m=e.target.closest('[data-mk]');if(!m)return;const x=((data().items||{})[m.dataset.mk]||[])[+m.dataset.i];
@@ -2749,7 +2778,7 @@ let tx=null,tsig='',tpanel=false;   // tx: the text being made or changed {style
 const tword=()=>{const w=$('tword');return w?w.value.trim():tx?tx.word||'':''};
 const editable=c=>!(S.sent&&!c.queued)&&c.round>=S.round;
 let tool=null;   // the left panel's tool: 'media', 'text', 'captions', 'sounds' or none
-function openTool(n){if(n!=='text'&&tx)setText(null);tool=n;tpanel=n==='text';document.body.classList.toggle('tside',!!n);
+function openTool(n){if(n!=='text'&&tx)setText(null);tool=n;tpanel=n==='text';document.body.classList.toggle('tside',PH?document.body.classList.contains('tside'):!!n);   // PH: not under a press, the video would jump away from the pointer
   $('railtext').classList.toggle('on',n==='text');$('railcap').classList.toggle('on',n==='captions');$('railsnd').classList.toggle('on',n==='sounds');$('railmed').classList.toggle('on',n==='media');
   $('tsht').textContent={captions:'Captions',sounds:'Sounds',media:'Media',insp:'Properties'}[n]||'Text';
   $('tplus').hidden=n!=='text';$('tbody').hidden=n!=='text';$('cbody').hidden=n!=='captions';$('sbody').hidden=n!=='sounds';$('mbody').hidden=n!=='media';$('ibody').hidden=n!=='insp';if(n!=='insp')IN.sig=null;
@@ -2775,7 +2804,9 @@ function textItems(){   // sent ones (texts.json) and this edit's text notes not
   const sent=S.texts||[],ids=new Set(sent.map(x=>x.id));
   const fresh=S.comments.filter(c=>c.add_text&&c.stage==='edit'&&!ids.has('edit'+c.round+'-'+c.id))   // with Claude, not in texts.json yet: shown, locked
     .map(c=>({id:c.id,text:c.text,style:c.add_text.style,x_pct:c.add_text.x_pct,y_pct:c.add_text.y_pct,size_pct:c.add_text.size_pct,font:c.add_text.font,color:c.add_text.color,width_pct:c.add_text.width_pct,start:c.t,end:c.t_end??c.t+3,fresh:editable(c),locked:!editable(c)}));
-  return [...fresh,...sent.map(x=>({...x,fresh:false}))].sort((a,b)=>a.start-b.start)}
+  const burned=new Set((S.texts_burned||[]).map(String));   // burned into a layer draft's base video: shown, never laid on again
+  return [...fresh,...sent.map(x=>burned.has(String(x.id))?{...x,fresh:false,locked:true,burned:true}:{...x,fresh:false})].sort((a,b)=>a.start-b.start)}
+const BURNED='In the video: it is part of the video this draft was made from, so it cannot move here. Leave a note to change it.';
 function renderTextPanel(){
   const l=$('tbody');if(!tpanel||!S)return;
   if(!l._tx){l._tx=1;l.innerHTML=`<div class="ttiles" id="ttiles" role="group" aria-label="look">${Object.entries(TSTY).map(([k,n])=>`<button class="ttile" data-ts="${k}" title="${n}"><span class="ts-${k}">${n}</span></button>`).join('')}</div><div id="tform"></div><div class="tlist" id="trows"></div>`}
@@ -2790,10 +2821,10 @@ function renderTextPanel(){
       <div class="tcustom"><label title="Any colour"><input type="color" id="tcol" value="${tx.color.toLowerCase()}" aria-label="any colour"><span></span></label><input id="thex" value="${tx.color}" maxlength="7" aria-label="colour as hex" spellcheck="false"></div></div></div>
     ${txMore()}
     <div class="tfoot">${tx.edit?'<button id="tdel">Delete</button>':''}<span></span><button id="tcancel">Cancel</button><button id="tadd" ${tword()?'':'disabled'}>${tx.edit?'Save':'Add text'}</button></div>
-    <p class="tsub">On the video: drag to move it, click to type, a corner sizes it, a side makes it narrower. Enter is a new line, ⌘ Enter saves.</p></div>`:''}
+    <p class="tsub">On the video: drag to move it, double-click to type, a corner sizes it, a side makes it narrower. Enter is a new line, ⌘ Enter saves.</p></div>`:''}
   if(tx&&$('tspan'))$('tspan').textContent=fmtx(so(tx.start))+' to '+fmtx(so(tx.end));if(tx)txMoreVals();
   const all=textItems(),on=x=>tx&&tx.edit&&String(tx.edit.id)===String(x.id);
-  const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(so(x.start))}–${fmtx(so(x.end))} · Claude has it</span></div></div>`
+  const row=x=>x.locked?`<div class="titem" data-tseek="${x.start}"${x.burned?` title="${esc(BURNED)}"`:''}><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(so(x.start))}–${fmtx(so(x.end))} · ${x.burned?'In the video':'Claude has it'}</span></div></div>`
     :`<div class="titem${on(x)?' on':''}" data-tedit="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}" title="Click to change it"><div><b>${esc(x.text)}</b><span>${TSTY[x.style]||x.style} · ${fmtx(so(x.start))}–${fmtx(so(x.end))}</span></div><button data-tdel="${esc(String(x.id))}" data-fresh="${x.fresh?1:''}">Delete</button></div>`;
   const nw=all.filter(x=>x.fresh),old=all.filter(x=>!x.fresh);
   const h=(nw.length?`<h4>Not sent yet</h4>${nw.map(row).join('')}`:'')+(old.length?`<h4>On the video</h4>${old.map(row).join('')}`:'')
@@ -3052,13 +3083,13 @@ $('mbody').addEventListener('dragleave',e=>{if(!$('mbody').contains(e.relatedTar
 $('mbody').addEventListener('drop',e=>{if(!e.dataTransfer.files.length)return;e.preventDefault();const d=$('mdrop');if(d)d.classList.remove('on');medUpload(e.dataTransfer.files)});
 async function saveText(){const text=tword();if(!tx||!text)return;
   const look={style:tx.style,x_pct:tx.x,y_pct:tx.y,size_pct:tx.size,font:tx.font,color:tx.color,width_pct:tx.w,...txX(tx)},ed=tx.edit,t={start:Math.round(tx.start*100)/100,end:Math.round(tx.end*100)/100};
-  if(ed&&!ed.fresh){await textAuto();inT=outT=null;renderBar();setText(null);return load()}   // it saves itself: this only lets go
+  const me=tx;if(ed&&!ed.fresh){await textAuto();if(tx===me){inT=outT=null;renderBar();setText(null)}return load()}   // it saves itself: this only lets go
   let r;
   if(!ed)r=await post('/text/add',{text,...look,...t});
   else if(ed.fresh)r=await post('/edit',{id:ed.id,text,add_text:look,t:t.start,t_end:t.end});
   if(!r||!(r.id||r.ok))return toast((r&&r.error)||'That did not save.');
   if(!ed){let cur=r.text_id||r.id;edPush('add text',()=>edSave('/text/delete',{id:cur}),async()=>{const a=await post('/text/add',{text,...look,...t});cur=a.text_id||a.id;await load()})}
-  inT=outT=null;renderBar();setText(null);toast(ed?'Text changed.':'Text added.');await load()}
+  if(tx===me){inT=outT=null;renderBar();setText(null)}toast(ed?'Text changed.':'Text added.');await load()}
 function renderTexts(){
   const L=$('tlayer'),fs=sz=>Math.min(L.offsetWidth,L.offsetHeight)*(sz||TEXT_SIZE)/100,t=v.currentTime,edit=!!(S&&view&&view.stage==='edit');
   $('railmed').hidden=$('railtext').hidden=$('railcap').hidden=$('railsnd').hidden=$('railtools').hidden=!edit;if(!edit&&tool)openTool(null);
@@ -3086,28 +3117,29 @@ $('tedit').addEventListener('keydown',e=>{if(!e.target.isContentEditable)return;
   if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();e.target.blur();saveText()}if(e.key==='Escape'){e.target.blur();setText(null)}});
 $('tedit').addEventListener('focusout',e=>{const el=$('tprev');if(el)el.classList.remove('typing')});
 new ResizeObserver(()=>{tsig=null;renderTexts()}).observe($('tlayer'));
-$('tlayer').addEventListener('pointerdown',e=>{
-  const k=e.target.closest('[data-tclick]');if(k&&!tx){e.preventDefault();editText(k.dataset.tclick.slice(1),k.dataset.tclick[0]==='f');return}   // a text drawn live: click it to change it
-});
-$('tedit').addEventListener('pointerdown',e=>{const el=e.target.closest('#tprev');if(!el||!tx)return;const sp=el.firstChild,h=e.target.dataset.h;
+$('tlayer').addEventListener('pointerdown',e=>{const k=e.target.closest('[data-tclick]');if(k&&!e.button)tlPress(e,k)});
+function tlPress(e,k){e.preventDefault();   // a text on the video: pressed, it is picked and follows the pointer
+  pressHold();if(csel){csel=null;drawCard()}tlOpen=true;editText(k.dataset.tclick.slice(1),k.dataset.tclick[0]==='f');if(!tx||!$('tprev')){tlOpen=false;return}textPress(e,$('tprev'),false)}
+$('tedit').addEventListener('pointerdown',e=>{const el=e.target.closest('#tprev');if(el&&tx)textPress(e,el,true)});
+function textPress(e,el,was){const sp=el.firstChild,h=e.target.dataset.h;v.pause();
   if(!h&&document.activeElement===sp){   // typing: a click moves the caret, a press that moves drags the text
     const pre=ev=>{if(Math.abs(ev.clientX-e.clientX)+Math.abs(ev.clientY-e.clientY)<5)return;stop();getSelection().removeAllRanges();sp.blur();textDrag(e.clientX,e.clientY,ev)},
       stop=()=>{document.removeEventListener('pointermove',pre);document.removeEventListener('pointerup',stop)};
     document.addEventListener('pointermove',pre);document.addEventListener('pointerup',stop);return}
   e.preventDefault();el.setPointerCapture(e.pointerId);const L=$('tlayer').getBoundingClientRect(),x0=e.clientX,y0=e.clientY,ox=tx.x,oy=tx.y,dup=e.altKey&&!h&&tx.edit&&!tx.edit.fresh;let moved=false;
   if(h==='rot'){const r=el.getBoundingClientRect();return rotDrag(e,el,[r.left+r.width/2,r.top+r.height/2],tx.rotation||0,a=>{tx.rotation=a;renderTexts();txMoreVals()},()=>textSoon(100))}
-  const end=f=>{el.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)>3)moved=true;if(moved)f(ev)};el.onpointerup=ev=>{el.onpointermove=el.onpointerup=null;guides(false);if(!moved&&!h)typeIn(sp,false,ev.clientX,ev.clientY);
+  const end=f=>{el.onpointermove=ev=>{if(Math.abs(ev.clientX-x0)+Math.abs(ev.clientY-y0)>3)moved=true;if(moved)f(ev)};el.onpointerup=ev=>{el.onpointermove=el.onpointerup=null;guides(false);if(!moved&&!h){const c=(ev.metaKey||ev.ctrlKey)&&cardUnder(ev.clientX,ev.clientY);if(c){setText(null);return selectCard(c)}if(was)typeIn(sp,false,ev.clientX,ev.clientY)}
     if(dup&&moved){const nx=tx.x,ny=tx.y;tx.x=ox;tx.y=oy;renderTexts();post('/text/add',{...txState(),x_pct:nx,y_pct:ny}).then(r=>{if(!(r.id||r.ok))return toast(r.error||'That did not save.');   // Alt: a copy where it was let go
       let cur=r.id;const b={...txState(),x_pct:nx,y_pct:ny};edPush(`"${b.text}" copied`,()=>edSave('/text/delete',{id:cur}),async()=>{const a=await post('/text/add',b);cur=a.id;await load()});toast('Copied.');load()})}}};
   if(h==='w'||h==='e'){const cx=L.left+tx.x/100*L.width;   // a side: the text's width, the box hugs what is left
     return end(ev=>{tx.w=Math.round(Math.min(84,Math.max(15,Math.abs(ev.clientX-cx)*2/L.width*100)));const z=$('twidth');if(z)z.value=tx.w;tnums();renderTexts()})}
   if(h){const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,s0=tx.size,d=ev=>Math.hypot(ev.clientX-cx,ev.clientY-cy),d0=Math.max(8,d(e));
     return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner, the top or the bottom scales it from its centre
-  end(textMove(x0,y0))});
+  end(textMove(x0,y0))}
 // the text follows the mouse from where the press began; reels: inside the safe zone
 function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),vert=v.videoHeight>v.videoWidth,ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   const tr=$('tprev')&&$('tprev').getBoundingClientRect(),hw=tr?tr.width/2/L.width*100:0,hh=tr?tr.height/2/L.height*100:0,lines=snapLines('t'+(tx.edit?tx.edit.id:''));
-  return ev=>{guides(true);let x=ox+(ev.clientX-x0)/L.width*100,y=oy+(ev.clientY-y0)/L.height*100;[x,y]=snapBox([x-hw,y-hh,hw*2,hh*2],lines,L).map((q,i)=>q+[hw,hh][i]);
+  return ev=>{guides(true);let x=ox+(ev.clientX-x0)/L.width*100,y=oy+(ev.clientY-y0)/L.height*100;[x,y]=snapBox([x-hw,y-hh,hw*2,hh*2],lines,L,ev).map((q,i)=>q+[hw,hh][i]);
     tx.x=cl(x,vert?20:12,vert?73:88);tx.y=cl(y,vert?16:8,vert?72:92);renderTexts();txMoreVals()}}
 function textDrag(x0,y0,ev0){const f=textMove(x0,y0),up=()=>{document.removeEventListener('pointermove',f);document.removeEventListener('pointerup',up);textSoon(250)};
   f(ev0);document.addEventListener('pointermove',f);document.addEventListener('pointerup',up)}
@@ -3127,6 +3159,26 @@ $('send').onclick=sendOrStop;$('msend').onclick=sendOrStop;
 const approve=async()=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;render()}   // instant: the button and the steps turn before the server answers
   try{await post('/event',{type:'approve'});await load(true)}catch(e){}finally{approving=false;render()}};
 $('approve').onclick=approve;$('mapprove').onclick=approve;
+// ---- Export (review.py export_job): the page as one MP4, hand edits and all, with no Claude and no note
+let exOpen=false,exAsk=false;
+const exOn=()=>!!(S&&S.export&&view&&view.stage==='edit'&&isCur()&&!S.stills&&!S.raw);
+function renderExport(){const on=exOn(),x=on?S.export:{},w=x.state==='working',b=$('mexport'),box=$('exbox');
+  $('exwrap').hidden=!on;if(!on)return;
+  if(!$('mapprove').classList.contains('approved'))$('mapprove').classList.remove('primary');   // Export is the one primary
+  b.classList.toggle('busy',w);b.disabled=w;b.querySelector('span').textContent=w?'Exporting... '+(x.pct!=null?x.pct+'%':fmt(x.elapsed||0)):'Export';
+  let h='';
+  if(exAsk&&!w)h=`<b>Export what you see?</b><p>${esc(x.left_out||'')}</p><div class="exb"><button data-exno>Cancel</button><button class="go" data-exgo>Export anyway</button></div>`;
+  else if(w)h=`<b>Exporting... ${x.pct!=null?x.pct+'%':fmt(x.elapsed||0)}</b><p>${esc(x.note||'Your changes go in as the page shows them.')}</p>`;
+  else if(x.state==='done')h=`<b>Exported.</b><p>${esc(x.name||'')}${x.note?'<br>'+esc(x.note):''}</p><div class="exb"><button data-exfind>Show in Finder</button><a class="go" href="/export/file" download hidden></a><button class="go" data-exdl>Download</button></div>`;
+  else if(x.state==='failed')h=`<b>The export stopped.</b><p>${esc(x.why||'')}</p><div class="exb"><button class="go" data-exgo>Try again</button></div>`;
+  box.hidden=!exOpen||!h;h=h&&h+'<button class="exx" data-exclose aria-label="close" title="Close">×</button>';
+  if(box._h!==h){box._h=h;box.innerHTML=h}}
+async function exportNow(){exAsk=false;exOpen=true;const r=await fetch('/export',{method:'POST',body:'{}'});
+  if(!r.ok){const j=await r.json().catch(()=>({}));toast(j.error||'The export did not start.')}await load(true)}
+$('mexport').onclick=()=>{const x=S&&S.export||{};exOpen=true;if(x.left_out){exAsk=true;renderExport()}else exportNow()};
+$('exbox').onclick=e=>{const t=e.target.closest('button');if(!t)return;
+  if('exgo' in t.dataset)exportNow();else if('exno' in t.dataset||'exclose' in t.dataset){exAsk=false;exOpen=false;renderExport()}
+  else if('exfind' in t.dataset)post('/export/reveal',{});else if('exdl' in t.dataset)$('exbox').querySelector('a[download]').click()};
 const ovOpen=()=>!!document.querySelector('dialog[open],[popover]:popover-open');   // a dialog or popover has the keys
 document.addEventListener('keydown',e=>{if(ovOpen())return;
   const typing=e.target.tagName==='TEXTAREA'||e.target.tagName==='INPUT'||e.target.tagName==='SELECT'||!!e.target.isContentEditable;
@@ -3205,7 +3257,7 @@ function inspTarget(){if(!S||!view||view.stage!=='edit')return null;if(msel.size
   return csel?{k:'card'}:ssel&&placed(ssel)?{k:'snd'}:vsel!=null?{k:'vid'}:null}
 const inspSoon=()=>{if(!IN.raf)IN.raf=requestAnimationFrame(()=>{IN.raf=0;inspSync()})};
 {const f=renderEdTracks;renderEdTracks=function(){f.apply(this,arguments);inspSoon()}}   // every pick redraws the rows: the inspector follows
-function inspSync(){if(window.SC&&SC.on)return;const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
+function inspSync(){if(window.SC&&SC.on||PH)return;const t=inspTarget(),sig=t?t.k+(t.ids||[]).join()+(csel?csel.x.key:'')+(ssel||'')+(vsel??''):'';
   if(!t||tx&&t.k!=='multi'){if(tool==='insp')openTool(IN.prev);return}
   if(tool!=='insp'){IN.prev=tool==='text'?null:tool;openTool('insp')}
   if(IN.sig!==sig){IN.sig=sig;renderInsp(t)}else inspVals()}
@@ -3293,7 +3345,7 @@ function snapLines(self){const t=v.currentTime,L={x:[50],y:[50]};
   for(const c of cardsAll()){if(c.key===self||!(c.s<=t&&t<c.e))continue;const p=(S.cards_pending||[]).find(p=>p.key===c.key&&p.box),[x,y,w,h]=p?p.box:c.box;L.x.push(x,x+w/2,x+w);L.y.push(y,y+h/2,y+h)}
   for(const x of textItems())if('t'+x.id!==self&&x.start<=t&&t<x.end){L.x.push(x.x_pct??50);L.y.push(x.y_pct??40)}
   return L}
-function snapBox(b,L,r){const th=[6/r.width*100,6/r.height*100];IN.g={x:[],y:[]};const out=[b[0],b[1]];
+function snapBox(b,L,r,ev){const th=[6/r.width*100,6/r.height*100];IN.g={x:[],y:[]};const out=[b[0],b[1]];if(ev&&(ev.metaKey||ev.ctrlKey)){drawGuides();return out}   // Cmd: no snapping
   [['x',0,2],['y',1,3]].forEach(([k,i,j],n)=>{let best=null;for(const q of [b[i],b[i]+b[j]/2,b[i]+b[j]])for(const l of L[k]){const d=l-q;if(Math.abs(d)<th[n]&&(!best||Math.abs(d)<Math.abs(best.d)))best={d,l}}
     if(best){out[n]=b[i]+best.d;IN.g[k]=[best.l]}});drawGuides();return out}
 function guides(on){if(IN.gon===on)return;IN.gon=on;if(!on)IN.g={x:[],y:[]};drawGuides()}

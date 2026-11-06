@@ -2139,6 +2139,7 @@ def make_handler(token):
                     ms = list(ex.map(lambda v: library.meta(v["video"]) if v["video"] else {}, vids))
                 for v in vids:
                     v["phase"] = phase(v)
+                    v["exported"] = max((f.stat().st_mtime for f in (Path(v["dir"]) / "exports").glob("*.mp4")), default=None)   # review.py Export
                 for v, m in zip(vids, ms):
                     a = (raw.get(v["dir"]) or {}).get("args", {}).get("aspect")
                     v["duration"] = m.get("duration") if v["status"] in ("ready", "done") else None
@@ -2351,6 +2352,13 @@ def make_handler(token):
             if path == "/job":
                 return self.job(body)
             if path == "/reveal":   # Show in Finder / Explorer: the library, one of its videos, or the custom folder
+                if body.get("export"):   # a video's last export (review.py Export), picked in <edit>/exports/
+                    d = Path(str(body["export"])).resolve()
+                    fs = sorted((d / "exports").glob("*.mp4"), key=lambda f: f.stat().st_mtime) if d in library.edit_dirs() else []
+                    if not fs:
+                        return self.send(404, {})
+                    subprocess.Popen(library.reveal_cmd(fs[-1]), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                    return self.send(200, {})
                 p = custom.path().resolve() if body.get("custom") else Path(str(body.get("dir") or read()["root"])).resolve()
                 if p not in (Path(read()["root"]).resolve(), custom.path(False).resolve()) and p not in library.edit_dirs():
                     return self.send(400, {})
