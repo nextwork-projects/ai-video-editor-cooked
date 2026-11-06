@@ -9,7 +9,7 @@ var SC={on:false,s:null,pl:null,sel:new Set(),crop:false,edit:null,last:'',busy:
 body.scene #tside{display:flex}body.scene #tclose{display:none}body.scene .left{padding-left:16px;padding-right:16px}   /* the panel slot always there: a pick never moves the video */
 #scl{display:none;width:100%;height:100%;background:var(--film)}body.scene #scl{display:block}body.scene #live,body.scene #v{display:none!important}
 body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.scene #cplayer{display:none!important}
-#scover{display:none;position:absolute;left:0;top:0;transform-origin:0 0;z-index:6;touch-action:none}body.scene #scover{display:block}
+#scover{display:none;position:absolute;left:0;top:0;transform-origin:0 0;z-index:6;touch-action:none}body.scene #scl,#scover{-webkit-user-select:none;user-select:none}#scover .sced{-webkit-user-select:text;user-select:text}   /* a pick never selects the words: only the in-place editor does */body.scene #scover{display:block}
 .scbox{position:absolute;outline:calc(1.5px / var(--k)) solid #FFFFFF;box-shadow:0 0 0 calc(2.5px / var(--k)) rgba(0,0,0,.35);pointer-events:none}.scbox.sub{outline-style:dashed}
 .scbox i{position:absolute;width:calc(12px / var(--k));height:calc(12px / var(--k));margin:calc(-6px / var(--k)) 0 0 calc(-6px / var(--k));border-radius:calc(3px / var(--k));background:#FFFFFF;box-shadow:0 0 0 calc(1px / var(--k)) rgba(0,0,0,.45);pointer-events:auto}
 .scbox i::after{content:"";position:absolute;inset:calc(-6px / var(--k))}
@@ -17,7 +17,7 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .scbox i[data-h=nw],.scbox i[data-h=se]{cursor:nwse-resize}.scbox i[data-h=ne],.scbox i[data-h=sw]{cursor:nesw-resize}.scbox i[data-h=n],.scbox i[data-h=s]{cursor:ns-resize}.scbox i[data-h=e],.scbox i[data-h=w]{cursor:ew-resize}
 .scbox i[data-h=rot]{border-radius:50%;cursor:grab}.scbox i[data-h=rot]::before{content:"";position:absolute;left:50%;top:100%;width:calc(1.5px / var(--k));height:calc(18px / var(--k));background:#FFFFFF}
 .scbox i[data-h=rot].dn::before{top:auto;bottom:100%}.scbox.crop i{background:#FFD60A}.scghost{position:absolute;outline:calc(1px / var(--k)) dashed rgba(255,255,255,.6);background:rgba(0,0,0,.35);pointer-events:none}
-.scg{position:absolute;background:#FF2D92;pointer-events:none}.scsz{position:absolute;left:60px;top:250px;width:880px;height:1190px;outline:calc(1px / var(--k)) dashed rgba(255,255,255,.45);pointer-events:none}
+.scg{position:absolute;background:#FF2D92;pointer-events:none}
 .sced{position:absolute;outline:calc(1.5px / var(--k)) solid #0A84FF;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:#FFFFFF;cursor:text}
 .eitem.sc{cursor:grab;overflow:visible}.eitem.sc>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;pointer-events:none}.eitem.sc.sel{outline:2px solid #FFFFFF;outline-offset:1px;z-index:2}
 .eitem.sc::before,.eitem.sc::after{content:"";position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}.eitem.sc::before{left:-1px}.eitem.sc::after{right:-1px}
@@ -73,14 +73,16 @@ function scDiff(a,b){const ops=[],A={},B={};scAll(a).forEach(o=>A[o.it.id]=o);sc
   for(const t of a.tracks)if(!b.tracks.some(x=>x.id===t.id))ops.push({op:'remove_track',track:t.id});
   return ops}
 // ---- on and off: the scene from GET /scene, the player from CookedLive.mountScene
-SC.check=async function(){const want=!!(S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!alt&&!cmp&&!previewOn);const k=want?key(S):'';
+const SCQ=()=>alt?'?alt='+encodeURIComponent(alt):'',EHS={};   // a version (a trial reel) edits its own scene, with its own undo
+SC.check=async function(){const want=!!(S&&view&&isCur()&&S.stage==='edit'&&!S.stills&&!S.raw&&!cmp&&!previewOn);const k=want?key(S)+'|'+alt:'';
   if(k===SC.last)return SC.on;SC.last=k;if(!want)return SC.off();
-  try{const r=await fetch('/scene');const j=r.ok?await r.json():null;if(!j||!Array.isArray(j.tracks))return SC.off();SC.s=j;
+  if((SC.alt??'')!==alt){EHS[SC.alt??'']={u:EH.u,r:EH.r};const h=EHS[alt]||{u:[],r:[]};EH.u=h.u;EH.r=h.r;SC.alt=alt;SC.sel.clear();SC.crop=false}
+  try{const r=await fetch('/scene'+SCQ());const j=r.ok?await r.json():null;if(!j||!Array.isArray(j.tracks))return SC.off();SC.s=j;
     if(!window.CookedLive||!CookedLive.mountScene)await import('/live/live.js');if(!SC.pl)SC.pl=CookedLive.mountScene($('scl'),SC.s);else SC.pl.update(SC.s);
     if(!SC.on){SC.on=true;if(LV.on){LV.on=false;LV.shim&&LV.shim.pause();document.body.classList.remove('live')}document.body.classList.add('scene');v.use(SC.pl);SC.size();SC.draw();SC.insp()}
     $('edtracks')._h=null;renderEdTracks();return true}catch(e){console.warn('scene mode off:',e);return SC.off()}};
 SC.off=function(){if(SC.on){SC.on=false;document.body.classList.remove('scene');v.use(null);SC.pl&&SC.pl.pause();SC.sel.clear();SC.crop=false;$('edtracks')._h=null;$('scover').innerHTML=''}return false};
-SC.fetch=async function(){try{const j=await (await fetch('/scene')).json();if(j&&j.tracks){SC.s=j;SC.show()}}catch(e){}};
+SC.fetch=async function(){try{const j=await (await fetch('/scene'+SCQ())).json();if(j&&j.tracks){SC.s=j;SC.show()}}catch(e){}};
 // the scene drawn: the player at once, the boxes, the rows, the inspector, the transcript's struck words
 SC.show=function(fast){if(!SC.on)return;const s=SC.edit?scCopy(SC.s):SC.s;if(SC.edit){const o=scAll(s).find(o=>o.it.id===SC.edit);if(o)o.it.opacity=0}
   s.duration=scDur(SC.s);SC.pl.update(s);SC.draw();if(fast)return;$('edtracks')._h=null;SC.tl();SC.insp();SC.txSync()};
@@ -92,7 +94,7 @@ const scAt=t=>scAll().filter(o=>scVis(o.it)&&o.tr.kind==='visual'&&!o.tr.hidden&
 function scHit(px,py,t){return scAt(t).filter(o=>{const g=scGeo(o.it,t),a=-g.r*Math.PI/180,dx=px-g.x,dy=py-g.y,lx=dx*Math.cos(a)-dy*Math.sin(a),ly=dx*Math.sin(a)+dy*Math.cos(a);
   return Math.abs(lx)<=g.w/2&&Math.abs(ly)<=g.h/2}).reverse()}   // top first
 SC.draw=function(guides){if(!SC.on)return;guides=guides||SC.drag&&SC.gd;const t=scNow(),o=$('scover'),ids=[...SC.sel].filter(id=>{const q=scGet(id);return q&&scVis(q.it)&&q.it.start<=t+1e-4&&t<q.it.end});
-  let h=SC.s.width===1080&&SC.s.height===1920&&SC.mov?'<div class="scsz"></div>':'';
+  let h='';
   ids.forEach((id,n)=>{const it=scGet(id).it,g=scGeo(it,t),cr=SC.crop&&ids.length===1&&/^(video|image)$/.test(it.type),c=it.crop||{l:0,t:0,r:0,b:0};
     if(cr){const fw=g.w/Math.max(.02,1-c.l-c.r),fh=g.h/Math.max(.02,1-c.t-c.b);h+=`<div class="scghost" style="left:${g.x-g.w/2-c.l*fw}px;top:${g.y-g.h/2-c.t*fh}px;width:${fw}px;height:${fh}px;transform-origin:${g.w/2+c.l*fw}px ${g.h/2+c.t*fh}px;transform:rotate(${g.r}deg)"></div>`}
     const hs=ids.length>1?[]:it.type==='text'?['nw','ne','se','sw','e','w']:['nw','ne','se','sw','n','e','s','w'],P={nw:[0,0],n:[50,0],ne:[100,0],e:[100,50],se:[100,100],s:[50,100],sw:[0,100],w:[0,50]};
@@ -102,9 +104,9 @@ SC.draw=function(guides){if(!SC.on)return;guides=guides||SC.drag&&SC.gd;const t=
 v.addEventListener('timeupdate',()=>{if(SC.on&&!SC.drag)SC.draw()});v.addEventListener('seeked',()=>{if(SC.on&&!SC.drag){SC.draw();SC.insp()}});
 // ---- one change: made on a copy (fn), shown at once, sent as the ops between the two
 SC.commit=async function(before,what){const after=scCopy(SC.s),ops=scDiff(before,after);if(!ops.length)return;SC.busy++;
-  try{const r=await post('/scene/ops',{ops});if(!r.ok)throw new Error(r.error||'That did not save.');
+  try{const r=await post('/scene/ops',{ops,alt});if(!r.ok)throw new Error(r.error||'That did not save.');
     edPush(what,()=>SC.send(scDiff(after,before)),()=>SC.send(scDiff(before,after)));if(r.scene&&!SC.drag)SC.s=r.scene}catch(e){toast(e.message);SC.s=before}finally{SC.busy--}SC.show()};
-SC.send=async ops=>{const r=await post('/scene/ops',{ops});JQ.length=0;if(r.scene)SC.s=r.scene;SC.show()};
+SC.send=async ops=>{const r=await post('/scene/ops',{ops,alt});JQ.length=0;if(r.scene)SC.s=r.scene;SC.show()};
 SC.change=function(what,fn){const b=scCopy(SC.s);fn(SC.s);SC.show();return SC.commit(b,what)};
 const scId=p=>p+Math.random().toString(36).slice(2,8);
 // ---- the video: press and drag moves what is under the pointer, handles resize, rotate and crop
@@ -112,12 +114,13 @@ const scPt=e=>{const r=$('scover').getBoundingClientRect();return [(e.clientX-r.
 $('scover').addEventListener('pointerdown',e=>{if(e.button||!SC.on||e.target.closest('.sced'))return;e.preventDefault();e.stopPropagation();SC.edDone();v.pause();SC.zone='v';
   const t=scNow(),[px,py]=scPt(e),hd=e.target.closest('[data-h]');let id;SC.pick=1;
   if(hd)id=e.target.closest('[data-b]').dataset.b;
-  else{const hs=scHit(px,py,t).filter(o=>!o.tr.locked&&!o.it.locked);if(!hs.length){SC.sel.clear();SC.crop=false;SC.show();return}
+  else{const hs=scHit(px,py,t).filter(o=>!o.tr.locked&&!o.it.locked),base=(SC.s.tracks.find(x=>x.kind==='visual')||{}).id;
+    if(!hs.length||SC.sel.size&&!e.shiftKey&&hs.every(o=>o.tr.id===base&&!SC.sel.has(o.it.id))){SC.sel.clear();SC.crop=false;SC.show();return}   // a missed click picks none; the footage takes a click with nothing picked
     const i=hs.findIndex(o=>SC.sel.has(o.it.id));id=(e.metaKey||e.ctrlKey)&&i>=0?hs[(i+1)%hs.length].it.id:i>=0&&!(e.metaKey||e.ctrlKey)?hs[i].it.id:hs[0].it.id;
     if(e.shiftKey){SC.sel.has(id)?SC.sel.delete(id):SC.sel.add(id)}else if(!SC.sel.has(id)||(e.metaKey||e.ctrlKey)){SC.sel.clear();SC.sel.add(id)}}
   const before=scCopy(SC.s),b0=scCopy(SC.s),g0={};SC.sel.forEach(k=>{const q=scGet(k);if(q)g0[k]=scGeo(q.it,t)});const G=g0[id]||scGeo(scGet(id).it,t),h=hd&&hd.dataset.h;
   if(e.altKey&&!h){const ns=[];[...SC.sel].forEach(k=>{const q=scAll(b0).find(o=>o.it.id===k);if(!q)return;const c={...scCopy(q.it),id:scId('i'),name:(q.it.name||q.it.type)+' copy'};q.tr.items.splice(q.ii+1,0,c);ns.push(c.id);g0[c.id]=g0[k]});SC.sel=new Set(ns)}   // Alt-drag: the copies move, the originals stay
-  const L=h!=='rot'&&(()=>{const xs=[SC.s.width/2],ys=[SC.s.height/2];if(SC.s.width===1080&&SC.s.height===1920){xs.push(60,940);ys.push(250,1440)}
+  const L=h!=='rot'&&(()=>{const xs=[SC.s.width/2],ys=[SC.s.height/2];
     scAt(t).forEach(o=>{if(SC.sel.has(o.it.id)||g0[o.it.id])return;const g=scGeo(o.it,t);xs.push(g.x-g.w/2,g.x,g.x+g.w/2);ys.push(g.y-g.h/2,g.y,g.y+g.h/2)});return {xs,ys}})();
   let moved=false;SC.drag=1;SC.draw();
   const mv=ev=>{const[qx,qy]=scPt(ev),dx=qx-px,dy=qy-py;if(!moved&&Math.hypot(dx,dy)*SC.k<3)return;moved=true;SC.mov=1;SC.s=scCopy(b0);SC.apply(ev,dx,dy,h,G,g0,t,L,b0);SC.show(true)};
@@ -141,7 +144,7 @@ SC.apply=function(ev,dx,dy,h,G,g0,t,L,b0){const sh=ev.shiftKey,free=ev.metaKey||
     if(sx>0)n.r=Math.min(1-c.l-.05,Math.max(0,c.r-lx/fw));if(sx<0)n.l=Math.min(1-c.r-.05,Math.max(0,c.l+lx/fw));if(sy>0)n.b=Math.min(1-c.t-.05,Math.max(0,c.b-ly/fh));if(sy<0)n.t=Math.min(1-c.b-.05,Math.max(0,c.t+ly/fh));
     const w=fw*(1-n.l-n.r),hh=fh*(1-n.t-n.b);it.crop=Object.fromEntries(Object.entries(n).map(([k,x])=>[k,+x.toFixed(4)]));
     put(w,hh);scSet(it,'w',+(w/s).toFixed(2),t);scSet(it,'h',+(hh/s).toFixed(2),t);return SC.draw()}
-  // the moving edges land on the guides (the centre, the safe zone, other items' edges) while it is not rotated
+  // the moving edges land on the guides (the centre, other items' edges) while it is not rotated
   let w=G.w+sx*lx*m,hh=G.h+sy*ly*m,ax=null;
   if(!free&&!G.r&&L){const th=6/SC.k,edge=(c,g,d,v)=>alt?c+d*v/2:c-d*g/2+d*v,size=(c,g,d,p)=>alt?2*d*(p-c):d*(p-(c-d*g/2));
     const near=(e,ps)=>ps.reduce((b,p)=>Math.abs(p-e)<=th&&(b==null||Math.abs(p-e)<Math.abs(b-e))?p:b,null);
@@ -210,7 +213,8 @@ function scTrim(s,id,side,dt){const o=scAll(s).find(o=>o.it.id===id);if(!o)retur
 // a join's note sits above its tab, outside the rows' scroll box
 $('edtracks').addEventListener('mouseover',e=>{const j=e.target.closest('.scj');if(!j)return;const r=j.getBoundingClientRect(),sp=j.querySelector('span');sp.style.left=Math.max(8,r.left-8)+'px';sp.style.bottom=(innerHeight-r.top+6)+'px'});
 SC.bringBack=function(id){const q=scGet(id);if(!q||!q.it.cut||!q.it.cut.before)return;const d=q.it.cut.before.dur;SC.change('bring back a cut',s=>scTrim(s,id,'l',-d))};
-$('edtracks').addEventListener('pointerdown',e=>{const el=e.target.closest('.eitem.sc');if(!SC.on||!el||e.button)return;e.stopPropagation();e.preventDefault();v.pause();SC.zone='t';
+$('edtracks').addEventListener('pointerdown',e=>{const el=e.target.closest('.eitem.sc');if(SC.on&&!el&&!e.button&&e.target.closest('.etrack')&&SC.sel.size){SC.sel.clear();SC.crop=false;SC.show()}   // an empty row: none picked
+  if(!SC.on||!el||e.button)return;e.stopPropagation();e.preventDefault();v.pause();SC.zone='t';
   const id=el.dataset.sid,q=scGet(id);if(!q||q.tr.locked||q.it.locked)return;SC.pick=1;const r=el.getBoundingClientRect(),side=e.clientX-r.left<8?'l':r.right-e.clientX<8?'r':'m',slip=side==='m'&&e.altKey&&/^(video|audio)$/.test(q.it.type);
   if(e.shiftKey||e.metaKey||e.ctrlKey){SC.sel.has(id)?SC.sel.delete(id):SC.sel.add(id)}else if(!SC.sel.has(id)){SC.sel.clear();SC.sel.add(id)}
   const b0=scCopy(SC.s),inn=document.querySelector('#edtracks .einner'),W0=inn.getBoundingClientRect().width,T=TO(),x0=e.clientX,y0=e.clientY,ps=snapPts([...document.querySelectorAll('#edtracks .eitem.sc')].filter(x=>SC.sel.has(x.dataset.sid)));
@@ -306,3 +310,5 @@ SC.txSync=function(){if(!SC.on||typeof W==='undefined'||!W.length)return;const m
   const rs=main.items.filter(i=>i.type==='video').map(i=>[i.in||0,(i.in||0)+(i.end-i.start)*(i.speed||1)]);
   document.querySelectorAll('#txlines .tw[data-k]').forEach(el=>{const w=W[+el.dataset.k];if(!w||w.s==null)return;el.classList.toggle('cut',!rs.some(([a,b])=>w.s>=a-.02&&w.s<b))})};
 // ---- Export: review.html's one Export button (review.py export_job renders the scene when there is one)
+// a click round the frame (the black at the sides, the empty stage): none picked
+document.addEventListener('pointerdown',e=>{if(!SC.on||e.button||!e.target.closest('#stage')||e.target.closest('#scover,button,input,select,textarea,[contenteditable],.pmenu')||!SC.sel.size&&!SC.crop)return;SC.edDone();SC.sel.clear();SC.crop=false;SC.show()});

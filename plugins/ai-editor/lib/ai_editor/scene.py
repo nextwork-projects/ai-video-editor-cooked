@@ -53,8 +53,8 @@ def jsave(p, d):
 
 
 def probe(path):
-    """{w, h, duration, kind, codec} of a media file, rotation applied."""
-    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height:stream_side_data=rotation"
+    """{w, h, duration, kind, codec, adur (its sound's length)} of a media file, rotation applied."""
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,duration:stream_side_data=rotation"
                           ":format=duration", "-of", "json", str(path)], capture_output=True, text=True)
     if out.returncode:
         raise SceneError(f"ffprobe could not read {path}")
@@ -67,7 +67,8 @@ def probe(path):
     if any(abs(sd.get("rotation", 0)) == 90 for sd in v.get("side_data_list", [])):
         w, h = h, w
     still = Path(path).suffix.lower() in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
-    return {"kind": "image" if still else "video", "w": w, "h": h, "duration": 0 if still else dur, "codec": v.get("codec_name")}
+    au = next((float(s["duration"]) for s in d.get("streams", []) if s.get("codec_type") == "audio" and s.get("duration")), None)
+    return {"kind": "image" if still else "video", "w": w, "h": h, "duration": 0 if still else dur, "codec": v.get("codec_name"), "adur": au}
 
 
 # ---------------------------------------------------------------- shape
@@ -175,13 +176,24 @@ def validate(sc):
     return sc
 
 
-def load(edit):
-    return validate(normalise(jload(Path(edit) / NAME)))
+def name_of(alt=None):
+    """The scene file of a version: scene.json for the round's main draft, scene.<alt>.json for another version (a
+    name with other characters than letters, digits, - and _ as those and a short hash: "Trial t1: x" is
+    scene.Trial-t1-x-1a2b3c4d.json)."""
+    if not alt:
+        return NAME
+    import hashlib, re
+    slug = re.sub(r"[^\w-]+", "-", str(alt)).strip("-")[:48] or "v"
+    return f"scene.{slug}.json" if slug == alt else f"scene.{slug}-{hashlib.sha1(str(alt).encode()).hexdigest()[:8]}.json"
 
 
-def save(edit, sc):
+def load(edit, name=NAME):
+    return validate(normalise(jload(Path(edit) / name)))
+
+
+def save(edit, sc, name=NAME):
     sc = validate(normalise(sc))
-    jsave(Path(edit) / NAME, sc)
+    jsave(Path(edit) / name, sc)
     return sc
 
 
@@ -320,7 +332,7 @@ def apply(sc, ops, edit=None):
             if edit and not a.get("kind"):
                 if not (Path(edit) / src).is_file():
                     raise SceneError(f"asset {aid}: {src} is not in the edit")
-                a.update({k: v for k, v in probe(Path(edit) / src).items() if k != "codec"})
+                a.update({k: v for k, v in probe(Path(edit) / src).items() if k not in ("codec", "adur")})
             sc["assets"][aid] = {**a, "src": src.as_posix()}
         else:
             raise SceneError(f"unknown op {kind!r}: set, add, remove, move, track, add_track, remove_track, split, trim or asset")
@@ -354,7 +366,7 @@ class Scene:
             aid, n = f"{base}-{n}", n + 1
         p = Path(src) if Path(src).is_absolute() or not self.edit else self.edit / src
         info = probe(p) if p.exists() else {}
-        self.sc["assets"][aid] = {"src": str(src), **{k: v for k, v in info.items() if k != "codec"}, **kw}
+        self.sc["assets"][aid] = {"src": str(src), **{k: v for k, v in info.items() if k not in ("codec", "adur")}, **kw}
         return aid
 
     def _add(self, typ, start, end, track=None, **kw):
@@ -750,14 +762,14 @@ def from_video(edit, video, gone=(), texts=(), sounds=(), library=None):
     e = Path(edit)
     f = Path(video) if Path(video).is_absolute() else e / video
     i = probe(f)
-    W, H = i["w"], i["h"]
+    W, H, end = i["w"], i["h"], min(i["duration"], i.get("adur") or i["duration"])   # ends with its sound, so the export's picture and sound end together
     S = Scene(W, H, 30, edit=e)
     aid = S.asset(rel(e, f), "draft")
     if needs_proxy(S.sc["assets"][aid], W, H):
         S.sc["assets"][aid]["proxy"] = f".scene/{aid}.mp4"
     tr = S.track("Video", "visual", magnet=True)
     t, at = 0.0, 0.0
-    for a, b in [*sorted(gone), (i["duration"], i["duration"])]:
+    for a, b in [*sorted(gone), (end, end)]:
         if a - at > EPS:
             it = {"type": "video", "asset": aid, "start": round(t, 6), "end": round(t + a - at, 6), "in": round(at, 6), "x": W / 2, "y": H / 2,
                   "w": W, "h": H, "name": "Draft"}
@@ -851,10 +863,11 @@ def renderer():
     return edit_py.REMOTION
 
 
-def render(edit, out=None, draft=False, log=None):
-    """The export: the scene through the Scene composition to out (default <edit>/exports/<edit name>.mp4)."""
+def render(edit, out=None, draft=False, log=None, name=NAME):
+    """The export: the scene (name: a version's scene file) through the Scene composition to out (default
+    <edit>/exports/<edit name>.mp4)."""
     e = Path(edit)
-    sc = load(e)
+    sc = load(e, name)
     ensure_proxies(e, sc)
     out = Path(out) if out else e / "exports" / f"{e.name}.mp4"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -928,6 +941,8 @@ def demo():
         assert pos_keys(keys, org, (540, 960), 1080, 1920)["y"][1][1] == round(576 + 1.2 * 384, 3)
         assert cut_before({"cuts": [{"start": 1, "end": 3, "kind": "retake"}]}, [{"text": "uh", "start": 1.5, "end": 1.7}], 1, 3) == \
             {"reason": "retake", "words": "uh", "dur": 2}
+        assert name_of() == NAME and name_of("t1") == "scene.t1.json" and name_of("Trial t1: big").startswith("scene.Trial-t1-big-")
+        assert name_of("../x") != name_of("x") and "/" not in name_of("../x")
         v = from_video(e, "take.mp4", gone=[[1, 2], [4, 4.5]], texts=[{"kind": "label", "text": "Yo", "start": 0.5, "end": 2, "x_pct": 50,
                        "y_pct": 30}, {"kind": "label", "text": "Hid", "start": 0, "end": 1, "x_pct": 50, "y_pct": 60, "lane": 1, "lane_off": True}])
         vt = v["tracks"][0]["items"]

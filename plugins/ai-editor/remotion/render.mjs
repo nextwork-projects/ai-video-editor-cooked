@@ -167,7 +167,7 @@ async function local(publicDir, planPath, out) {
     enforceAudioTrack: true, concurrency: concurrency(), scale, ...hwOpts(composition, scale), timeoutInMilliseconds: TIMEOUT_MS,
     onProgress: progress(composition.durationInFrames) });
   const r = spawnSync("ffmpeg", ["-v", "error", "-y", "-i", tmp, "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-    "-shortest", "-movflags", "+faststart", out], { stdio: "inherit" });
+    "-t", (composition.durationInFrames / composition.fps).toFixed(6), "-movflags", "+faststart", out], { stdio: "inherit" });   // -shortest dropped the last B-frames
   fs.rmSync(tmp, { force: true });
   if (r.status !== 0) throw new Error(`ffmpeg could not write ${out}`);
   console.log(`rendered ${out} in ${((Date.now() - t0) / 1000).toFixed(1)} s`);

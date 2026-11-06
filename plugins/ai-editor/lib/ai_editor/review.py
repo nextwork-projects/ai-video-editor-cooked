@@ -1547,37 +1547,48 @@ def video_scene(folder, d):
     return scene.from_video(folder, base, gone=gone, texts=texts, sounds=sounds, library=sfx_mod().library_dir())
 
 
-def scene_for(folder, d):
+def scene_for(folder, d, alt=None):
     """scene.json for a draft on the edit (scene_mode), made on the first ask and never over one that is there: a plan
     draft (plan_draft) through scene.from_plan with this page's live plan (texts.json, overrides.json, placed sounds),
     any other draft, or a plan from_plan refuses, through video_scene. None off the edit. The raw take's seek-friendly
     copy is made in the background; until then the page plays the take itself."""
     if not scene_mode(folder, d):
         return None
+    name = scene.name_of(alt)
     with SCENE_LOCK:
-        if (folder / scene.NAME).exists():
-            return scene.load(folder)
+        if (folder / name).exists():
+            return scene.load(folder, name)
         sc = None
-        if plan_draft(folder, d):
+        if alt:   # another version (a trial reel): its own plan when it has one, else its MP4 as a clip
+            a = next((a for a in d.get("alts") or [] if a["name"] == alt), None)
+            if not a:
+                raise scene.SceneError(f"no version {alt}")
+            try:
+                sc = scene.from_plan(folder, load(Path(a["plan"]))) if a.get("plan") and Path(a["plan"]).is_file() else None
+            except Exception as e:   # noqa: BLE001
+                print(f"scene: from-plan ({alt}): {e}; the version as a video instead", file=sys.stderr)
+            sc = scene.save(folder, sc or scene.from_video(folder, Path(a["video"])), name)
+        elif plan_draft(folder, d):
             try:
                 lp = live_plan(folder, d, plan=True)
                 p = load(Path(d["plan"])) if lp.get("why") else lp
                 sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
             except Exception as e:   # noqa: BLE001  any refusal (split, board, cover, cutouts) or failure: the draft's MP4
                 print(f"scene: from-plan: {e}; the draft as a video instead", file=sys.stderr)
-        sc = scene.save(folder, sc or video_scene(folder, d))
+        if not alt:
+            sc = scene.save(folder, sc or video_scene(folder, d))
     if any(a.get("proxy") for a in sc["assets"].values()):
         threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
     return sc
 
 
-def scene_out(folder, sc):
+def scene_out(folder, sc, alt=None):
     """The scene as the page gets it: each asset on /scene/asset/<id>, versioned by the file it plays (a proxy that
     lands is a new URL). Never saved."""
     sc = json.loads(json.dumps(sc))
     for k, a in sc["assets"].items():
         f = scene.path_of(folder, a)
-        a["url"] = f"/scene/asset/{quote(k)}?v={f.stat().st_mtime_ns if f.exists() else 0}"
+        a["url"] = f"/scene/asset/{quote(k)}?v={f.stat().st_mtime_ns if f.exists() else 0}" + (f"&alt={quote(alt)}" if alt else "")
     return sc
 
 
@@ -1617,7 +1628,9 @@ JOURNAL, JOURNAL_LOCK = {}, threading.Lock()   # folder -> [{"at": (stage, round
 
 
 def hand_files(folder):
-    return {n: (Path(folder) / n).read_bytes() if (Path(folder) / n).exists() else None for n in HAND_FILES}
+    """The hand-edit files as they are now: HAND_FILES, and every version's scene (scene.<alt>.json)."""
+    ns = (*HAND_FILES, *sorted(f.name for f in Path(folder).glob("scene.*.json")))
+    return {n: (Path(folder) / n).read_bytes() if (Path(folder) / n).exists() else None for n in ns}
 
 
 BAKE = {}   # folder -> {"state": "waiting" | "working" | "done" | "failed" | "off", "why", "timer", "again"}
@@ -1852,17 +1865,18 @@ def export_state(folder, d):
         ex["pct"] = log_pct(lg) if lg.is_file() and lg.stat().st_mtime >= ex["since"] else None
     if ex.get("file"):
         ex["name"] = Path(ex["file"]).name
-    return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at")} | {
+    return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at", "alt")} | {
         "left_out": None if scene_mode(folder, d) else export_left_out(folder, d),   # a scene has every edit in it
         "url": "/export/file" if ex.get("state") == "done" and ex.get("file") else None}
 
 
-def start_export(folder):
-    """Export pressed: one export at a time per edit, in its own thread. False when one is running."""
+def start_export(folder, alt=None):
+    """Export pressed: one export at a time per edit (alt: that version's scene), in its own thread. False when one is
+    running."""
     with BAKE_LOCK:
         if (EXPORT.get(str(folder)) or {}).get("state") == "working":
             return False
-        EXPORT[str(folder)] = {"state": "working", "since": time.time()}
+        EXPORT[str(folder)] = {"state": "working", "since": time.time(), "alt": alt or None}
     threading.Thread(target=export_job, args=(Path(folder),), daemon=True).start()
     return True
 
@@ -1870,14 +1884,15 @@ def start_export(folder):
 def export_job(folder, run=subprocess.run):
     ex = EXPORT[str(folder)]
     try:
-        d = load(folder / "review.json")
+        d, alt = load(folder / "review.json"), ex.get("alt")
         name = download_name(folder, d)
+        name = f"{name[:-4]} - {alt}.mp4" if alt else name   # a version's export carries its name
         out = exports_dir(folder) / name
         out.parent.mkdir(exist_ok=True)
         with live.busy():
-            if scene_for(folder, d) is not None:   # a scene: the Scene composition renders it (scene.render)
+            if scene_for(folder, d, alt) is not None:   # a scene: the Scene composition renders it (scene.render)
                 ex["log"] = str(exports_dir(folder) / ".export.log")
-                src = scene.render(folder, out.with_name(".export.mp4"), log=ex["log"])
+                src = scene.render(folder, out.with_name(".export.mp4"), log=ex["log"], name=scene.name_of(alt))
             else:
                 src = export_src(folder, ex, run)
         if isinstance(src, str):
@@ -2806,15 +2821,15 @@ def make_handler(folder, token):
                 if not p.is_file() or not p.is_relative_to(folder.resolve()):
                     return self.send(404, {})
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream")
-            if path == "/scene":   # the scene (scene.json), made on the first ask
+            if path == "/scene":   # the scene (scene.json; ?alt=: that version's scene.<alt>.json), made on the first ask
                 try:
-                    sc = scene_for(folder, load(rj))
-                    return self.send(200, scene_out(folder, sc)) if sc else self.send(404, {"error": "Only a draft on the edit is a scene."})
+                    sc = scene_for(folder, load(rj), q.get("alt"))
+                    return self.send(200, scene_out(folder, sc, q.get("alt"))) if sc else self.send(404, {"error": "Only a draft on the edit is a scene."})
                 except (scene.SceneError, OSError, KeyError) as e:
                     return self.send(400, {"error": str(e)})
             if path.startswith("/scene/asset/"):   # an asset the scene names: its seek-friendly copy once made
                 try:
-                    a = scene.load(folder)["assets"][unquote(path[len("/scene/asset/"):])]
+                    a = scene.load(folder, scene.name_of(q.get("alt")))["assets"][unquote(path[len("/scene/asset/"):])]
                 except (scene.SceneError, OSError, KeyError, ValueError):
                     return self.send(404, {})
                 p = scene.path_of(folder, a)
@@ -3489,14 +3504,15 @@ def make_handler(folder, token):
                                      f"overrides.json added_cards has it (card {key}). Plan again so it shows."})
             if path == "/scene/ops":   # the page's edit of the scene: ops applied in order, kept for Undo (j); no note for Claude
                 try:
-                    sc = scene_for(folder, load(rj))
+                    alt = body.get("alt") or None   # a version's own scene
+                    sc = scene_for(folder, load(rj), alt)
                     if sc is None:
                         return self.send(409, {"error": "Only a draft on the edit is a scene."})
                     sc = scene.apply(sc, body.get("ops") or [], edit=folder)
-                    sc = scene.save(folder, sc)
+                    sc = scene.save(folder, sc, scene.name_of(alt))
                 except (scene.SceneError, TypeError, ValueError, AttributeError) as e:
                     return self.send(400, {"error": str(e)})
-                return self.send(200, {"ok": True, "scene": scene_out(folder, sc)})
+                return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt)})
             if path == "/timeline/restore":   # Undo or Redo of a hand edit: its files as they were before it, or after it
                 d, js = load(rj), JOURNAL.get(str(folder)) or []
                 try:
@@ -3513,7 +3529,7 @@ def make_handler(folder, token):
                             (folder / n).unlink(missing_ok=True)
                         elif not (folder / n).exists() or (folder / n).read_bytes() != b:
                             (folder / n).write_bytes(b)
-                if any(j["before"].get(n) != j["after"].get(n) for n in HAND_FILES if n != scene.NAME):   # a scene edit bakes nothing
+                if any(j["before"].get(n) != j["after"].get(n) for n in HAND_FILES if not n.startswith("scene")):   # a scene edit bakes nothing
                     bake_soon(folder)
                 return self.send(200, {"ok": True})
             if path == "/card/dup":   # Alt-drag on the video: a copy of a card at a new box, an added card like a dropped picture
@@ -3648,7 +3664,7 @@ def make_handler(folder, token):
                 d = load(rj)
                 if d.get("stage") != "edit" or d.get("stills") or d.get("raw"):
                     return self.send(409, {"error": "Export opens on the edit."})
-                return self.send(200, {"ok": True}) if start_export(folder) else self.send(409, {"error": "An export is running."})
+                return self.send(200, {"ok": True}) if start_export(folder, body.get("alt")) else self.send(409, {"error": "An export is running."})
             if path == "/export/reveal":   # Show in Finder: the last export, picked in its folder
                 p = Path((EXPORT.get(str(folder)) or {}).get("file") or last_export(folder) or "-")
                 if not p.is_file():
@@ -5322,7 +5338,7 @@ def demo_bake(tmp):
     assert export_src(f, {}, run=fake) == Path(d["video"]) and len(ran) == n + 1, "a new edit: baked first"
     assert load(f / "plan.json")["texts"][1]["text"] == "hey" and export_left_out(f, d) is None
     EXPORT[str(f)] = {"state": "working", "since": time.time()}
-    r0, scene.render = scene.render, lambda e, out, log=None: Path(shutil.copy2(d["video"], out))   # Remotion faked
+    r0, scene.render = scene.render, lambda e, out, log=None, name=None: Path(shutil.copy2(d["video"], out))   # Remotion faked
     export_job(f, run=fake)
     scene.render = r0
     assert (f / scene.NAME).is_file(), "Export renders the scene"
@@ -5494,6 +5510,11 @@ def demo_layers(tmp):
     v, tx, au = ([it for t in sc["tracks"] if t["name"] == n for it in t["items"]] for n in ("Video", "Text", "Placed sounds"))
     assert [(x["start"], x["end"], x["in"]) for x in v] == [(0, 1, 0), (1, 3.5, 1.5)] and v[1]["cut"]["before"]["reason"] == "by hand", v
     assert [(x["text"], x["start"], x["end"]) for x in tx] == [("hi", 2.0, 3.0)] and [(x["start"], x["volume"]) for x in au] == [(1.5, 0.5)], (tx, au)
+    # a version (a trial reel) is its own scene, scene.<alt>.json: its MP4 as one clip, none of the main draft's hand edits
+    sv = scene_for(f, {**d, "alts": [{"name": "t1", "video": str(base)}]}, "t1")
+    assert (f / "scene.t1.json").is_file() and not (f / scene.NAME).exists() and [t["name"] for t in sv["tracks"]] == ["Video"], sv["tracks"]
+    assert "scene.t1.json" in hand_files(f) and scene_out(f, sv, "t1")["assets"]["draft"]["url"].endswith("&alt=t1")
+    (f / "scene.t1.json").unlink()
     ran = []
 
     def fake(cmd, **k):   # edit.py render: the plan's own video as the render

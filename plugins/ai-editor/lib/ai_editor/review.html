@@ -282,7 +282,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 
 body.asidex #rszside{display:none}
 body.edro .eitem{pointer-events:none}body.edro .ehd button{display:none}
-body.edalt .etrack:not([data-row="vid"]),body.edalt .ehd:not(:first-child){display:none}
+
 /* the edit, tidied (body.edcalm, calm()): edit tools only on the rail, transcript left, video big, one control row, one timeline */
 #railtx{display:none}body.edcalm #railtx{display:flex}
 body.edcalm .rail a.ritem,body.edcalm .rail .rnew,body.edcalm #railupd:not(.rupd),body.edcalm #railtog{display:none}
@@ -640,7 +640,7 @@ body.tside #tside{display:flex}
 .tl.ed [data-h=n],.tl.ed [data-h=s]{left:50%;width:16px;height:6px;margin-left:-8px;border-radius:3px;cursor:ns-resize}.tl.ed [data-h=n]{top:-7px}.tl.ed [data-h=s]{bottom:-7px}
 .tl.ed [data-h=rot],.csel [data-h=rot]{left:50%;top:-30px;margin-left:-6px;border-radius:50%;cursor:grab}.tl.ed [data-h=rot]{top:-34px;margin-left:-6px}
 .csel [data-h=n]{left:50%;top:0;cursor:ns-resize}.csel [data-h=s]{left:50%;bottom:0;cursor:ns-resize}.csel [data-h=w]{left:0;top:50%;cursor:ew-resize}.csel [data-h=e]{right:0;top:50%;cursor:ew-resize}
-#guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}#guides .szone{position:absolute;left:5.56%;top:13.02%;width:81.48%;height:61.98%;outline:1px dashed rgba(255,255,255,.4)}
+#guides{z-index:5}#guides .sgl{position:absolute;background:rgba(255,255,255,.9);box-shadow:0 0 0 1px rgba(0,0,0,.35)}
 #ibody{flex:1;overflow:auto;padding:12px 16px}.ihead{margin:0 0 4px;display:flex;flex-direction:column;gap:2px}.ihead b{font-size:14px;line-height:18px;color:var(--strong)}.ihead span{font-size:12px;color:var(--muted)}
 .tf>span{flex-shrink:0;width:84px;font-size:12px;color:var(--muted)}.tfv .inum{flex:1;min-width:0;height:32px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:0 8px;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
 .tfv em{font-style:normal;font-size:12px;color:var(--muted);width:24px}.tfv output.wide{width:56px}.ifull{width:100%;height:36px;border-radius:8px;border:1px solid var(--line2);font-size:13px;font-weight:600;color:var(--ink)}.ifull:hover{border-color:var(--ink)}
@@ -1409,9 +1409,9 @@ function capWords(cs){const T=TO(),pps=Math.max(1,$('edtracks').clientWidth-140)
   for(const c of cs){const t=capText(c).text;if(!t||inGone(...capAt(c)))continue;const[s,e]=capAt(c).map(so);if(a==null)a=s;b=e;words.push(t);if((b-a)*pps>=70)flush()}
   flush();return out.join('')}
 function renderEdTracks(){const E=$('edtracks'),T=D();
-  // an approved draft or another version still shows it, to look and scrub (body.edro). A version has only its video here, so just its own bar (body.edalt)
+  // an approved draft still shows it, to look and scrub (body.edro). A version is edited like the main draft (its own scene)
   const on=!!(S&&view&&view.stage==='edit'&&isCur()&&!previewOn&&!cmp)&&!!T;$('timeline').classList.toggle('edon',on);calm(on);
-  document.body.classList.toggle('edro',on&&(!noteOk()||!!alt));document.body.classList.toggle('edalt',on&&!!alt);
+  document.body.classList.toggle('edro',on&&!noteOk());
   if(!on){E.innerHTML='';E._h='';return}
   if(window.SC&&SC.on)return SC.tl();   // a scene: one row per track (review-scene.js)
   const TT=TO(),pc=t=>Math.max(0,Math.min(100,so(t)/TT*100)),it=data().items||{};   // pc: on the output clock (ripple)
@@ -2498,7 +2498,7 @@ const fsAt=e=>{const r=$('fsscrub').getBoundingClientRect();return Math.min(1,Ma
 $('fsscrub').addEventListener('pointerdown',e=>{fsDrag=true;$('fsscrub').setPointerCapture(e.pointerId);v.currentTime=fsAt(e)*D()});
 $('fsscrub').addEventListener('pointermove',e=>{const h=$('fshover'),f=fsAt(e);h.style.display='block';h.style.left=f*100+'%';h.textContent=fmtx(f*D());if(fsDrag)v.currentTime=f*D()});
 $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscrub').addEventListener('pointerleave',()=>{if(!fsDrag)$('fshover').style.display='none'});
-$('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render()};
+$('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
 // the version menu: the app's own list, built from the select (renderMeta fills that), roomy rows, opens up when it has no room below
 {const M=document.createElement('div'),B=$('vbtn');M.id='vmenu';M.hidden=true;M.setAttribute('role','listbox');document.body.append(M);
   const TK='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -2685,15 +2685,10 @@ function cardPress(e,el){const k=!e.target.dataset.h&&document.elementsFromPoint
   const cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   if(h==='rot')return rotDrag(e,el,[r.left+(b0[0]+b0[2]/2)/100*r.width,r.top+(b0[1]+b0[3]/2)/100*r.height],csel.rot,a=>{csel.rot=a;el.style.transform=a?`rotate(${a}deg)`:'';liveSync()},a=>inspCommit('rotation',a));
   el.onpointermove=ev=>{if(!go&&Math.hypot(ev.clientX-x0,ev.clientY-y0)<3)return;go=true;const dx=(ev.clientX-x0)/r.width*100,dy=(ev.clientY-y0)/r.height*100;let[x,y,w,ht]=b0;guides(true);
-    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r,ev)}   // frame centre, the other items, the safe zone
+    if(!h){x=cl(x+dx,-w/2,100-w/2);y=cl(y+dy,-ht/2,100-ht/2);[x,y]=snapBox([x,y,w,ht],lines,r,ev)}   // frame centre, the other items
     else{const keep=ev.shiftKey||!!cpic(csel.x)&&h.length===2,l=h.includes('w'),t=h.includes('n'),hz=h!=='n'&&h!=='s',vt=h!=='w'&&h!=='e';   // a corner keeps a picture's shape, Shift any card's
       w=hz?Math.max(4,b0[2]+(l?-dx:dx)):b0[2];ht=keep?w*ar:vt?Math.max(4,b0[3]+(t?-dy:dy)):b0[3];if(keep&&!hz){ht=Math.max(4,b0[3]+(t?-dy:dy));w=ht/ar}
       if(l)x=b0[0]+b0[2]-w;else if(!hz)x=b0[0]+(b0[2]-w)/2;if(t)y=b0[1]+b0[3]-ht;else if(!vt)y=b0[1]+(b0[3]-ht)/2;[x,y,w,ht]=[x,y,w,ht].map(q=>Math.round(q*10)/10)}
-    if(v.videoHeight>v.videoWidth){   // reels: inside the safe zone (x 60-940, y 250-1440 of 1080x1920)
-      const X0=5.6,X1=87,Y0=13,Y1=75,keep=!!h&&!!cpic(csel.x);if(w>X1-X0){w=X1-X0;if(keep)ht=w*ar}if(ht>Y1-Y0){ht=Y1-Y0;if(keep)w=ht/ar}
-      if(h){const l=h.includes('w'),t=h.includes('n'),fx=l?b0[0]+b0[2]:x,fy=t?b0[1]+b0[3]:y,mw=l?fx-X0:X1-fx,mh=t?fy-Y0:Y1-fy,k=Math.min(1,mw/w,mh/ht);   // a resize stops at the edge, the other side stays put
-        if(k<1){if(keep){w*=k;ht*=k}else{w=Math.min(w,mw);ht=Math.min(ht,mh)}}if(l)x=fx-w;if(t)y=fy-ht}
-      x=Math.round(Math.min(X1-w,Math.max(X0,x))*10)/10;y=Math.round(Math.min(Y1-ht,Math.max(Y0,y))*10)/10}
     csel.box=[x,y,w,ht];const s2=$('csel');Object.assign(s2.style,{left:x+'%',top:y+'%',width:w+'%',height:ht+'%'});liveSync();inspVals()};
   el.onpointerup=ev=>{el.onpointermove=null;guides(false);if(dup&&cmoved())return cardDup();if(cmoved())return cardSave(false);const c=!h&&(ev.metaKey||ev.ctrlKey)&&cardUnder(ev.clientX,ev.clientY,csel.x.key);if(c)return selectCard(c);drawCard()}}   // let go: saved; Alt: a copy there, the card stays
 document.addEventListener('keydown',e=>{if(!csel||/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement||{}).tagName||'')||KM.off())return;
@@ -3132,11 +3127,11 @@ function textPress(e,el,was){const sp=el.firstChild,h=e.target.dataset.h;v.pause
   if(h){const r=el.getBoundingClientRect(),cx=r.left+r.width/2,cy=r.top+r.height/2,s0=tx.size,d=ev=>Math.hypot(ev.clientX-cx,ev.clientY-cy),d0=Math.max(8,d(e));
     return end(ev=>{tx.size=Math.round(Math.min(20,Math.max(2,s0*d(ev)/d0))*2)/2;const z=$('tsize');if(z)z.value=tx.size;tnums();renderTexts()})}   // a corner, the top or the bottom scales it from its centre
   end(textMove(x0,y0))}
-// the text follows the mouse from where the press began; reels: inside the safe zone
-function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),vert=v.videoHeight>v.videoWidth,ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
+// the text follows the mouse from where the press began
+function textMove(x0,y0){const L=$('tlayer').getBoundingClientRect(),ox=tx.x,oy=tx.y,cl=(n,a,b)=>Math.round(Math.min(b,Math.max(a,n))*10)/10;
   const tr=$('tprev')&&$('tprev').getBoundingClientRect(),hw=tr?tr.width/2/L.width*100:0,hh=tr?tr.height/2/L.height*100:0,lines=snapLines('t'+(tx.edit?tx.edit.id:''));
   return ev=>{guides(true);let x=ox+(ev.clientX-x0)/L.width*100,y=oy+(ev.clientY-y0)/L.height*100;[x,y]=snapBox([x-hw,y-hh,hw*2,hh*2],lines,L,ev).map((q,i)=>q+[hw,hh][i]);
-    tx.x=cl(x,vert?20:12,vert?73:88);tx.y=cl(y,vert?16:8,vert?72:92);renderTexts();txMoreVals()}}
+    tx.x=cl(x,0,100);tx.y=cl(y,0,100);renderTexts();txMoreVals()}}
 function textDrag(x0,y0,ev0){const f=textMove(x0,y0),up=()=>{document.removeEventListener('pointermove',f);document.removeEventListener('pointerup',up);textSoon(250)};
   f(ev0);document.addEventListener('pointermove',f);document.addEventListener('pointerup',up)}
 // a trial reel on screen (its version picked, after Make): the note goes to that trial on the Trial reels tab, at this moment
@@ -3169,7 +3164,7 @@ function renderExport(){const on=exOn(),x=on?S.export:{},w=x.state==='working',b
   else if(x.state==='failed')h=`<b>The export stopped.</b><p>${esc(x.why||'')}</p><div class="exb"><button class="go" data-exgo>Try again</button></div>`;
   box.hidden=!exOpen||!h;h=h&&h+'<button class="exx" data-exclose aria-label="close" title="Close">×</button>';
   if(box._h!==h){box._h=h;box.innerHTML=h}}
-async function exportNow(){exAsk=false;exOpen=true;const r=await fetch('/export',{method:'POST',body:'{}'});
+async function exportNow(){exAsk=false;exOpen=true;const r=await fetch('/export',{method:'POST',body:JSON.stringify({alt})});
   if(!r.ok){const j=await r.json().catch(()=>({}));toast(j.error||'The export did not start.')}await load(true)}
 $('mexport').onclick=()=>{const x=S&&S.export||{};exOpen=true;if(x.left_out){exAsk=true;renderExport()}else exportNow()};
 $('exbox').onclick=e=>{const t=e.target.closest('button');if(!t)return;
@@ -3335,9 +3330,8 @@ $('ibody').addEventListener('click',e=>{const t=inspTarget();if(!t)return;const 
 function rotDrag(e,el,c,a0,live,done){const ang=ev=>Math.atan2(ev.clientY-c[1],ev.clientX-c[0])*180/Math.PI,s0=ang(e);let a=a0;IN.rot0=a0;
   el.onpointermove=ev=>{a=a0+ang(ev)-s0;a=((a+180)%360+360)%360-180;if(ev.shiftKey)a=Math.round(a/15)*15;else for(const q of [-180,-90,0,90,180])if(Math.abs(a-q)<3)a=q;a=Math.round(a);live(a);inspVals()};
   el.onpointerup=()=>{el.onpointermove=el.onpointerup=null;if(a!==a0)done(a)}}
-// snap lines while moving, % of the frame: its centre lines, the other items' edges and centres up now, and on 9:16 the reels safe zone
+// snap lines while moving, % of the frame: its centre lines, the other items' edges and centres up now
 function snapLines(self){const t=v.currentTime,L={x:[50],y:[50]};
-  if(FH()>FW()){L.x.push(5.56,87.04);L.y.push(13.02,75)}
   for(const c of cardsAll()){if(c.key===self||!(c.s<=t&&t<c.e))continue;const p=(S.cards_pending||[]).find(p=>p.key===c.key&&p.box),[x,y,w,h]=p?p.box:c.box;L.x.push(x,x+w/2,x+w);L.y.push(y,y+h/2,y+h)}
   for(const x of textItems())if('t'+x.id!==self&&x.start<=t&&t<x.end){L.x.push(x.x_pct??50);L.y.push(x.y_pct??40)}
   return L}
@@ -3345,7 +3339,7 @@ function snapBox(b,L,r,ev){const th=[6/r.width*100,6/r.height*100];IN.g={x:[],y:
   [['x',0,2],['y',1,3]].forEach(([k,i,j],n)=>{let best=null;for(const q of [b[i],b[i]+b[j]/2,b[i]+b[j]])for(const l of L[k]){const d=l-q;if(Math.abs(d)<th[n]&&(!best||Math.abs(d)<Math.abs(best.d)))best={d,l}}
     if(best){out[n]=b[i]+best.d;IN.g[k]=[best.l]}});drawGuides();return out}
 function guides(on){if(IN.gon===on)return;IN.gon=on;if(!on)IN.g={x:[],y:[]};drawGuides()}
-function drawGuides(){const G=$('guides');G.innerHTML=!IN.gon?'':(FH()>FW()?'<div class="szone"></div>':'')+IN.g.x.map(x=>`<div class="sgl" style="left:${x}%;top:0;width:1px;height:100%"></div>`).join('')+IN.g.y.map(y=>`<div class="sgl" style="top:${y}%;left:0;height:1px;width:100%"></div>`).join('')}
+function drawGuides(){const G=$('guides');G.innerHTML=!IN.gon?'':IN.g.x.map(x=>`<div class="sgl" style="left:${x}%;top:0;width:1px;height:100%"></div>`).join('')+IN.g.y.map(y=>`<div class="sgl" style="top:${y}%;left:0;height:1px;width:100%"></div>`).join('')}
 // Alt-drag a card: a copy lands where it was let go (review.py /card/dup), the card stays
 async function cardDup(){const c=csel,nb=c.box.slice();c.box=c.orig.slice();cardLive();const r=await post('/card/dup',{key:c.x.key,box:nb});
   if(!r.key)return toast(r.error||'That did not save.');let cur=r.key;edPush('image copied',()=>edSave('/card/edit',{key:cur,label:'the copy',t:r.start,t_end:r.end,deleted:true}),async()=>{const a=await post('/card/dup',{key:c.x.key,box:nb});cur=a.key;await load()});

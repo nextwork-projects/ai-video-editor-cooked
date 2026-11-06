@@ -77,6 +77,13 @@ each line. `outline.width` is the CSS text stroke (half of it shows outside the 
   gaps between them, each clip after one with `cut.before` {`reason`: "by hand"}. Every hand edit already on it comes
   over as items on the cut's clock: the typed texts (minus the ones burned in, `burned_labels`), the placed sounds
   (minus the ones mixed in), a track per lane (a hidden or muted lane is a hidden or muted track).
+- Every version (a trial reel, any other version in the Version menu, review.json `alts`) is its own scene in
+  `<edit>/scene.<alt>.json` (`scene.name_of`: a name with characters other than letters, digits, - and _ becomes those
+  plus a short hash). It is made the same way: `from_plan` when the version has its own `plan`, else `from_video` with
+  its MP4 as one clip (the main draft's texts.json, sounds.json and overrides.json are the main draft's only). The
+  routes take the version: `GET /scene?alt=`, `/scene/asset/<id>?alt=`, `POST /scene/ops {"ops", "alt"}`,
+  `POST /export {"alt"}` (saved as `<download name> - <alt>.mp4`, `/export`'s `alt` says which). The page swaps the
+  scene when the version changes, with no reload, and keeps an undo history per version.
 
 ## The AI's cuts are clips
 
