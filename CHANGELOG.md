@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.41, creator-teardown 2.7.41 (2026-11-06)
+- The Properties panel closes. Its × hides it and the video gets the room; picking something keeps it closed, so the video never jumps. Properties in the left rail opens it again, and so does any tool there. It remembers which way you left it.
+
 ## ai-editor 2.7.40, creator-teardown 2.7.40 (2026-11-05)
 - Scenes. A cooked. edit now opens as a scene: the footage, every text, picture, card, caption and sound is its own item on its own track, drawn the same way on the page and in the export.
 - Every element movable. Press on anything on the video to move it, drag a handle to resize or rotate it, crop a picture or a clip, and trim or slide it on the timeline. Its settings open on the left.
