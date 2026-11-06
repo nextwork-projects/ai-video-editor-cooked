@@ -144,6 +144,30 @@ shrinks), so captions, texts and cards stay on their words. `remove` of a clip o
 start, end or in never ripples. Captions are timed
 from the raw take's words through the same clips, so a restored piece gets its captions back.
 
+The page shows the cuts at any zoom: a yellow tick per cut on the ruler (hover: why, the words, the seconds, Bring back;
+click: the playhead goes there), the Video row's list button (every cut with its time, a row jumps there, Bring back),
+and Up / Down jump between them.
+
+## Editing on the page
+
+- Split (S, Cmd+B, the scissors beside the timeline zoom): the picked clips at the playhead, or with none picked the clip
+  under it on the main video track. Each part keeps all of the clip's keys, moved to its own start, so the picture never
+  jumps. Delete / Backspace (or the bin beside it): the picked clips, or the clip under the mouse once it has moved off the
+  pick; on the main track the gap closes. Each is one undo.
+- The keyframe lane: a picked clip opens a thin row per animated property under its track (Scale, Position, Size,
+  Rotation, Opacity), a diamond per key. A diamond stands for every key the clip has at that time (an AI zoom is scale,
+  x and y together): click goes there and shows it in Properties (opened if closed: ease to the next key, Delete
+  keyframe), drag moves it in time, Delete removes it. The ◇ beside a field in Properties adds or removes a key at the
+  playhead; a keyed field shows in yellow. Scale has no plain field: one key holds it.
+- A field being typed in lets go on any press on the video or the rows, so the next pick and its keys always work.
+
+## Footage covers the frame
+
+`scene.cover` (from_plan, and once on load for a scene.json without `covered`, logged): a clip on the first visual
+track that leaves an edge of the frame uncovered (a cut the house centre step slid sideways: the render mirrored the
+strip in) has each short zoom key raised about the clip's centre, just enough, and grows if still short. The zooms that
+already covered keep their framing. Each zoom key is scaled about its own zoom's origin (StyleEdit zoomAt).
+
 ## Migration
 
 - A cooked. plan draft becomes a scene (`scene.py from-plan`): the footage as the clips above (from spans.json
