@@ -1024,7 +1024,8 @@ def words_of(transcript):
         return []
     d = load(transcript)
     ws = d.get("words", []) if isinstance(d, dict) else d
-    return [w for w in ws if isinstance(w, dict) and w.get("type", "word") == "word"]
+    ws = [{"text": w["w"], "start": w["s"], "end": w["e"]} if isinstance(w, dict) and {"w", "s", "e"} <= w.keys() else w for w in ws]   # a voiceover's {w, s, e}
+    return [w for w in ws if isinstance(w, dict) and w.get("type", "word") == "word" and {"text", "start", "end"} <= w.keys()]
 
 
 def words_at(transcript, t0, t1):

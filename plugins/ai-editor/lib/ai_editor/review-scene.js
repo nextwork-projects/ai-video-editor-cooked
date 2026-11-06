@@ -21,7 +21,7 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .eitem.sc{cursor:grab;overflow:visible}.eitem.sc>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;pointer-events:none}.eitem.sc.sel{outline:2px solid #FFFFFF;outline-offset:1px;z-index:2}
 .eitem.sc::before,.eitem.sc::after{content:"";position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}.eitem.sc::before{left:-1px}.eitem.sc::after{right:-1px}
 .eitem.sc img{height:18px;width:auto;max-width:32px;border-radius:3px;margin-right:4px;pointer-events:none}.eitem.sc.shp{background:#4A3B2A;border-color:#8A6A44;color:#FFFFFF;padding:0 6px}
-.eitem.sc.cut0{border-left:3px solid #FFD60A}.sck{position:absolute;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;transform:rotate(45deg);background:#FFD60A;pointer-events:none}
+.eitem.sc.cut0{border-left:3px solid #FFD60A}.sck{display:none;position:absolute;top:50%;width:7px;height:7px;margin:-3.5px 0 0 -3.5px;transform:rotate(45deg);background:#FFD60A;pointer-events:none}.eitem.sc.sel .sck{display:block}   /* keys show on the picked item only, as CapCut does */
 .scj{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;z-index:4;background:#FFD60A;pointer-events:none}.scj::after{content:"";position:absolute;left:-5px;top:-8px;width:12px;height:16px;pointer-events:auto;cursor:help}   /* a 2 px line on each AI cut; its top end takes the hover, the edges stay free to trim */
 .scj>b{display:none;position:absolute;left:-5px;top:-7px;width:12px;height:7px;border-radius:3px 3px 0 0;background:#FFD60A;pointer-events:none}.scj.t>b,.scj:hover>b{display:block}   /* the tab: on hover, or when the joins are far enough apart (zoomed in) */
 .scj>span{display:none;position:fixed;font-style:normal;z-index:9;width:max-content;max-width:300px;flex-direction:column;gap:6px;padding:10px 12px;border-radius:8px;background:var(--panel);border:1px solid var(--line2);box-shadow:0 8px 24px rgba(0,0,0,.4);font-size:12px;font-weight:500;line-height:16px;color:var(--strong);white-space:normal;cursor:default}
@@ -42,9 +42,9 @@ function scVal(it,p,t){const k=it.keys&&it.keys[p];const b=p==='scale'?1:it[p]??
 // a change to an animated prop is a key at the playhead (CapCut's way); any other prop changes the item
 function scSet(it,p,x,t){const k=it.keys&&it.keys[p];if(!k||!k.length){it[p]=x;return}const u=+(t-it.start).toFixed(3),f=1/(SC.s.fps||30);
   const i=k.findIndex(q=>Math.abs(q[0]-u)<f/2);if(i>=0)k[i][1]=x;else{k.push([u,x,'inout']);k.sort((a,b)=>a[0]-b[0])}}
-const TXH={};function scTextH(it){const sig=[it.text,it.font,it.weight,it.size,it.w,it.line_height,(it.box||{}).pad].join('|');if(TXH[sig])return TXH[sig];
-  const d=document.createElement('div');d.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;overflow-wrap:anywhere;width:${it.w||800}px;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700};font-size:${it.size||64}px;line-height:${it.line_height||1.15}`;
-  d.textContent=it.text||' ';document.body.appendChild(d);const h=d.offsetHeight+2*((it.box||{}).pad||0);d.remove();return TXH[sig]=h}
+const TXH={};function scTextH(it){const sig=[it.text,it.font,it.weight,it.size,it.w,it.line_height,JSON.stringify((it.box||{}).pad)].join('|');if(TXH[sig])return TXH[sig];
+  const d=document.createElement('div');d.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;white-space:pre-wrap;overflow-wrap:anywhere;width:${it.w||800}px;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700};font-size:${it.size||64}px;line-height:${it.line_height||1.2}`;
+  d.textContent=it.text||' ';document.body.appendChild(d);const b=it.box,pd=b&&b.pad,h=d.offsetHeight+(b&&b.block?2*(Array.isArray(pd)?(+pd[1]||0):(pd??(it.size||64)*.1)):0);d.remove();return TXH[sig]=h}   // as SceneEdit lays it: box.pad is px or [x, y], only a block box adds height
 function scGeo(it,t){const s=scVal(it,'scale',t),w=scVal(it,'w',t)||it.w||100;return {x:scVal(it,'x',t),y:scVal(it,'y',t),w:w*s,h:(it.type==='text'?scTextH({...it,w}):scVal(it,'h',t)||100)*s,r:scVal(it,'rotation',t),s}}
 const scDur=s=>Math.max(.1,...scAll(s).map(o=>o.it.end||0));
 // the ops that take scene a to scene b (SCENE.md): tracks added, track fields, items added, moved, changed, removed

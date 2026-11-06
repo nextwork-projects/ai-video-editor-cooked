@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -765,10 +766,15 @@ def path_of(edit, a, playable=True):
     return p if p.is_absolute() else Path(edit) / p
 
 
+PROXY_LOCK = threading.Lock()   # one proxy made at a time: an export pressed while the page's copy is still being made waits for it
+
+
 def ensure_proxies(edit, sc):
     """Make every proxy the scene names that is not there yet (the export waits for them)."""
-    for aid, a in sc["assets"].items():
-        if a.get("proxy") and not (Path(edit) / a["proxy"]).is_file():
+    with PROXY_LOCK:
+        for aid, a in sc["assets"].items():
+            if not a.get("proxy") or (Path(edit) / a["proxy"]).is_file():
+                continue
             out = Path(edit) / a["proxy"]
             out.parent.mkdir(parents=True, exist_ok=True)
             tmp = out.with_name(out.stem + ".part.mp4")
