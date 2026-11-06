@@ -6,7 +6,7 @@
 // it only uses that script's globals ($, v, S, post, edPush, ...) once it runs.
 var SC={on:false,s:null,pl:null,sel:new Set(),crop:false,edit:null,last:'',busy:0,mov:0};
 {const st=document.createElement('style');st.textContent=`
-body.scene #tside{display:flex}body.scene #tclose{display:none}body.scene .left{padding-left:16px;padding-right:16px}   /* the panel slot always there: a pick never moves the video */
+body.scene #tside{display:flex}body.scene.scnoside #tside{display:none}body.scene .left{padding-left:16px;padding-right:16px}#railinsp{display:none}body.scene #railinsp{display:flex}   /* the panel stays put while open, so a pick never moves the video; its × closes it until a rail tool or Properties opens it again */
 #scl{display:none;width:100%;height:100%;background:var(--film)}body.scene #scl{display:block}body.scene #live,body.scene #v{display:none!important}
 body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.scene #cplayer{display:none!important}
 #scover{display:none;position:absolute;left:0;top:0;transform-origin:0 0;z-index:6;touch-action:none}body.scene #scl,#scover{-webkit-user-select:none;user-select:none}#scover .sced{-webkit-user-select:text;user-select:text}   /* a pick never selects the words: only the in-place editor does */body.scene #scover{display:block}
@@ -271,7 +271,7 @@ function scFields(it){const V=scVis(it),F=[];const n=(p,l,st,u,o)=>F.push({p,l,k
   n('start','Start',.01,'s',{min:0});n('end','End',.01,'s',{min:0});return F}
 const scPath=(it,p)=>p.split('.').reduce((o,k)=>o==null?o:o[k],it);
 function scPut(it,p,x,t){const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
-SC.insp=function(){if(!SC.on)return;const ids=[...SC.sel].filter(k=>scGet(k)),B=$('ibody');
+SC.insp=function(){if(!SC.on||SC.noside)return;const ids=[...SC.sel].filter(k=>scGet(k)),B=$('ibody');
   if(!ids.length){if(tool&&tool!=='insp')return;if(tool!=='insp')openTool('insp');const h='<p class="ihead"><b>Nothing picked</b><span>Click anything on the video or the timeline to change it here.</span></p>';if(B._h!==h)B.innerHTML=B._h=h;return}
   if(tool&&tool!=='insp'&&!SC.pick)return;SC.pick=0;if(tool!=='insp')openTool('insp');const t=scNow(),its=ids.map(k=>scGet(k).it),one=its[0],fs=scFields(one).filter(f=>f.k!=='txt'||its.length===1).filter(f=>its.every(i=>scFields(i).some(g=>g.p===f.p)));
   const val=f=>KEYP.includes(f.p)?scVal(one,f.p,t):scPath(one,f.p),hk=p=>(one.keys&&one.keys[p]||[]).some(q=>Math.abs(one.start+q[0]-t)<1/(SC.s.fps||30)),kb=f=>KEYP.includes(f.p)&&its.length===1?`<button class="sckey${hk(f.p)?' on':''}" data-kp="${f.p}" title="${hk(f.p)?'Remove the key here':'Add a key here: it animates to the next key'}" aria-label="keyframe ${f.l.toLowerCase()}"></button>`:'';
@@ -307,7 +307,7 @@ SC.addMedia=async function(m,t,px,py){const sz=await medSize(m),vid=/\.(mp4|mov|
   return SC.add(vid?'a video':'an image',{type:vid?'video':'image',name:m.src.split('/').pop(),asset:a,...(vid?{in:0,speed:1,volume:1,fade_in:0,fade_out:0}:{}),x:Math.round(px!=null?px/100*W:W/2),y:Math.round(py!=null?py/100*H:H*.35),w:Math.round(sz[0]*f),h:Math.round(sz[1]*f),rotation:0,opacity:1,fit:'cover',start:t,dur:d},'visual',{src:m.src,kind:vid?'video':'image',w:sz[0],h:sz[1],url:'/live/media/'+encodeURI(m.src),...(vid?{duration:d}:{})})};
 SC.addSound=(name,t,dur)=>SC.add('a sound',{type:'audio',name:name.split('/').pop().replace(/\.[a-z0-9]+$/i,''),asset:scId('s'),in:0,speed:1,volume:1,fade_in:0,fade_out:0,start:t,dur:dur||3},'audio',{src:name,lib:true,kind:'audio',duration:dur||3});   // a library sound: its name, not a file in the edit (SCENE.md has no library src yet)
 document.addEventListener('keydown',e=>{if(SC.key(e))e.stopImmediatePropagation()},true);
-$('railtext').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();SC.addText(scNow())},true);
+$('railtext').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();if(SC.noside)scSide(true);SC.addText(scNow())},true);
 $('scover').addEventListener('click',e=>e.stopPropagation());
 // ---- the transcript follows the clips: a raw word inside a clip of the main track is kept, one in a gap is struck
 SC.txSync=function(){if(!SC.on||typeof W==='undefined'||!W.length)return;const main=SC.s.tracks.find(tr=>tr.kind==='visual'&&tr.items.some(i=>i.cut))||null;if(!main)return;
@@ -316,3 +316,11 @@ SC.txSync=function(){if(!SC.on||typeof W==='undefined'||!W.length)return;const m
 // ---- Export: review.html's one Export button (review.py export_job renders the scene when there is one)
 // a click round the frame (the black at the sides, the empty stage): none picked
 document.addEventListener('pointerdown',e=>{if(!SC.on||e.button||!e.target.closest('#stage')||e.target.closest('#scover,button,input,select,textarea,[contenteditable],.pmenu')||!SC.sel.size&&!SC.crop)return;SC.edDone();SC.sel.clear();SC.crop=false;SC.show()});
+
+// the side panel's ×: closed stays closed (a pick never opens it, so the video never jumps); Properties or any rail tool opens it
+try{SC.noside=localStorage.getItem('review-scside')==='0'}catch(e){}
+function scSide(open){SC.noside=!open;document.body.classList.toggle('scnoside',!open);try{localStorage.setItem('review-scside',open?'1':'0')}catch(e){}}
+document.body.classList.toggle('scnoside',!!SC.noside);
+const scOT=openTool;openTool=function(n){if(SC.on&&n&&SC.noside)scSide(true);return scOT(n)};
+$('tclose').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();scSide(false);scOT(null)},true);
+$('railinsp').onclick=()=>{if(SC.noside||tool!=='insp'){scSide(true);openTool('insp');SC.insp()}else{scSide(false);scOT(null)}};
