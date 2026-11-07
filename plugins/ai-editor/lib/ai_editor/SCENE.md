@@ -53,7 +53,8 @@ each line. `outline.width` is the CSS text stroke (half of it shows outside the 
   `{"op": "remove_track", "track": id}`, `{"op": "split", "item": id, "t": seconds}`,
   `{"op": "trim", "item": id, "edge": "start" | "end", "by": seconds}` (a later edge for by > 0: the in-point
   moves with a start edge), `{"op": "asset", "id": id, "asset": {"src": "media/x.mp4"}}` (a file in the edit,
-  probed). The page gets each asset with `url` (`/scene/asset/<id>?v=`, never saved).
+  probed); `{"op": "asset", "id": id, "asset": null}` drops an asset no item uses (the undo of an add). The page gets
+  each asset with `url` (`/scene/asset/<id>?v=`, never saved).
 - `window.CookedLive.mountScene(el, scene)` returns the same player stand-in `mount()` does; `.update(scene)`
   redraws at once without a reload.
 - Export is one route family. `POST /export` starts it and renders the scene with Remotion (the `Scene` composition,
@@ -160,6 +161,18 @@ and Up / Down jump between them.
   keyframe), drag moves it in time, Delete removes it. The ◇ beside a field in Properties adds or removes a key at the
   playhead; a keyed field shows in yellow. Scale has no plain field: one key holds it.
 - A field being typed in lets go on any press on the video or the rows, so the next pick and its keys always work.
+
+## Adding audio
+
+- Every sound is a file in the edit's `media/`, an asset, and an `audio` item. `POST /scene/sound {"name"}` copies a
+  library sound (`custom/sounds`) in (an APFS clone, the same file once: `scene.bring_in`); `POST /scene/upload?name=`
+  streams an audio file, or a video whose sound is wanted, in. Both answer `{src, duration}` and the page adds the item.
+- Where it goes: the Sounds panel's Add (or a row dragged onto the timeline), + Audio (a file picker) and a file dropped
+  from Finder put it at the playhead or the drop time, on the first audio track that is unlocked, unmuted and free there,
+  else a new one. It lasts the file, up to the scene's end. The panel lists the sounds picked for a moment first.
+- `GET /scene/peaks/<id>?alt=` is an asset's waveform (`scene.peaks`: 50 values a second, cached in
+  `.scene/<id>.peaks.json`); each audio clip draws the part it plays. A top corner of an audio clip drags its fade.
+- Volume is 0 to 1: the player and the export play no louder than the file.
 
 ## Footage covers the frame
 

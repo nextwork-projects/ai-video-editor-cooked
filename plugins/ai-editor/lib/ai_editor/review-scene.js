@@ -49,7 +49,11 @@ body.scene .edleft{width:156px}.eruler .scj{top:auto;bottom:0;height:6px;width:3
 .sccr button{grid-row:1/3;grid-column:3;height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.sccr button:hover{border-color:var(--ink)}
 .tzoom .scbtn{display:none}body.scene .tzoom .scbtn{display:grid;place-items:center}body.scene #scdelb{margin-right:6px}.tzoom .scbtn svg{width:15px;height:15px}
 #ibody .tf.keyed>span{color:#FFD60A}#ibody .tf.keyed .inum{border-color:rgba(255,214,10,.6)}.sckey.has{color:#FFD60A}.sckey.has::before{background:none}
-.sckds{border:1px solid rgba(255,214,10,.4);border-radius:8px;padding:4px 8px;margin-bottom:8px}`;document.head.appendChild(st)}
+.sckds{border:1px solid rgba(255,214,10,.4);border-radius:8px;padding:4px 8px;margin-bottom:8px}
+/* an audio clip: its waveform, its fades shaded, a handle on each top corner to drag a fade (on the picked clip, or on hover) */
+.eitem.sc.snd svg.wv{pointer-events:none}.scfd{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.45);pointer-events:none}.scfd.in{left:0;clip-path:polygon(0 0,100% 0,0 100%)}.scfd.out{right:0;clip-path:polygon(0 0,100% 0,100% 100%)}
+.scfh{display:none;position:absolute;top:-4px;width:9px;height:9px;margin-left:-4.5px;border-radius:50%;background:#FFFFFF;box-shadow:0 0 0 1px rgba(0,0,0,.5);cursor:ew-resize;z-index:3}.scfh[data-fd=out]{margin:0 -4.5px 0 0}.scfh::after{content:"";position:absolute;inset:-5px}
+.eitem.sc.snd.sel .scfh,.eitem.sc.snd:hover .scfh{display:block}`;document.head.appendChild(st)}
 // the mark on a clip Claude added or changed (scene.py ops, by "claude"), until the user changes it
 const SCBY='<svg class="scby" viewBox="0 0 24 24" aria-label="Claude made this"><title>Claude made this</title><path fill="currentColor" d="M12 1.5l1.8 7.2 6.4-3.9-3.9 6.4 7.2 1.8-7.2 1.8 3.9 6.4-6.4-3.9L12 22.5l-1.8-7.2-6.4 3.9 3.9-6.4L.5 12l7.2-1.8-3.9-6.4 6.4 3.9z"/></svg>';
 // ---- the scene: items, values at a time (keys), the diff that becomes ops
@@ -107,6 +111,7 @@ function scDiff(a,b){const ops=[],A={},B={};scAll(a).forEach(o=>A[o.it.id]=o);sc
     if(Object.keys(p).length)ops.push({op:'set',item:id,props:p})}   // a set never ripples: the page moved every later item itself
   for(const id of Object.keys(A))if(!B[id])ops.push({op:'remove',item:id});
   for(const t of a.tracks)if(!b.tracks.some(x=>x.id===t.id))ops.push({op:'remove_track',track:t.id});
+  for(const k of Object.keys(a.assets||{}))if(!(b.assets||{})[k])ops.push({op:'asset',id:k,asset:null});   // after the items that used it: the undo of an add
   return ops}
 // ---- on and off: the scene from GET /scene, the player from CookedLive.mountScene
 const SCQ=()=>alt?'?alt='+encodeURIComponent(alt):'',EHS={};   // a version (a trial reel) edits its own scene, with its own undo
@@ -214,8 +219,9 @@ SC.tl=function(){const E=$('edtracks');if(!SC.on||!SC.s)return;const T=TO()||scD
   const vt=SC.s.tracks.filter(t=>t.kind==='visual').reverse(),ct=SC.s.tracks.filter(t=>t.kind==='captions'),at=SC.s.tracks.filter(t=>t.kind==='audio'),L=[],R=[];
   const head=(tr,cls)=>{const au=tr.kind==='audio',off=au?tr.muted:tr.hidden,nc=scCuts(tr).length;return `<div class="ehd${cls||''}" title="${esc(tr.name||tr.id)}"><span>${esc(tr.name||tr.id)}</span>${nc?`<button data-sccuts="${tr.id}" title="The AI's ${nc} cuts: what was taken out, Bring back" aria-label="list the cuts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h.01M4 12h.01M4 18h.01" stroke-width="3"/></svg></button>`:''}${tr.kind==='visual'&&tr.items.some(i=>i.type==='video')?`<button data-sct="magnet" data-tk="${tr.id}" class="${scMag(tr)?'on':''}" title="${scMag(tr)?'Magnet on: a trim moves everything after it':'Magnet off: a trim leaves a gap'}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3v8a6 6 0 0 0 12 0V3"/><path d="M6 7h4M14 7h4"/></svg></button>`:''}<button data-sct="${au?'muted':'hidden'}" data-tk="${tr.id}" class="${off?'on':''}" title="${au?(off?'Unmute':'Mute'):(off?'Show':'Hide')} this track">${lico((au?LICO.spk:LICO.eye)+(off?LICO.off:''))}</button><button data-sct="locked" data-tk="${tr.id}" class="${tr.locked?'on':''}" title="${tr.locked?'Unlock':'Lock'} this track">${lico(tr.locked?LICO.lock:LICO.open)}</button></div>`};
   const item=(it,tr)=>{const a=it.start,b=it.end,k=it.keys?[...new Set(Object.values(it.keys).flat().map(q=>q[0]))]:[],A=it.asset&&SC.s.assets[it.asset]||{},src=A.src;
-    const nm=it.type==='text'&&it.text||it.name||(it.type==='captions'?'Captions':src?String(src).split('/').pop():it.type);
-    return `<div class="eitem sc ${SCCLS[it.type]||'img'}${SC.sel.has(it.id)?' sel':''}" data-sid="${esc(it.id)}" data-lkey="${esc(it.id)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(nm)} · ${fmtx(a)}–${fmtx(b)} · drag to move, an edge to trim${/video|audio/.test(it.type)?', Alt-drag to slip':''}">${it.type==='image'&&(A.url||src)?`<img src="${esc(A.url||'/live/media/'+encodeURI(src))}" alt="">`:''}<span>${esc(nm)}</span>${k.map(u=>`<i class="sck" style="left:${u/(b-a||1)*100}%"></i>`).join('')}${it.by==='claude'?SCBY:''}</div>`};
+    const nm=it.type==='text'&&it.text||it.name||(it.type==='captions'?'Captions':src?String(src).split('/').pop():it.type),au=it.type==='audio',d=b-a||1;
+    const fd=au?`${scWave(it,d*pps)}${it.fade_in>0?`<i class="scfd in" style="width:${Math.min(100,it.fade_in/d*100)}%"></i>`:''}${it.fade_out>0?`<i class="scfd out" style="width:${Math.min(100,it.fade_out/d*100)}%"></i>`:''}<b class="scfh" data-fd="in" title="Drag to fade in" style="left:max(9px,${Math.min(100,(it.fade_in||0)/d*100)}%)"></b><b class="scfh" data-fd="out" title="Drag to fade out" style="right:max(9px,${Math.min(100,(it.fade_out||0)/d*100)}%)"></b>`:'';
+    return `<div class="eitem sc ${SCCLS[it.type]||'img'}${SC.sel.has(it.id)?' sel':''}" data-sid="${esc(it.id)}" data-lkey="${esc(it.id)}" style="left:${pc(a)}%;width:${pc(b)-pc(a)}%" title="${esc(nm)} · ${fmtx(a)}–${fmtx(b)} · drag to move, an edge to trim${/video|audio/.test(it.type)?', Alt-drag to slip':''}${au?', a top corner to fade':''}">${it.type==='image'&&(A.url||src)?`<img src="${esc(A.url||'/live/media/'+encodeURI(src))}" alt="">`:''}${fd}<span>${esc(nm)}</span>${k.map(u=>`<i class="sck" style="left:${u/(b-a||1)*100}%"></i>`).join('')}${it.by==='claude'?SCBY:''}</div>`};
   const pps=Math.max(200,($('edtracks').clientWidth||900)-120)*(zm||1)/T;   // pixels a second at this zoom
   const joins=tr=>{const js=scCuts(tr);return js.map((i,n)=>{const c=i.cut.before,why=String(c.reason||'cut').replace(/^./,m=>m.toUpperCase());
     const room=Math.min(n?i.start-js[n-1].start:1e9,n<js.length-1?js[n+1].start-i.start:1e9)*pps;   // the tab shows once neighbours are 40 px apart
@@ -232,13 +238,14 @@ SC.tl=function(){const E=$('edtracks');if(!SC.on||!SC.s)return;const T=TO()||scD
   L.push('<div class="ehd newl" data-row="scv"></div>');R.push('<div class="etrack newl" data-row="scv" data-new="visual">Drop here for a new track</div>');
   vt.forEach((t,i)=>row(t,i===vt.length-1?' l1':''));ct.forEach(t=>row(t,' l1'));at.forEach((t,i)=>row(t,i?'':' l1'));
   L.push('<div class="ehd newl" data-row="sca"></div>');R.push('<div class="etrack newl" data-row="sca" data-new="audio">Drop here for a new track</div>');
-  L.push('<div class="scadd"><button data-addtk="visual" title="Add a video track on top">+ Track</button><button data-addtk="audio" title="Add an audio track">+ Audio</button><button data-addit="text" title="Add a text at the playhead">+ Text</button><button data-addit="shape" title="Add a shape at the playhead">+ Shape</button></div>');
+  L.push('<div class="scadd"><button data-addtk="visual" title="Add a video track on top">+ Track</button><button data-addau="1" title="Add a song, a voice-over or any sound file at the playhead">+ Audio</button><button data-addit="text" title="Add a text at the playhead">+ Text</button><button data-addit="shape" title="Add a shape at the playhead">+ Shape</button></div>');
   const h=`<div class="edwrap"><div class="edleft">${L.join('')}</div><div class="edright"><div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(x=>`<span style="left:${x/T*100}%">${st<1?fmtx(x):fmt(x)}</span>`).join('')}${mainT?joins(mainT):''}</div>${R.join('')}<b class="eph" id="eph"></b><b class="esnap" id="esnap" hidden><i></i></b></div></div></div></div>`;
   if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
     // the keyframe lane never grows the timeline (the video would jump on a pick): the rows keep their height without it and scroll
     const wr=E.querySelector('.edwrap'),lh=[...E.querySelectorAll('.edleft .sckh')].reduce((a,x)=>a+x.offsetHeight+2,0);wr.style.height=lh?`calc(${Math.min(wr.scrollHeight-lh,innerHeight*.42)}px + var(--nl,0px))`:''}edPh()};
 // a track's buttons, Bring back on a join, + Track
-$('edtracks').addEventListener('click',e=>{if(!SC.on)return;const b=e.target.closest('[data-sct],[data-back],[data-addtk],[data-addit],[data-sccuts],[data-kopen]');if(!b)return;e.stopPropagation();
+$('edtracks').addEventListener('click',e=>{if(!SC.on)return;const b=e.target.closest('[data-sct],[data-back],[data-addtk],[data-addit],[data-addau],[data-sccuts],[data-kopen]');if(!b)return;e.stopPropagation();
+  if(b.dataset.addau){$('scaudfile').dataset.t=scNow();return $('scaudfile').click()}
   if(b.dataset.sccuts)return SC.cutsList(b);if(b.dataset.kopen)return scOpenInsp();if(b.dataset.addit)return b.dataset.addit==='text'?SC.addText(scNow()):SC.addShape(scNow());
   if(b.dataset.sct){const id=b.dataset.tk,p=b.dataset.sct;return SC.change({hidden:'hide or show a track',muted:'mute a track',locked:'lock a track',magnet:'magnet'}[p],s=>{const tr=s.tracks.find(x=>x.id===id);tr[p]=p==='magnet'?!scMag(tr):!tr[p]})}
   if(b.dataset.back)return SC.bringBack(b.dataset.back);
@@ -264,6 +271,7 @@ SC.bringBack=function(id){const q=scGet(id);if(!q||!q.it.cut||!q.it.cut.before)r
 // Properties shows it, opened if closed; drag: the key moves in time, one undo), and letting go of a field being typed in
 $('edtracks').addEventListener('pointerdown',e=>{if(!SC.on||e.button)return;scBlur();
   if(e.target.closest('.scj>span')){e.stopImmediatePropagation();return}   // its Bring back, never a scrub under it
+  const fh=e.target.closest('.scfh');if(fh){e.stopImmediatePropagation();e.preventDefault();SC.fadeDrag(e,fh);return}
   const tk=e.target.closest('.eruler .scj');if(tk){e.stopImmediatePropagation();e.preventDefault();const q=scGet(tk.dataset.cj);if(q){v.pause();v.currentTime=q.it.start;edPh();SC.draw()}return}
   const kd=e.target.closest('.sckd');if(!kd){if(e.target.closest('.eitem.sc'))SC.kd=null;return}
   e.stopImmediatePropagation();e.preventDefault();v.pause();const id=kd.parentElement.dataset.kid,g=kd.dataset.kg,u0=+kd.dataset.ku,q=scGet(id);if(!q)return;
@@ -354,7 +362,7 @@ function scFields(it){const V=scVis(it),F=[];const n=(p,l,st,u,o)=>F.push({p,l,k
     n('radius','Corners',1,'px');tg('shadow','Shadow',{blur:24,y:8,opacity:.4});if(it.shadow){n('shadow.blur','Shadow blur',1,'px');n('shadow.y','Shadow Y',1,'px');n('shadow.opacity','Shadow opacity',.05,'')}
     tg('border','Border',{width:4,color:'#FFFFFF'});if(it.border){n('border.width','Border width',1,'px');c('border.color','Border colour')}
     s('anim.in','Animation in',SCAN);s('anim.out','Animation out',SCAN);n('anim.dur','Animation time',.05,'s')}
-  if(/^(video|audio)$/.test(it.type)){n('volume','Volume',.05,'',{min:0,max:2});n('speed','Speed',.05,'x',{min:.1,max:8});n('fade_in','Fade in',.05,'s',{min:0});n('fade_out','Fade out',.05,'s',{min:0});n('in','Starts in source',.01,'s',{min:0})}
+  if(/^(video|audio)$/.test(it.type)){n('volume','Volume',.05,'',{min:0,max:1});n('speed','Speed',.05,'x',{min:.1,max:8});n('fade_in','Fade in',.05,'s',{min:0});n('fade_out','Fade out',.05,'s',{min:0});n('in','Starts in source',.01,'s',{min:0})}
   n('start','Start',.01,'s',{min:0});n('end','End',.01,'s',{min:0});return F}
 const scPath=(it,p)=>p.split('.').reduce((o,k)=>o==null?o:o[k],it);
 function scPut(it,p,x,t){const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
@@ -398,7 +406,44 @@ SC.addShape=t=>SC.add('shape',{type:'shape',name:'Shape',fill:'#FFFFFF',stroke:n
 SC.addMedia=async function(m,t,px,py){const sz=await medSize(m),vid=/\.(mp4|mov|m4v|webm)$/i.test(m.src),W=SC.s.width,H=SC.s.height,f=Math.min(W*.7/sz[0],H*.4/sz[1]),a=scId('m');
   let d=3;if(vid)d=await new Promise(res=>{const x=document.createElement('video');x.preload='metadata';x.onloadedmetadata=()=>res(Math.min(x.duration||3,30));x.onerror=()=>res(3);x.src='/live/media/'+encodeURI(m.src)});
   return SC.add(vid?'a video':'an image',{type:vid?'video':'image',name:m.src.split('/').pop(),asset:a,...(vid?{in:0,speed:1,volume:1,fade_in:0,fade_out:0}:{}),x:Math.round(px!=null?px/100*W:W/2),y:Math.round(py!=null?py/100*H:H*.35),w:Math.round(sz[0]*f),h:Math.round(sz[1]*f),rotation:0,opacity:1,fit:'cover',start:t,dur:d},'visual',{src:m.src,kind:vid?'video':'image',w:sz[0],h:sz[1],url:'/live/media/'+encodeURI(m.src),...(vid?{duration:d}:{})})};
-SC.addSound=(name,t,dur)=>SC.add('a sound',{type:'audio',name:name.split('/').pop().replace(/\.[a-z0-9]+$/i,''),asset:scId('s'),in:0,speed:1,volume:1,fade_in:0,fade_out:0,start:t,dur:dur||3},'audio',{src:name,lib:true,kind:'audio',duration:dur||3});   // a library sound: its name, not a file in the edit (SCENE.md has no library src yet)
+// ---- audio, CapCut's way: a library sound, a file from + Audio, a file dropped from Finder. Each is a file in the edit's
+// media/ (review.py /scene/sound copies a library sound in, /scene/upload streams a file in), an asset, and an audio item
+// at t on the first audio track free there (a new track when every one is busy), as long as the file, up to the scene's end
+function scFreeAudio(s,a,b){let tr=s.tracks.find(x=>x.kind==='audio'&&!x.locked&&!x.muted&&!x.items.some(i=>i.start<b-1e-3&&i.end>a+1e-3));
+  if(!tr){tr={id:scId('a'),kind:'audio',name:'Audio '+(s.tracks.filter(x=>x.kind==='audio').length+1),muted:false,locked:false,items:[]};s.tracks.push(tr)}return tr}
+SC.addAudio=function(src,dur,t){const s0=SC.s,D=scDur(s0),a=+Math.max(0,t).toFixed(3),name=src.split('/').pop().replace(/\.[a-z0-9]+$/i,'');
+  let e=a+(dur||3);if(a<D-.1)e=Math.min(e,D);e=+Math.max(a+.1,e).toFixed(3);
+  let aid=Object.keys(s0.assets||{}).find(k=>s0.assets[k].src===src);
+  if(!aid){const base=name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,24)||'a';aid=base;for(let n=2;(s0.assets||{})[aid];n++)aid=base+'-'+n}
+  const it={id:scId('i'),type:'audio',name,asset:aid,in:0,speed:1,volume:1,fade_in:0,fade_out:0,start:a,end:e};
+  return SC.change('add '+name,s=>{s.assets=s.assets||{};if(!s.assets[aid])s.assets[aid]={src,kind:'audio',duration:dur};scFreeAudio(s,a,e).items.push(it)})
+    .then(()=>{if(!scGet(it.id))return;SC.sel=new Set([it.id]);SC.zone='t';SC.show();toast(`${name} added at ${fmtx(a)}.`)})};
+SC.addSound=async function(name,t){const r=await post('/scene/sound',{name});if(!r.ok)return toast(r.error||'That sound was not added.');return SC.addAudio(r.src,r.duration,t)};
+SC.addFile=async function(f,t){toast(`Adding ${f.name}...`);
+  const r=await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/scene/upload?name='+encodeURIComponent(f.name));
+    x.upload.onprogress=e=>{if(e.lengthComputable)toast(`Adding ${f.name}... ${Math.round(e.loaded/e.total*100)}%`)};
+    x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Add it again.'});x.send(f)});
+  if(!r.ok)return toast(r.error||`${f.name} was not added.`);return SC.addAudio(r.src,r.duration,t)};
+{const i=document.createElement('input');i.type='file';i.id='scaudfile';i.hidden=true;i.multiple=true;i.accept='audio/*,video/*,.mp3,.wav,.m4a,.aac,.flac,.ogg,.opus,.mp4,.mov,.m4v,.webm';document.body.appendChild(i);
+  i.addEventListener('change',async()=>{const fs=[...i.files],t=+i.dataset.t||0;i.value='';for(const f of fs)await SC.addFile(f,t)})}
+// a clip's waveform: the asset's peaks from review.py /scene/peaks (fetched once each), the part the clip plays, about one bar per 3 px
+SC.pk={};SC.pkN={};
+function scWave(it,px){const A=SC.s.assets[it.asset]||{},k=(alt||'')+'|'+it.asset+'|'+A.src,P=SC.pk[k];
+  if(!P){SC.pk[k]={busy:1};const redraw=()=>{$('edtracks')._h=null;SC.tl()};   // not saved yet (an add on its way): asked again, 3 times at most
+    fetch('/scene/peaks/'+encodeURIComponent(it.asset)+SCQ()).then(r=>r.ok?r.json():Promise.reject()).then(j=>{SC.pk[k]=j;redraw()})
+      .catch(()=>{const n=SC.pkN[k]=(SC.pkN[k]||0)+1;setTimeout(()=>{if(n<4)delete SC.pk[k];else SC.pk[k]={peaks:[]};redraw()},1500)});return ''}
+  if(!P.peaks||!P.peaks.length)return '';const sp=it.speed||1,i0=Math.floor((it.in||0)*P.rate),i1=Math.min(P.peaks.length,Math.ceil(((it.in||0)+(it.end-it.start)*sp)*P.rate)),sl=P.peaks.slice(i0,i1);
+  const n=Math.max(1,Math.min(sl.length,400,Math.round(px/3)));if(!sl.length)return '';const q=[];for(let j=0;j<n;j++){let m=0;for(let x=Math.floor(j*sl.length/n);x<Math.max(Math.floor(j*sl.length/n)+1,Math.floor((j+1)*sl.length/n));x++)m=Math.max(m,sl[x]||0);q.push(m)}
+  return waveSvg(q)}
+// a fade handle (a top corner of an audio clip) dragged: the fade in or out grows to where it is let go, one undo
+SC.fadeDrag=function(e,fh){const el=fh.closest('.eitem.sc'),id=el&&el.dataset.sid,q=id&&scGet(id);if(!q||q.tr.locked||q.it.locked)return;v.pause();
+  const k=fh.dataset.fd==='in'?'fade_in':'fade_out',o=k==='fade_in'?'fade_out':'fade_in',b0=scCopy(SC.s),W=el.getBoundingClientRect().width,d=q.it.end-q.it.start,x0=e.clientX,f0=q.it[k]||0;let moved=false;
+  SC.sel=new Set([id]);SC.drag=1;edHold=1;SC.show();
+  const mv=ev=>{if(!moved&&Math.abs(ev.clientX-x0)<2)return;moved=true;SC.s=scCopy(b0);const it=scGet(id).it,dx=(ev.clientX-x0)/W*d*(k==='fade_in'?1:-1);
+    it[k]=+Math.max(0,Math.min(d-(it[o]||0),f0+dx)).toFixed(2);SC.show(true);SC.tl()};
+  const up=async()=>{document.removeEventListener('pointermove',mv,true);document.removeEventListener('pointerup',up,true);SC.drag=0;edHold=0;
+    if(moved)await SC.commit(b0,k==='fade_in'?'fade in':'fade out');else SC.show()};
+  document.addEventListener('pointermove',mv,true);document.addEventListener('pointerup',up,true)};
 document.addEventListener('keydown',e=>{if(SC.key(e))e.stopImmediatePropagation()},true);
 $('railtext').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();if(SC.noside)scSide(true);SC.addText(scNow())},true);
 $('scover').addEventListener('click',e=>e.stopPropagation());
