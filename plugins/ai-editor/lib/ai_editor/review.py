@@ -424,7 +424,8 @@ def sounds_info():
     """The Sounds panel: each moment that can have a sound, what plays there now, and the user's own files."""
     sfx = sfx_mod()
     c = sfx.choices()
-    own = sfx.own_sounds()
+    picks = [f for f in c.values() if f not in ("default", "none")]
+    own = sorted(sfx.own_sounds(), key=lambda f: f not in picks)   # the sounds picked for a moment first, then the rest
     return {"cues": [{"cue": k, "label": sfx.LABELS[k][0], "when": sfx.LABELS[k][1], "choice": c[k]} for k in sfx.LABELS],
             "own": own, "own_len": {n: sound_shape(sfx.library_dir() / n, n=8).get("d") for n in own}}
 
@@ -533,6 +534,44 @@ def save_audio(folder, name, stream, n, t, dur_of):
     f = Path(folder) / "sounds.json"
     save(f, {"items": placed_raw(folder) + [x]})
     return x
+
+
+SCENE_AUDIO_EXT = (".mp4", ".mov", ".m4v", ".webm")   # a video whose sound is wanted, beside sfx.SOUND_EXT
+
+
+def scene_audio_upload(folder, name, stream, n):
+    """The scene editor's + Audio, or an audio file dropped from Finder: one file into <edit>/media/ under its own name
+    (-2, -3 when taken), streamed. A video's sound counts. Returns {"src", "duration"}; ValueError with the words to show."""
+    name = re.sub(r"[^\w.\- ]+", "", Path(str(name or "")).name).strip()[:120]
+    if not name or name.startswith(".") or Path(name).suffix.lower() not in (*sfx_mod().SOUND_EXT, *SCENE_AUDIO_EXT):
+        raise ValueError("Add an audio file (mp3, wav, m4a, aac, flac, ogg, opus) or a video with sound.")
+    if not 0 < n <= assets.MAX_VIDEO:
+        raise ValueError(f"{name} is over 2 GB.")
+    d = Path(folder) / "media"
+    d.mkdir(parents=True, exist_ok=True)
+    out, k = d / name, 2
+    while out.exists():
+        out, k = d / f"{Path(name).stem}-{k}{Path(name).suffix}", k + 1
+    assets._stream_to(out, stream, n)
+    try:
+        info = scene.probe(out)
+    except scene.SceneError:
+        info = {}
+    dur = info.get("duration") if info.get("kind") == "audio" else info.get("adur")
+    if not dur:
+        out.unlink(missing_ok=True)
+        raise ValueError(f"{name} has no sound in it.")
+    return {"src": f"media/{out.name}", "duration": round(dur, 3)}
+
+
+def scene_library_sound(folder, name):
+    """A sound from the user's library (custom/sounds) into <edit>/media/ (a clone; the same file once), so the scene
+    holds its own copy. Returns {"src", "duration"}."""
+    sfx = sfx_mod()
+    if name not in sfx.own_sounds():
+        raise ValueError("That sound is not in your library.")
+    src = scene.bring_in(folder, sfx.library_dir() / name)
+    return {"src": src, "duration": round(scene.probe(Path(folder) / src).get("duration") or 0, 3)}
 
 
 _SHAPE = {}
@@ -2874,6 +2913,12 @@ def make_handler(folder, token):
                     return self.send(404, {})
                 p = scene.path_of(folder, a)
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream") if p.is_file() else self.send(404, {})
+            if path.startswith("/scene/peaks/"):   # an asset's waveform for its timeline clips (scene.peaks, cached)
+                try:
+                    aid = unquote(path[len("/scene/peaks/"):])
+                    return self.send(200, scene.peaks(folder, aid, scene.load(folder, scene.name_of(q.get("alt")))["assets"][aid]))
+                except (scene.SceneError, OSError, KeyError, ValueError):
+                    return self.send(404, {})
             if path == "/export":   # the export's state (export_state, the same as /state's export)
                 return self.send(200, export_state(folder, load(rj)))
             if path == "/video":
@@ -3005,6 +3050,16 @@ def make_handler(folder, token):
                     self.close_connection = True
                     return self.send(400, {"error": str(e)})
                 return self.send(200, {"ok": True, "name": name, "sounds": sounds_info()})
+            if urlsplit(self.path).path == "/scene/upload":   # the scene editor: an audio file (or a video's sound) into media/
+                q = parse_qs(urlsplit(self.path).query)
+                try:
+                    if load(rj).get("stage") != "edit":
+                        raise ValueError("Audio goes on the edit.")
+                    x = scene_audio_upload(folder, unquote(q.get("name", [""])[0]), self.rfile, int(self.headers.get("Content-Length") or 0))
+                except ValueError as e:
+                    self.close_connection = True
+                    return self.send(400, {"error": str(e)})
+                return self.send(200, {"ok": True, **x})
             if urlsplit(self.path).path == "/audio/upload":   # an audio file dropped on the timeline, streamed in
                 q = parse_qs(urlsplit(self.path).query)
                 d = load(rj)
@@ -3557,6 +3612,11 @@ def make_handler(folder, token):
                 if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()):
                     threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
                 return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt), **({"change": ch} if by else {})})
+            if path == "/scene/sound":   # the Sounds panel in the scene editor: a library sound copied into media/ ({name})
+                try:
+                    return self.send(200, {"ok": True, **scene_library_sound(folder, str(body.get("name") or ""))})
+                except (ValueError, OSError, scene.SceneError) as e:
+                    return self.send(400, {"error": str(e)})
             if path == "/scene/claude":   # Undo or Redo of one of Claude's changes, by its own ops: {"n", "undo": true | false, "alt"}
                 alt = body.get("alt") or None
                 try:
@@ -6465,6 +6525,22 @@ def demo():
         clip = next(x for x in load(folder / "sounds.json")["items"] if x.get("kind") == "clip")
         assert (clip["sound"], clip["t"], clip["in"], clip["vol"]) == ("my song.wav", 1.5, 0.0, 1.0) and 0 < clip["dur"] <= 2.0, clip
         assert (folder / "audio" / "my song.wav").is_file() and get("/audio/my%20song.wav").read()[:4] == b"RIFF"
+        # the scene editor: a file into media/ (+ Audio, a Finder drop), a library sound copied in once; anything else refused
+        su = json.loads(urllib.request.urlopen(urllib.request.Request(base + "/scene/upload?name=my%20song.wav&t=" + tok, buf.getvalue(), method="POST")).read())
+        assert su == {"ok": True, "src": "media/my song.wav", "duration": 2.0} and (folder / "media" / "my song.wav").read_bytes() == buf.getvalue(), su
+        ls = post("/scene/sound", {"name": "my ding.wav"})
+        assert ls["src"] == "media/my ding.wav" and ls["duration"] > 0 and post("/scene/sound", {"name": "my ding.wav"})["src"] == ls["src"]
+        assert (folder / "media" / "my ding.wav").read_bytes() == (sfx_mod().library_dir() / "my ding.wav").read_bytes()
+        assert sounds_info()["own"][0] == "my ding.wav", "the sounds picked for a moment first"
+        for bad in (lambda: post("/scene/sound", {"name": "../review.json"}),
+                    lambda: urllib.request.urlopen(urllib.request.Request(base + "/scene/upload?name=x.txt&t=" + tok, b"hello", method="POST")),
+                    lambda: urllib.request.urlopen(urllib.request.Request(base + "/scene/upload?name=quiet.wav&t=" + tok, b"RIFFnotaudio", method="POST"))):
+            try:
+                bad()
+                raise AssertionError("refused")
+            except urllib.error.HTTPError as e:
+                assert e.code == 400
+        assert not (folder / "media" / "quiet.wav").exists(), "a file with no sound is not kept"
         post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
         clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
         assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip

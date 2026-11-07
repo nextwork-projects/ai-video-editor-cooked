@@ -2,6 +2,13 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.43, creator-teardown 2.7.43 (2026-11-06)
+- Add audio in the editor. The Sounds panel lists your sounds, the ones you picked for a moment first. Play one to hear it, search, then Add puts it at the playhead or drag it onto the timeline. It goes on the first audio track free there, or a new one.
+- Your own files. + Audio opens a file picker for mp3, wav, m4a, aac, flac, ogg, opus, or a video whose sound you want. Dropping an audio file from Finder on the timeline adds it where you drop it; on the video, at the playhead. A long song stops at the end of the video.
+- Every sound is copied into the edit, so the export has it on any Mac.
+- Audio clips show their waveform. Move, trim either edge, Alt-drag to slip, split and delete them like any clip. Drag a top corner to fade in or out. Volume and fades are in Properties, and each track mutes.
+- What you add is heard at once in the player and in the export.
+
 ## ai-editor 2.7.42, creator-teardown 2.7.42 (2026-11-06)
 - Split and delete work everywhere. S or Cmd+B splits the picked clip at the playhead, or with nothing picked the video under it. Delete or Backspace takes out the picked clip, or the one under the mouse once you move onto it, and the gap closes. Split and Delete buttons sit beside the timeline zoom. Each is one undo.
 - Keys no longer stop after you type in Properties. Clicking a clip or the video lets go of the field, so the next pick shows its own settings and S and Delete work.

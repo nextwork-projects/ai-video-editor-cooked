@@ -1766,7 +1766,8 @@ $('edtracks').addEventListener('pointerdown',e=>{const it=e.target.closest('.eit
   it.onpointermove=ev=>{if(Math.abs(ev.clientY-y0)>6)moved=true;if(moved)laneMv(it,ev,y0)};
   it.onpointerup=async()=>{it.onpointermove=it.onpointerup=null;if(!moved)return;edDragged=performance.now();const lz=laneUp(it);if(lz)await lz();$('edtracks')._h=null;renderEdTracks()}});
 // an audio file onto the timeline (a song, a voice-over, a sound): streamed in, a clip on the Sounds row at once
-async function upAudio(f,t){toast(`Adding ${f.name}...`);
+async function upAudio(f,t){if(window.SC&&SC.on)return SC.addFile(f,t);   // a scene: into media/, an audio item
+  toast(`Adding ${f.name}...`);
   const r=await new Promise(res=>{const x=new XMLHttpRequest();x.open('POST','/audio/upload?name='+encodeURIComponent(f.name)+'&at='+t.toFixed(2));
     x.upload.onprogress=e=>{if(e.lengthComputable)toast(`Adding ${f.name}... ${Math.round(e.loaded/e.total*100)}%`)};
     x.onload=()=>{let j={};try{j=JSON.parse(x.responseText)}catch(e){}res(j)};x.onerror=()=>res({error:'The upload stopped. Drop it again.'});x.send(f)});
