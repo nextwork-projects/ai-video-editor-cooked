@@ -135,12 +135,7 @@ python3 "$S/preview_cut.py" edits/<name> --no-open && \
 python3 "$R" edits/<name> start --video edits/<name>/cut.mp4 --stage cut --transcript edits/<name>/words.json
 ```
 
-Verify clean: the cut page is ready. Verify diffs the cut's transcript with the kept words (exit 1 stops the chain):
-- **MISSING**: a kept word is not in the render. Raise `--pad` (or narrow the span), rebuild, re-render.
-- **SURVIVED**: a span to add for a real repeat or stumble, never one that cuts a kept line.
-- **HEARD DIFFERENTLY** ("jev -> jeff") and filler notes are transcriber variance: no rebuild.
-- **DOUBLED**: words said twice in a row. Natural ("very, very"): keep. A stumble: add its span.
-- **N join(s) in speech**: listen. Clipped: `splice_check.py edits/<name> --fix`, re-render.
+Verify clean: the cut page is ready. Verify diffs the cut's transcript with the kept words (exit 1 stops the chain); what each finding means and its fix: `references/verify.md`.
 
 One fix cycle (the same chain), then show the user what is left.
 
@@ -160,14 +155,7 @@ the page opens, start `visual-prep` in the background; its `motion_briefs`: a ba
 
 ## If a script stops
 
-| message | do |
-|---|---|
-| `no such file` / `ffmpeg could not read audio` | ask for the right path; never copy or convert the source |
-| `faster-whisper missing` / `CrisperWhisper missing` | run with `python3 "$PY"`, or the setup skill's step 3 |
-| `no ElevenLabs key` (exit 2) / `HTTP 4xx`, `unreachable` (3) | drop `--engine scribe`, or re-save the key with the setup skill |
-| build `ERROR` on a quote | fix that span's quote or add `occurrence`, build again |
-| `cannot derive a silence threshold` / `marked no silence` | speech and background are under 10 dB apart: `ffmpeg -i <source> -af volumedetect -vn -f null -`, pass `--noise` about 10 dB above the mean |
-| render `ERROR ...` | say it; re-run render once |
+Its message and what to do: `references/errors.md`.
 
 ## Rules
 
