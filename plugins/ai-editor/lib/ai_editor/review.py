@@ -1563,6 +1563,11 @@ def scene_for(folder, d, alt=None):
     with SCENE_LOCK:
         if (folder / name).exists():
             sc = scene.load(folder, name)
+            if not sc.get("covered"):   # 2.7.42: footage a slid cut left short of an edge (a black strip) grows to cover it, once
+                grown = scene.cover(sc)
+                sc = scene.save(folder, sc, name)
+                if grown:
+                    print(f"scene: {name}: footage grown to cover the frame (no black edge): {', '.join(grown)}", file=sys.stderr)
             k = f"{folder}|{name}"
             if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()) and not PROXY_BUSY.get(k):
                 PROXY_BUSY[k] = threading.Thread(target=lambda: (scene.ensure_proxies(folder, sc), PROXY_BUSY.pop(k, None)), daemon=True)

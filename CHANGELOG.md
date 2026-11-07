@@ -2,6 +2,14 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.42, creator-teardown 2.7.42 (2026-11-06)
+- Split and delete work everywhere. S or Cmd+B splits the picked clip at the playhead, or with nothing picked the video under it. Delete or Backspace takes out the picked clip, or the one under the mouse once you move onto it, and the gap closes. Split and Delete buttons sit beside the timeline zoom. Each is one undo.
+- Keys no longer stop after you type in Properties. Clicking a clip or the video lets go of the field, so the next pick shows its own settings and S and Delete work.
+- A split keeps the zoom. Both parts hold the picture exactly where it was.
+- Keyframes you can see. A picked clip opens a lane under its track with a row per animated setting and a diamond per keyframe, the AI's zooms included. Click a diamond to go there and see it in Properties, drag it to move it, press Delete to remove it, and pick its ease (linear, ease in, ease out, ease in and out, hold). Properties opens if it was closed. The diamond beside a field adds a keyframe; a keyed field shows in yellow. Scale is now a field.
+- The AI's cuts are easy to find. A yellow tick per cut on the ruler at any zoom, with what was taken out and Bring back on hover. The Video row's list button shows every cut with its time, reason and words. Up and Down jump between cuts.
+- No black strip down the side. Footage the house centre step slid over is zoomed just enough to fill the frame, and scenes already made heal the first time they open. New scenes zoom about each zoom's own point, as the render does.
+
 ## ai-editor 2.7.41, creator-teardown 2.7.41 (2026-11-06)
 - The Properties panel closes. Its × hides it and the video gets the room; picking something keeps it closed, so the video never jumps. Properties in the left rail opens it again, and so does any tool there. It remembers which way you left it.
 

@@ -476,41 +476,52 @@ def key_at(ks, t):
     return k[1] + (n[1] - k[1]) * EASE_F[k[2] if len(k) > 2 else "linear"](min(1, u))
 
 
+ZOOM_ORIGIN = (50, 30)   # StyleEdit.tsx's, % of the frame, for a zoom with no origin of its own
+
+
 def zoom_keys(zooms, a, b):
     """Scale keys on a clip from scene a to b: StyleEdit.tsx zoomAt's punches (held, or eased in PUNCH_S) and pushes
-    (sine in and out), from the clip's start. And the zoom origin, % of the frame."""
+    (sine in and out), from the clip's start. And each key's zoom origin, % of the frame (zoomAt scales each zoom about
+    its own origin)."""
     zs = sorted(zooms, key=lambda z: z["start"])
     pts = []
     for i, z in enumerate(zs):
-        k, nxt = z["scale"], zs[i + 1]["start"] if i + 1 < len(zs) else float("inf")
+        k, nxt, o = z["scale"], zs[i + 1]["start"] if i + 1 < len(zs) else float("inf"), tuple(z.get("origin") or ZOOM_ORIGIN)
         if z.get("kind") == "push" and z.get("ease_s", 0) > 0:
             e = min(max(0.8, z["ease_s"]), (z["end"] - z["start"]) / 2)
-            pts += [[z["start"], 1, "inout"], [z["start"] + e, k, "hold"], [z["end"] - e, k, "inout"], [z["end"], 1, "hold"]]
+            pts += [[z["start"], 1, "inout", o], [z["start"] + e, k, "hold", o], [z["end"] - e, k, "inout", o], [z["end"], 1, "hold", o]]
             continue
         tr = z.get("travel_s", 0.16)
         tail = min(tr, max(0, nxt - z["end"]))
         if tr < 0.02:
-            pts += [[z["start"], k, "hold"]] + ([[z["end"], 1, "hold"]] if tail > 0 else [])
+            pts += [[z["start"], k, "hold", o]] + ([[z["end"], 1, "hold", o]] if tail > 0 else [])
         else:
-            pts += [[z["start"], 1, "out"], [z["start"] + tr, k, "hold"]] + ([[z["end"], k, "out"], [z["end"] + tail, 1, "hold"]] if tail > 0 else [])
+            pts += [[z["start"], 1, "out", o], [z["start"] + tr, k, "hold", o]] + ([[z["end"], k, "out", o], [z["end"] + tail, 1, "hold", o]] if tail > 0 else [])
     pts = sorted(pts, key=lambda p: p[0])
     if not pts:
         return {}, None
+    o_at = lambda t: max((p for p in pts if p[0] <= t + EPS), key=lambda p: p[0], default=pts[0])[3]
     keys = [[0, round(key_at(pts, a) if pts[0][0] <= a else 1, 6), "hold"]]
-    keys += [[round(p[0] - a, 6), p[1], p[2]] for p in pts if a + EPS < p[0] < b - EPS]
+    orgs = [o_at(a)]
+    for p in pts:
+        if a + EPS < p[0] < b - EPS:
+            keys.append([round(p[0] - a, 6), p[1], p[2]])
+            orgs.append(p[3])
     if all(k[1] == 1 for k in keys):
         return {}, None
-    return {"scale": keys}, next((z.get("origin") for z in zs if z.get("origin")), None)
+    return {"scale": keys}, orgs
 
 
-def pos_keys(keys, origin, base, W, H):
-    """x and y keys that hold the zoom's origin in place while scale changes (scale about a point, not the centre)."""
-    if not keys or not origin:
+def pos_keys(keys, origins, base, W, H):
+    """x and y keys that hold each key's zoom origin in place while scale changes (scale about a point, not the centre).
+    origins: one per scale key (zoom_keys), or one for all."""
+    if not keys or not origins:
         return {}
-    ox, oy = origin[0] / 100 * W, origin[1] / 100 * H
+    ks = keys["scale"]
+    os_ = [origins] * len(ks) if isinstance(origins[0], (int, float)) else origins
     cx, cy = base
-    return {"x": [[t, round(ox + k * (cx - ox), 3), e] for t, k, e in keys["scale"]],
-            "y": [[t, round(oy + k * (cy - oy), 3), e] for t, k, e in keys["scale"]]}
+    return {"x": [[t, round(o[0] / 100 * W + k * (cx - o[0] / 100 * W), 3), e] for (t, k, e), o in zip(ks, os_)],
+            "y": [[t, round(o[1] / 100 * H + k * (cy - o[1] / 100 * H), 3), e] for (t, k, e), o in zip(ks, os_)]}
 
 
 def framing(edit, plan, src, spans):
@@ -550,6 +561,43 @@ def framing(edit, plan, src, spans):
     k = sw // 135
     _, dx, dy = search(a, b, k + 1, (cx * k, cy * k))
     return dx * 2, dy * 2
+
+
+def cover(sc):
+    """The footage zoomed just enough to cover the frame edge to edge: a cut the house centre step slid sideways
+    (framing's dx, dy) otherwise leaves a black strip where the step mirrored the picture in. Each zoom key that falls
+    short is raised about the clip's centre (so the zooms that already cover keep their framing exactly), and a clip
+    still short anywhere (no zoom keys) grows, keeping its shape. Only video clips on the first visual track that fill
+    most of the frame (a picture-in-picture is left alone). The ids it changed; the scene is marked `covered` so a later
+    move of the user's is never undone."""
+    W, H = sc["width"], sc["height"]
+    first = next((t for t in sc["tracks"] if t["kind"] == "visual"), None)
+    out = []
+    for it in (first or {}).get("items", []):
+        if it.get("type") != "video" or it.get("fit", "cover") != "cover" or it.get("rotation") or not it.get("w") or not it.get("h"):
+            continue
+        ks, d = it.get("keys") or {}, it["end"] - it["start"]
+        at = lambda p, t, v: key_at(ks[p], t) if ks.get(p) else it.get(p, v)
+
+        def need(t):   # how much bigger the picture must be at t, about its centre; None: not footage that fills the frame
+            s, x, y = at("scale", t, 1), at("x", t, W / 2), at("y", t, H / 2)
+            w, h = it["w"] * s, it["h"] * s
+            return None if w < W * 0.8 or h < H * 0.8 else max(1.0, 2 * x / w, 2 * (W - x) / w, 2 * y / h, 2 * (H - y) / h)
+        ts = sorted({0.0, d, *(k[0] for p in ("x", "y", "scale") for k in ks.get(p) or [] if 0 <= k[0] <= d)})
+        if any(need(t) is None for t in ts):
+            continue
+        changed = False
+        for k in ks.get("scale") or []:
+            f = need(k[0])
+            if f > 1 + 1e-4:
+                k[1], changed = round(k[1] * f + 1e-4, 4), True
+        f = max(need(t) for t in ts)
+        if f > 1 + 1e-4:
+            it["w"], it["h"], changed = round(it["w"] * f + 0.01, 2), round(it["h"] * f + 0.01, 2), True
+        if changed:
+            out.append(it["id"])
+    sc["covered"] = True
+    return out
 
 
 def cut_before(report, words, prev_end, start):
@@ -693,8 +741,8 @@ def from_plan(edit, plan=None, sounds=None, library=None, proxies=True, frame_it
         dx = dy = 0
         clips = [(0.0, dur, {"start": 0.0, "end": dur})]
     base = (box[0] + box[2] / 2 + dx, box[1] + box[3] / 2 + dy)
-    # ponytail: a slid cut (just_talking.py centre) shows a dx-wide black edge where no zoom covers it; the house step
-    # mirrored that strip in. Growing the clip to cover it moves every pixel (PSNR 32 -> 14 dB), so it is left.
+    # a slid cut (the house centre step) mirrored a dx-wide strip in at the edge; a scene has no mirror, so cover()
+    # grows each clip about its centre until it fills the frame (the face stays within a few px of where the step put it)
     prev = None
     for a_, b_, s in clips:
         it = {"type": "video", "asset": aid, "start": round(a_, 6), "end": round(b_, 6), "in": round(s["start"], 6),
@@ -771,6 +819,8 @@ def from_plan(edit, plan=None, sounds=None, library=None, proxies=True, frame_it
         S.audio(c["src"], c["t"], c["t"] + d, name=Path(c["src"]).stem)
     placed(S, e, sounds, library)
     sc = S.done()
+    if lay.get("mode") != "letterbox":   # the band is meant to leave the frame
+        cover(sc)
     sc["duration"] = round(max(sc["duration"], dur), 6)
     return sc
 
@@ -1278,6 +1328,18 @@ def demo():
         assert [o["op"] for o in co] == ["add_track", "add"] and co[1]["item"]["type"] == "image" and co[1]["item"]["name"] == "red", co
         assert cards_ops(e, apply(r, co, e), plan) == [], "a card already on the scene is not added again"
         assert probe(e / "take.mp4").get("alpha") is None
+        # a slid cut (x 640, a 100 px black strip on the left, zoomed to 1.12 later) grows until it covers the frame
+        sl = normalise({"width": 1080, "height": 1920, "fps": 30, "assets": {"c": {"src": "take.mp4"}}, "tracks": [{"id": "v", "kind": "visual", "items": [
+            {"id": "a", "type": "video", "asset": "c", "start": 0, "end": 2, "x": 640, "w": 1080, "h": 1920,
+             "keys": {"scale": [[0, 1, "hold"], [1, 1.12, "hold"]], "x": [[0, 640, "hold"], [1, 651.87, "hold"]]}},
+            {"id": "b", "type": "video", "asset": "c", "start": 2, "end": 3, "x": 540, "w": 1080, "h": 1920},
+            {"id": "p", "type": "video", "asset": "c", "start": 3, "end": 4, "x": 900, "w": 300, "h": 533}]}]})
+        assert cover(sl) == ["a"] and sl["covered"], "only the slid clip; a full one and a picture-in-picture stay"
+        a = sl["tracks"][0]["items"][0]
+        assert a["w"] == 1080 and [k[1] for k in a["keys"]["scale"]] == [1.1853, 1.2073], a["keys"]   # each short key raised, just enough
+        assert all(key_at(a["keys"]["x"], t) - 540 * key_at(a["keys"]["scale"], t) <= 0 for t in (0, 0.5, 1, 1.5)), "the left edge is covered"
+        plain = normalise({**sl, "covered": False, "tracks": [{"id": "v", "kind": "visual", "items": [{**sl["tracks"][0]["items"][1], "x": 600}]}]})
+        assert cover(plain) == ["b"] and plain["tracks"][0]["items"][0]["w"] >= 1200, "no keys: the clip grows"
     print("scene demo ok")
 
 
