@@ -4209,8 +4209,25 @@ def cmd_round(a, folder):
                 d["scene_from"] = frm   # the next round: Claude's changes made on this one stay listed and undoable there
     elif not a.video:
         sys.exit("round takes --video <the new render>, or --scene when the notes were answered in scene.json")
+    elif (a.stage or d0["stage"]) == "edit" and not getattr(a, "stills", False):
+        def check(d):   # a new render: its plan draws the scene, never the last draft's (scene_for keeps one that is there)
+            snap = folder / "review" / Path(d.get("snap") or "-").name
+            for n in {scene.name_of(x) for x in [None, *(x.get("name") for x in d.get("alts") or [])]}:
+                f = folder / n
+                if not f.is_file():
+                    continue
+                if scene_mode(folder, d) and d.get("snap") and snap.is_dir():   # the user's hand edits stay on their draft
+                    clone(f, snap / n)
+                    names = set((snap / SNAP_NAMES).read_text(encoding="utf-8").split()) if (snap / SNAP_NAMES).is_file() else set()
+                    (snap / SNAP_NAMES).write_text("\n".join(sorted(names | {n})), encoding="utf-8")
+                f.unlink()
     d = open_round(folder, a.video, a.stage, a.transcript, a.plan, a.note, getattr(a, "stills", False), a.name, changed, check=check,
                    alts=alts)
+    if not getattr(a, "scene", False) and scene_mode(folder, d):
+        try:   # the page draws the new draft at once
+            scene_for(folder, d)
+        except Exception as e:   # noqa: BLE001  the page makes it on its first ask
+            print(f"scene: not made now ({e})", file=sys.stderr)
     still = [str(c["id"]) for c in d["comments"]
              if c["status"] == "open" and c["stage"] == d["stage"] and c["round"] < d["round"]]
     print(f"{stage_name(d['stage'], d.get('stills'))}, round {d['round']}" + (f"; still open: {', '.join(still)}" if still else ""))
@@ -5733,6 +5750,40 @@ def demo_claude_scene(tmp):
     _ui_json().write_bytes(ui0) if ui0 is not None else _ui_json().unlink(missing_ok=True)   # its /state counted it as a first video
 
 
+def demo_round_scene(tmp):
+    """round --video on the edit: scene.json is the new plan's, not the last draft's; the last draft keeps its hand edits."""
+    f, ui0 = (tmp / "round-scene").resolve(), _ui_json().read_bytes() if _ui_json().exists() else None
+    f.mkdir(parents=True)
+    ns = argparse.Namespace
+    mk = lambda c: subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", f"color=c={c}:s=64x36:r=30:d=2", "-c:v", "libx264",
+                                   "-pix_fmt", "yuv420p", str(f / "render.mp4")], check=True)
+    plan = lambda w: {"video": "render.mp4", "fps": 30, "durationInFrames": 60, "width": 64, "height": 36, "texts": [],
+                      "cards": [{"start": 0.5, "end": 1.5, "trigger_word": w, "box": [10, 10, 40, 20]}]}
+    cards = lambda sc: [i["name"] for t in sc["tracks"] if t["name"].startswith("Cards") for i in t["items"]]
+    for x in ("plan.json", "render.plan.json"):
+        (f / x).write_text(json.dumps(plan("snyk")), encoding="utf-8")
+    mk("red")
+    with contextlib.redirect_stdout(io.StringIO()):
+        cmd_start(ns(video=str(f / "render.mp4"), stage="edit", transcript=None, plan=str(f / "plan.json"), note=None, name=None), f)
+    sc = scene_for(f, load(f / "review.json"))
+    assert cards(sc) == ["snyk"], cards(sc)
+    next(i for t in sc["tracks"] for i in t["items"] if i["name"] == "snyk")["y"] = 7   # the user's hand edit on draft 1
+    scene.save(f, sc)
+    for x in ("plan.json", "render.plan.json"):
+        (f / x).write_text(json.dumps(plan("motion")), encoding="utf-8")
+    mk("blue")
+    with contextlib.redirect_stdout(io.StringIO()):
+        cmd_round(ns(video=str(f / "render.mp4"), stage="edit", transcript=None, plan=str(f / "plan.json"), note=None, name=None), f)
+    assert cards(scene.load(f)) == ["motion"], "the page draws draft 2's plan"
+    old = scene.load(f / "review" / "snap-edit1")
+    assert cards(old) == ["snyk"] and any(i.get("y") == 7 for t in old["tracks"] for i in t["items"]), "draft 1 keeps its hand edit"
+    assert not (f / "review" / "snap-edit2" / scene.NAME).exists(), "draft 2's snapshot never holds draft 1's scene"
+    go_back(f, 1)
+    sc = scene.load(f)
+    assert cards(sc) == ["snyk"] and any(i.get("y") == 7 for t in sc["tracks"] for i in t["items"]), "Drafts > go back: the hand edit returns"
+    _ui_json().write_bytes(ui0) if ui0 is not None else _ui_json().unlink(missing_ok=True)   # start recorded it as a video
+
+
 def demo_ripple(tmp):
     """The ripple timeline's server side: cuts keep the ripple choice; a plan draft's bake takes the cut pieces out of
     its render (render.cut.mp4), still plays live, and needs no note; every hand edit is journaled, and Undo and Redo
@@ -5955,6 +6006,7 @@ def demo():
     demo_layers(tmp)
     demo_ripple(tmp)
     demo_claude_scene(tmp)
+    demo_round_scene(tmp)
     # notes sent with no Claude on the edit: a new one opens in the library to carry on; never twice, never over a listener
     import launcher
     opened = []
