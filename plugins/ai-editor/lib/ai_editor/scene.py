@@ -45,6 +45,7 @@ TRACK_NAMES = {"video": "Video", "image": "Images", "card": "Cards", "shape": "S
 REASONS = {"retake": "retake", "redundant": "retake", "alt_hook": "retake", "false_start": "false start", "silence": "pause",
            "pause": "pause", "filler": "filler"}
 EPS = 1e-6
+AUDIO_EXT = (".wav", ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".opus")
 
 
 class SceneError(ValueError):
@@ -72,7 +73,7 @@ def probe(path):
     d = json.loads(out.stdout)
     v = next((s for s in d.get("streams", []) if s.get("codec_type") == "video"), None)
     dur = float((d.get("format") or {}).get("duration") or 0)
-    if not v:
+    if not v or Path(path).suffix.lower() in AUDIO_EXT:   # a song's cover art is no picture
         return {"kind": "audio", "duration": dur}
     w, h = v["width"], v["height"]
     if any(abs(sd.get("rotation", 0)) == 90 for sd in v.get("side_data_list", [])):
@@ -360,6 +361,11 @@ def apply(sc, ops, edit=None, by=None):
                 it["end"] = round(it["end"] + by, 6)
                 if magnet(sc, tr):
                     ripple(sc, old_end, by, skip=it)
+        elif kind == "asset" and op.get("asset") is None:   # an asset no item uses any more (the undo of an add)
+            aid = str(op.get("id") or "")
+            if any(it.get("asset") == aid for tr in sc["tracks"] for it in tr["items"]):
+                raise SceneError(f"asset {aid} is still on the timeline")
+            sc["assets"].pop(aid, None)
         elif kind == "asset":
             a, aid = dict(op.get("asset") or {}), str(op.get("id") or "")
             src = Path(str(a.get("src") or ""))
@@ -1006,6 +1012,7 @@ def diff(a, b):
         if tid in ta and props:
             ops.append({"op": "track", "track": tid, "props": props})
     ops += [{"op": "remove_track", "track": t} for t in ta if t not in tb]
+    ops += [{"op": "asset", "id": k, "asset": None} for k in a["assets"] if k not in b["assets"]]   # after the items that used it
     held = [t["id"] for t in a["tracks"] if magnet(a, t) and t["id"] in tb and any(A[i][0] == t["id"] for i in A if i not in B)]
     return [{"op": "track", "track": t, "props": {"magnet": False}} for t in held] + ops + \
         [{"op": "track", "track": t, "props": {"magnet": magnet(b, tb[t])}} for t in held]   # a remove here closes no gap
@@ -1177,6 +1184,51 @@ def cards_ops(edit, sc, plan, at=()):
     return ops
 
 
+def bring_in(edit, f):
+    """A file outside the edit copied into its media/ (an APFS clone on a Mac; the same file there already is used as
+    it is), so the scene plays and exports anywhere. Returns its src (relative to the edit)."""
+    e, f = Path(edit), Path(f).expanduser().resolve()
+    if e.resolve() in f.parents:
+        return f.relative_to(e.resolve()).as_posix()
+    (e / "media").mkdir(exist_ok=True)
+    dst, n = e / "media" / f.name, 2
+    while dst.exists() and dst.stat().st_size != f.stat().st_size:   # a different file of that name: never over it
+        dst, n = e / "media" / f"{f.stem}-{n}{f.suffix}", n + 1
+    if not dst.exists() and (sys.platform != "darwin" or subprocess.run(["cp", "-c", str(f), str(dst)], capture_output=True).returncode):
+        shutil.copyfile(f, dst)
+    return dst.relative_to(e).as_posix()
+
+
+PEAKS_RATE = 50   # waveform values a second of source
+
+
+def peaks(edit, aid, a):
+    """An asset's sound as a waveform for its timeline clips: {"rate", "peaks"} (0-1, PEAKS_RATE a second of the source,
+    the loudest 20 ms each, scaled to the file's loudest). Cached in .scene/<aid>.peaks.json by the file it reads."""
+    from array import array
+    f = path_of(edit, a, False)
+    st = f.stat()
+    sig = f"{a.get('src')}|{st.st_size}|{st.st_mtime_ns}"
+    cache = Path(edit) / ".scene" / f"{aid}.peaks.json"
+    try:
+        d = jload(cache)
+        if d.get("sig") == sig:
+            return d
+    except (OSError, ValueError):
+        pass
+    sr = 8000
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(f), "-map", "0:a:0", "-ac", "1", "-ar", str(sr), "-f", "s16le", "-"],
+                         capture_output=True).stdout
+    x = array("h")
+    x.frombytes(raw[:len(raw) // 2 * 2])
+    step = sr // PEAKS_RATE
+    p = [max(map(abs, x[i:i + step]), default=0) for i in range(0, len(x), step)]
+    top = max(p, default=0) or 1
+    d = {"sig": sig, "rate": PEAKS_RATE, "peaks": [round(v / top, 2) for v in p]}
+    jsave(cache, d)
+    return d
+
+
 def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=None, extra=None):
     """scene.py add: the ops that put one item on the scene (its file copied into the edit's media/ when it is outside)."""
     e, W, H = Path(edit), sc["width"], sc["height"]
@@ -1189,13 +1241,8 @@ def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=
         f = Path(src).expanduser().resolve()
         if not f.is_file():
             raise SceneError(f"no file {src}")
-        if e.resolve() not in f.parents:   # outside the edit: a copy in media/ (an APFS clone on a Mac)
-            (e / "media").mkdir(exist_ok=True)
-            dst = e / "media" / f.name
-            if not dst.exists() and (sys.platform != "darwin" or subprocess.run(["cp", "-c", str(f), str(dst)], capture_output=True).returncode):
-                shutil.copyfile(f, dst)
-            f = dst
-        rel_ = f.resolve().relative_to(e.resolve()).as_posix()
+        rel_ = bring_in(e, f)   # outside the edit: a copy in media/ (an APFS clone on a Mac)
+        f = e / rel_
         aid = next((k for k, a in sc["assets"].items() if a.get("src") == rel_), None)
         if not aid:
             base = "".join(c if c.isalnum() else "-" for c in f.stem.lower())[:24] or "a"
@@ -1300,6 +1347,22 @@ def demo():
         subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "color=c=red:s=64x32", "-frames:v", "1", str(e.parent / "ce-shot.png")], check=True)
         ops = add_op(e, sc, "image", 1, 2, src=e.parent / "ce-shot.png") + add_op(e, sc, "text", 3, 4, text="Link in bio", extra={"box": {"color": "#FFFFFF"}})
         assert (e / "media" / "ce-shot.png").is_file() and ops[0] == {"op": "asset", "id": "ce-shot", "asset": {"src": "media/ce-shot.png"}}, ops
+        # a sound from outside: copied into media/, an audio asset (cover art is no picture), its waveform; undo drops the asset
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i", "sine=f=440:d=2", "-i", str(e.parent / "ce-shot.png"),
+                        "-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-disposition:v", "attached_pic", str(e.parent / "ce-song.mp3")], check=True)
+        so = add_op(e, sc, "audio", 1, src=e.parent / "ce-song.mp3")
+        assert bring_in(e, e.parent / "ce-song.mp3") == "media/ce-song.mp3" and so[0]["asset"] == {"src": "media/ce-song.mp3"}, so
+        sa = apply(sc, so, e)
+        assert sa["assets"]["ce-song"]["kind"] == "audio" and abs(so[-1]["item"]["end"] - 3) < 0.1, (sa["assets"]["ce-song"], so[-1])
+        pk = peaks(e, "ce-song", sa["assets"]["ce-song"])
+        assert pk["rate"] == PEAKS_RATE and abs(len(pk["peaks"]) - 2 * PEAKS_RATE) <= 2 and max(pk["peaks"]) == 1 and peaks(e, "ce-song", sa["assets"]["ce-song"]) == pk
+        un = apply(sa, diff(sa, sc), e)
+        assert "ce-song" not in un["assets"] and json.dumps(un, sort_keys=True) == json.dumps(normalise(copy.deepcopy(sc)), sort_keys=True)
+        try:
+            apply(sa, [{"op": "asset", "id": "ce-song", "asset": None}], e)
+            raise AssertionError("an asset on the timeline is never dropped")
+        except SceneError:
+            pass
         c1 = save(e, apply(sc, ops, e, by="claude"))
         mine = [i for t in c1["tracks"] for i in t["items"] if i.get("by") == "claude"]
         mine = sorted(mine, key=lambda i: i["type"])
