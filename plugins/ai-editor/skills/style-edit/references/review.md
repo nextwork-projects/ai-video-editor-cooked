@@ -138,9 +138,8 @@ Every `review.py` command (and `scene.py` ops) records its session in `review.js
 (`session`, `host_session`, `kind` desktop, terminal or other, `at`, `by`). A session that ran `wait` or `round`
 keeps it against other sessions' other commands. Notes go to the `wait` that is listening; only the newest `wait`
 on a video listens (an older one prints `STOPPED LISTENING` and exits). With none listening: a Terminal Claude is
-typed into or resumed as before; a desktop session is never replaced by a Terminal one. The page says "Your desktop
-session for this video isn't listening" with **Open the desktop app** and **Start a new Claude**
-(`claude.how` = `desktop-idle`). The top bar always says where notes go, with the session's first 8 characters.
+typed into or resumed as before; a desktop session is never replaced by a Terminal one. The top bar says the desktop session is not listening, with **Open the desktop app** (and **Start a new Claude**
+in the more menu) (`claude.how` = `desktop-idle`). The top bar always says where notes go, with the session's first 8 characters.
 
 ## After send: fix, show the work, open the next round
 

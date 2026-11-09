@@ -5,7 +5,7 @@ What changed for every user, newest first.
 ## ai-editor 2.7.44, creator-teardown 2.7.44 (2026-11-09)
 - Notes reach the Claude that last worked on the video, in the Claude desktop app too. A desktop session listens in the background and wakes up the moment you press Submit feedback to Claude.
 - The top bar says where your notes go: your desktop session, your Terminal Claude, or a new Claude, with the session's short id and whether it is listening, working or not listening.
-- A desktop session that isn't listening never gets a Terminal Claude opened in its place. The page says so, with Open the desktop app and Start a new Claude.
+- A desktop session that isn't listening never gets a Terminal Claude opened in its place. The top bar says so, with Open the desktop app; Start a new Claude is in the ⋯ menu.
 - Only one Claude listens on a video. A newer one takes over and the older one stops.
 
 ## ai-editor 2.7.43, creator-teardown 2.7.43 (2026-11-06)
