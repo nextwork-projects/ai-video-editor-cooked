@@ -27,6 +27,10 @@ python3 "$R" edits/<name> wait       # run in the background: it exits when the 
 pause, add a note, then **Submit feedback to Claude** or **approve**. Then wait for `wait` to exit. Do not ask in
 the question box meanwhile.
 
+**In the Claude desktop app** (`CLAUDE_CODE_ENTRYPOINT=claude-desktop`), run `wait` with the Bash tool's
+`run_in_background` and end your turn: the app wakes you with its output when the user sends. Start it again the
+same way after every `round`. Never run it in the foreground there. `wait` and `round` print this as a `DESKTOP:` line.
+
 `wait` prints `SEND` or `APPROVE`, then every note of the round:
 
 ```
@@ -127,6 +131,16 @@ their first videos teach it their style (dismissed for good with Got it; count i
 
 With no `wait` running the page says Claude is not listening, and notes still save. The next
 `wait` returns at once with them.
+
+## Which Claude gets the notes
+
+Every `review.py` command (and `scene.py` ops) records its session in `review.json` `claude.last`
+(`session`, `host_session`, `kind` desktop, terminal or other, `at`, `by`). A session that ran `wait` or `round`
+keeps it against other sessions' other commands. Notes go to the `wait` that is listening; only the newest `wait`
+on a video listens (an older one prints `STOPPED LISTENING` and exits). With none listening: a Terminal Claude is
+typed into or resumed as before; a desktop session is never replaced by a Terminal one. The page says "Your desktop
+session for this video isn't listening" with **Open the desktop app** and **Start a new Claude**
+(`claude.how` = `desktop-idle`). The top bar always says where notes go, with the session's first 8 characters.
 
 ## After send: fix, show the work, open the next round
 

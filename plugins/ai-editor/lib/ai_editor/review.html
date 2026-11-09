@@ -98,6 +98,8 @@ header{position:relative;height:56px;flex-shrink:0;display:flex;align-items:cent
 .status .clc.waiting>i,.status .clc.open>i,.status .clc.working>i{background:var(--ok)}
 .status .clc.working>i{animation:pulse 1.2s ease-in-out infinite}
 .clc button{height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);background:var(--raise);color:var(--strong);font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.clc #clcs{color:var(--muted)}
+.clc #clcs:empty{display:none}
 .clc button.go{background:var(--ink);border-color:var(--ink);color:var(--onink)}
 .clc button:disabled{opacity:.5}
 #howbtn{width:32px;height:32px;border-radius:8px;border:1px solid var(--line2);display:grid;place-items:center;color:var(--ink);flex-shrink:0}
@@ -910,7 +912,7 @@ body.making #making{display:flex}
 <header>
  <div class="brand"><button id="homebtn" class="homebtn" title="Back to your videos"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>Your videos</button><span class="sl">/</span><span id="name"></span><span id="homemsg" class="homemsg" hidden></span></div>
  <div class="seg" id="stages"><button id="st1" data-go="cut"></button><svg class="chev" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><button id="st2" data-go="edit"></button></div>
- <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><button id="clcbtn"></button></span><button id="lrev" class="hbtn" hidden>Rules to review</button><button id="vmore" class="hbtn" popovertarget="moremenu" aria-label="more for this video" title="More for this video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
+ <div class="status" id="statusbox"><i></i><span id="listen"></span><span class="clc" id="clc" hidden><i></i><span id="clct"></span><span id="clcs"></span><button id="clcbtn"></button><button id="clcbtn2" hidden>Start a new Claude</button></span><button id="lrev" class="hbtn" hidden>Rules to review</button><button id="vmore" class="hbtn" popovertarget="moremenu" aria-label="more for this video" title="More for this video"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><button id="howbtn" aria-label="how this works and shortcuts" title="how this works (?)"><svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="10" cy="10" r="8.3"/><path d="M7.7 7.6a2.4 2.4 0 1 1 3.3 2.2c-.6.3-1 .8-1 1.5v.4"/><circle cx="10" cy="14.4" r=".4" fill="currentColor"/></svg></button></div>
  <div class="mhead"><b id="mstage"></b><span id="msub"></span></div><button class="themebtn mtheme"></button><button id="mapprove"></button><span class="exwrap" id="exwrap" hidden><button id="mexport" title="Save the video as you see it now, as one MP4"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 10.5v-8M4.5 6 8 2.5 11.5 6M3 13.5h10"/></svg><span>Export</span></button><div id="exbox" role="status" hidden></div></span><button id="popen" class="popen" title="Chat with Claude and your notes" aria-label="open the chat with Claude and your notes"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.5a8 8 0 0 1-8 8H5l-2 1.5v-9.5a8 8 0 0 1 8-8h1"/><path d="M18 2.5l1 2.5 2.5 1-2.5 1-1 2.5-1-2.5-2.5-1 2.5-1z"/></svg><small id="ncount2"></small></button>
 </header>
 <section id="how" aria-label="how this works"><ol>
@@ -1091,14 +1093,22 @@ let railx=false;try{railx=localStorage.getItem('review-railx')==='1'}catch(e){}
 document.body.classList.toggle('railx',railx);
 // the Claude control: Show Claude brings its Terminal tab to the front; Start Claude carries on in the Claude that worked
 // here (typed into it, or its conversation opened again), else a new one. Where no terminal opens, the command is copied.
-const CLC={working:'Claude is working on your notes',waiting:'Claude is waiting for your notes',open:'Claude is open',off:'Claude isn\u2019t running for this video'};
+// It says where notes go: the desktop session or Terminal Claude that last had them (its short id), else a new Claude.
+const CLS={working:'working on your notes',waiting:'listening',open:'open',off:'not running',idle:'not listening'};
+const CLW={desktop:'Notes go to your desktop session',terminal:'Notes go to your Terminal Claude',other:'Notes go to your Claude'};
 function renderClaude(asking){
-  const c=S.claude_ui||{},st=c.state==='off'&&alive(S)?'working':c.state||'off',el=$('clc'),b=$('clcbtn'),start=st==='off';
-  el.hidden=asking||!!S.raw&&!c.last;el.className='clc '+st;$('clct').textContent=CLC[st];
-  b.textContent=start?'Start Claude':'Show Claude';b.className=start?'go':'';b.hidden=!start&&!c.show;b.dataset.act=start?'start':'show';
+  const c=S.claude_ui||{},st=c.state==='off'&&alive(S)?'working':c.state||'off',el=$('clc'),b=$('clcbtn'),b2=$('clcbtn2');
+  const idle=st==='idle',start=st==='off'||idle,where=CLW[c.where];
+  el.hidden=asking||!!S.raw&&!c.last;el.className='clc '+st;
+  $('clct').textContent=idle?'Your desktop session for this video isn\u2019t listening':where||(st==='off'?'Notes go to a new Claude':'Claude is '+CLS[st]);
+  $('clcs').textContent=idle||!where?'':[c.name,CLS[st]].filter(Boolean).join(', ');$('clcs').title=c.name?'Session '+c.name:'';
+  b.textContent=idle?'Open the desktop app':start?'Start Claude':'Show Claude';b.className=start?'go':'';
+  b.hidden=!start&&!c.show;b.dataset.act=idle?'desktop':start?'start':'show';b2.hidden=!idle;
 }
+$('clcbtn2').onclick=()=>{$('clcbtn').dataset.act='start';$('clcbtn').onclick()};
 $('clcbtn').onclick=async()=>{const b=$('clcbtn');b.disabled=true;
-  try{if(b.dataset.act==='show'){const r=await post('/claude/show',{});if(!r.shown)toast('Its Terminal window was not found. Start Claude opens it again.')}
+  try{if(b.dataset.act==='desktop'){const r=await post('/claude/desktop',{});toast(r.opened?'Opened the Claude app. Tell your session to listen for notes.':'Open the Claude app and tell your session to listen for notes.')}
+    else if(b.dataset.act==='show'){const r=await post('/claude/show',{});if(!r.shown)toast('Its Terminal window was not found. Start Claude opens it again.')}
     else{const r=await post('/claude',{});if(r.opened)toast(r.how==='typed'?'Sent to the Claude open in Terminal':'Claude is opening in Terminal');
       else if(r.command){try{await navigator.clipboard.writeText(r.command);toast('Terminal did not open. The command is copied: paste it into a terminal.')}catch(x){toast('Run this in a terminal: '+r.command)}}
       else if(!r.how)toast('Claude is already on this video.')}}

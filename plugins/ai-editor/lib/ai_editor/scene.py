@@ -1452,6 +1452,11 @@ def main(a):
                          {k: num("--" + k) for k in ("x", "y", "w", "h")}, extra)
         before = {it["id"] for t in sc["tracks"] for it in t["items"]}
         after, ch = claude_ops(e, ops, opt("--why"), alt)
+        try:   # this Claude session worked on the edit: the page's notes go to it (review.py note_session)
+            import review
+            review.note_session(e.resolve(), "scene")
+        except Exception:
+            pass
         new = [f"{it['id']} ({it['type']})" for t in after["tracks"] for it in t["items"] if it["id"] not in before]
         print(f"Claude change {ch['n']}: {ch['why']}" if ch else "nothing changed",
               f"; added {', '.join(new)}" if new else "", "; the open page shows it on its next poll" if server(e) else "", sep="")
