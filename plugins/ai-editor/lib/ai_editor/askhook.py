@@ -126,6 +126,18 @@ def session():
     return os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
 
 
+def claude_env(env=None):
+    """Which Claude Code runs this command, from its env: {session, host_session, kind}, kind "desktop" (the Claude
+    desktop app's Code tab), "terminal" (the CLI) or "other" (an IDE, the SDK); {} outside Claude Code."""
+    env = os.environ if env is None else env
+    sid = env.get("CLAUDE_CODE_SESSION_ID", "").strip()
+    if not sid:
+        return {}
+    ep = env.get("CLAUDE_CODE_ENTRYPOINT", "").strip()
+    kind = "desktop" if ep == "claude-desktop" else "terminal" if ep in ("", "cli") else "other"
+    return {"session": sid, "host_session": env.get("CLAUDE_CODE_HOST_SESSION_ID", "").strip(), "kind": kind}
+
+
 def register(srv, url, kind=None, owner=None, where=None, folder=None):
     """A server's page file, touched while a page is showing. owner(session_id) -> what the question is
     about ("" for nothing to name), or None when that session's questions do not belong on this page.

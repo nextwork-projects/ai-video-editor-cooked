@@ -2,6 +2,12 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.44, creator-teardown 2.7.44 (2026-11-09)
+- Notes reach the Claude that last worked on the video, in the Claude desktop app too. A desktop session listens in the background and wakes up the moment you press Submit feedback to Claude.
+- The top bar says where your notes go: your desktop session, your Terminal Claude, or a new Claude, with the session's short id and whether it is listening, working or not listening.
+- A desktop session that isn't listening never gets a Terminal Claude opened in its place. The top bar says so, with Open the desktop app; Start a new Claude is in the ⋯ menu.
+- Only one Claude listens on a video. A newer one takes over and the older one stops.
+
 ## ai-editor 2.7.43, creator-teardown 2.7.43 (2026-11-06)
 - Add audio in the editor. The Sounds panel lists your sounds, the ones you picked for a moment first. Play one to hear it, search, then Add puts it at the playhead or drag it onto the timeline. It goes on the first audio track free there, or a new one.
 - Your own files. + Audio opens a file picker for mp3, wav, m4a, aac, flac, ogg, opus, or a video whose sound you want. Dropping an audio file from Finder on the timeline adds it where you drop it; on the video, at the playhead. A long song stops at the end of the video.

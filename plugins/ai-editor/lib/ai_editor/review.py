@@ -2324,6 +2324,48 @@ def listening(folder):
         return False
 
 
+def listener(folder):
+    """The `wait` listening on this edit: {pid, session, host_session, kind, since} (review/.listening), {} when none."""
+    if not listening(folder):
+        return {}
+    try:
+        return json.loads((folder / "review" / ".listening").read_text(encoding="utf-8") or "{}")
+    except (OSError, ValueError):
+        return {}
+
+
+TAKES = ("wait", "round")   # the commands that make a session the one notes go to
+
+
+def note_session(folder, cmd):
+    """Record in review.json claude.last which Claude Code ran this command: {session, host_session, kind, at, by}.
+    A session that ran `wait` or `round` keeps it against other sessions' other commands (a `status` elsewhere)."""
+    me = askhook.claude_env()
+    if not me:
+        return
+
+    def f(d):
+        c = d["claude"] = d.get("claude") or {}
+        last = c.get("last") or {}
+        if cmd in TAKES or last.get("session") == me["session"] or last.get("by") not in TAKES:
+            c["last"] = {**me, "at": time.time(), "by": cmd}
+    update(folder / "review.json", f)
+
+
+def is_desktop():
+    return askhook.claude_env().get("kind") == "desktop"
+
+
+def listen_hint(folder):
+    """What a desktop session is told to do after a round: listen in the background, end the turn. "" elsewhere."""
+    if not is_desktop():
+        return ""
+    return (f"DESKTOP: you run in the Claude desktop app. Listen for the user's notes in the background: run\n"
+            f"  python3 {shlex.quote(str(Path(__file__).resolve()))} {shlex.quote(str(folder))} wait\n"
+            f"with the Bash tool's run_in_background set, then end your turn. You are woken with the notes the moment the "
+            f"user sends them. Start it again after each round. Never run `wait` in the foreground: it blocks your turn.")
+
+
 BUSY_S = 900   # a Claude command on this edit in the last 15 min: Claude is mid-round, not gone
 
 
@@ -2399,8 +2441,19 @@ def claude_state(folder):
         last = (folder / "review" / ".claude").stat().st_mtime
     except OSError:
         last = None
+    try:
+        c = load(folder / "review.json").get("claude") or {}
+    except (OSError, ValueError):
+        c = {}
+    rec = c.get("last") or {}
+    who = listener(folder) if lis else {}   # notes go to the session listening, else the one that last had them
+    who = who if who.get("kind") else rec
+    where = who.get("kind") or ("terminal" if w.get("session") else "")
+    if where == "desktop" and not lis:   # a desktop session hears notes only through a background `wait`
+        st = "working" if b and rec.get("by") != "round" else "idle"
+    name = (who.get("host_session") or "").removeprefix("local_")[:8] or (who.get("session") or w.get("session") or "")[:8]
     return {"state": st, "show": bool(alive and w.get("app") == "Terminal" and w.get("tty")), "last": last,
-            "resume": resume_cmd(w)}
+            "resume": resume_cmd(w), "where": where, "name": name, "how": c.get("how") if st == "idle" else None}
 
 
 def show_claude(folder):
@@ -2436,6 +2489,13 @@ def reopen(folder, rj, force=False):
     Only with neither, a new Claude (`/ai-editor:start carry on edits/<name>`, in the library). Never while a `wait`
     listens; force (the page's "Open a new Claude") also when a Claude worked here lately, since it may have stopped.
     Kept on review.json as "claude": {opened, how, command, session, at} so the page says where it went."""
+    rec = (load(rj).get("claude") or {}).get("last") or {}
+    if not force and not listening(folder) and claude_state(folder)["state"] == "idle":
+        # the last session is in the desktop app and not listening: never a Terminal Claude in its place; the page offers
+        # "Open the desktop app" and "Start a new Claude" (force)
+        r = {"opened": False, "how": "desktop-idle", "session": rec.get("session"), "at": time.time()}
+        update(rj, lambda d: d.update(claude={**r, "last": (d.get("claude") or {}).get("last")}))
+        return r
     if os.environ.get("AI_EDITOR_NO_REOPEN"):   # tests: never a real Terminal or Claude Code session (the docstring up top)
         return None
     if listening(folder) or not force and (busy(folder) or time.time() - ((load(rj).get("claude") or {}).get("at") or 0) < REOPEN_S):
@@ -2456,8 +2516,15 @@ def reopen(folder, rj, force=False):
             r["resume"] = f"cd {shlex.quote(str(folder.parent.parent))} && claude --resume {sid}"
     r.setdefault("resume", resume_cmd(w) if r["how"] != "new" else "")
     r["at"] = time.time()
-    update(rj, lambda d: d.update(claude=r))
+    update(rj, lambda d: d.update(claude={**r, "last": (d.get("claude") or {}).get("last")}))
     return r
+
+
+def open_desktop():
+    """The page's "Open the desktop app": the Claude app to the front (macOS). False in tests or elsewhere."""
+    if os.environ.get("AI_EDITOR_NO_REOPEN") or sys.platform != "darwin":
+        return False
+    return subprocess.run(["open", "-a", "Claude"], capture_output=True).returncode == 0
 
 
 def log_pct(path):
@@ -3822,6 +3889,8 @@ def make_handler(folder, token):
                 return self.send(200, {})
             if path == "/claude":   # Start Claude: carry on in the Claude that worked here, else a new one
                 return self.send(200, reopen(folder, rj, force=True) or {})
+            if path == "/claude/desktop":   # the desktop session is not listening: bring the Claude app forward
+                return self.send(200, {"opened": open_desktop()})
             if path == "/claude/show":   # Show Claude: its Terminal tab to the front
                 return self.send(200, {"shown": show_claude(folder)})
             self.send(404, {})
@@ -4284,6 +4353,8 @@ def cmd_round(a, folder):
     noted(folder)
     if not running(folder):
         print("the page is not running: start it with `serve`")
+    if listen_hint(folder):
+        print(listen_hint(folder))
 
 
 def go_back(folder, n):
@@ -4689,8 +4760,21 @@ def cmd_alt(a, folder):
 def cmd_wait(folder, poll=1.0):
     rj = folder / "review.json"
     beat = folder / "review" / ".listening"
+    me = {"pid": os.getpid(), **askhook.claude_env(), "since": time.time()}
+    tmp = beat.with_name(f".listening.{os.getpid()}")
+    tmp.write_text(json.dumps(me), encoding="utf-8")
+    os.replace(tmp, beat)   # the newest `wait` on an edit takes its notes; an older one sees this and stops
+
+    def mine():
+        try:
+            return json.loads(beat.read_text(encoding="utf-8")).get("pid") in (None, me["pid"])
+        except (OSError, ValueError):
+            return True   # missing (Stop) or mid-write: keep listening
     try:
         while True:
+            if not mine():
+                print("STOPPED LISTENING: a newer `wait` on this video takes its notes now. Nothing to do here.")
+                return "superseded"
             beat.touch()
             # read only: a write here could drop a note the page saves in the same instant
             d0 = load(rj)
@@ -4699,7 +4783,8 @@ def cmd_wait(folder, poll=1.0):
                 break
             time.sleep(poll)
     finally:
-        beat.unlink(missing_ok=True)
+        if mine():
+            beat.unlink(missing_ok=True)
 
     (folder / "review" / ".claude").touch()   # Claude has the send or approve now: working, not gone
 
@@ -6001,6 +6086,75 @@ def demo_teach(folder, tmp, get, post, c3, tsk):
         os.environ["AI_EDITOR_CLAUDE"] = keep
 
 
+def demo_sessions(tmp, opened, typed):
+    """Which Claude gets the notes: claude.last, desktop sessions listening in the background, one listener at a time."""
+    keys = ("CLAUDE_CODE_SESSION_ID", "CLAUDE_CODE_ENTRYPOINT", "CLAUDE_CODE_HOST_SESSION_ID")
+    env0 = {k: os.environ.get(k) for k in keys}
+
+    def as_(sid, ep, host=""):
+        os.environ.update(CLAUDE_CODE_SESSION_ID=sid, CLAUDE_CODE_ENTRYPOINT=ep, CLAUDE_CODE_HOST_SESSION_ID=host)
+    E = lambda sid, ep="", host="": {"CLAUDE_CODE_SESSION_ID": sid, "CLAUDE_CODE_ENTRYPOINT": ep, "CLAUDE_CODE_HOST_SESSION_ID": host}
+    assert askhook.claude_env({}) == {} and askhook.claude_env(E("a", "claude-desktop", "local_9f")) == \
+        {"session": "a", "host_session": "local_9f", "kind": "desktop"}
+    assert [askhook.claude_env(E("a", ep))["kind"] for ep in ("cli", "", "sdk-py")] == ["terminal", "terminal", "other"]
+    try:
+        # a Terminal Claude that is not listening: today's reopen (stubbed launcher), never desktop-idle
+        tf = tmp / "lib" / "edits" / "term"
+        (tf / "review").mkdir(parents=True)
+        save(tf / "review.json", {})
+        as_("t-1", "cli")
+        note_session(tf, "wait")
+        assert load(tf / "review.json")["claude"]["last"]["kind"] == "terminal" and not listen_hint(tf)
+        n = len(opened)
+        r = reopen(tf, tf / "review.json")
+        assert r["how"] == "new" and len(opened) == n + 1 and load(tf / "review.json")["claude"]["last"]["session"] == "t-1", r
+        assert claude_state(tf)["where"] == "terminal" and claude_state(tf)["name"] == "t-1"
+        # the most recent `wait` or `round` wins; another session's status does not take it
+        df = tmp / "lib" / "edits" / "desk"
+        (df / "review").mkdir(parents=True)
+        rj = df / "review.json"
+        save(rj, {"name": "desk", "stage": "cut", "round": 1, "video": "v.mp4", "comments": [], "events": []})
+        note_session(df, "wait")
+        as_("d-1", "claude-desktop", "local_abcdef123456")
+        note_session(df, "status")
+        assert load(rj)["claude"]["last"]["session"] == "t-1", "a status elsewhere does not take the notes"
+        note_session(df, "round")
+        assert load(rj)["claude"]["last"] == {**load(rj)["claude"]["last"], "session": "d-1", "kind": "desktop", "by": "round",
+                                              "host_session": "local_abcdef123456"}
+        assert "run_in_background" in listen_hint(df) and str(df) in listen_hint(df)
+        # desktop, not listening: no Terminal Claude, the page says so
+        n, nt = len(opened), len(typed)
+        r = reopen(df, rj)
+        st = claude_state(df)
+        assert r["how"] == "desktop-idle" and not r["opened"] and (len(opened), len(typed)) == (n, nt), r
+        assert (st["state"], st["where"], st["name"], st["how"]) == ("idle", "desktop", "abcdef12", "desktop-idle"), st
+        assert load(rj)["claude"]["last"]["session"] == "d-1", "reopen keeps claude.last"
+        r = reopen(df, rj, force=True)   # Start a new Claude: today's reopen
+        assert r["how"] == "new" and len(opened) == n + 1 and load(rj)["claude"]["last"]["session"] == "d-1", r
+        # a desktop session's background `wait`: listening, then a newer one takes over and the older stops
+        me = [sys.executable, str(Path(__file__).resolve()), str(df), "wait"]
+        envd = lambda sid, host: {**os.environ, **E(sid, "claude-desktop", host)}
+        pa = subprocess.Popen(me, env=envd("d-1", "local_aaaaaaaa11"), stdout=subprocess.PIPE, text=True)
+        for _ in range(100):
+            if listener(df).get("pid") == pa.pid:
+                break
+            time.sleep(0.05)
+        st = claude_state(df)
+        assert (st["state"], st["where"], st["name"]) == ("waiting", "desktop", "aaaaaaaa"), st
+        assert reopen(df, rj) is None and len(opened) == n + 1, "a listener takes the notes"
+        pb = subprocess.Popen(me, env=envd("d-2", "local_bbbbbbbb22"), stdout=subprocess.PIPE, text=True)
+        out_a = pa.communicate(timeout=10)[0]
+        assert "STOPPED LISTENING" in out_a and "DESKTOP" not in out_a, out_a
+        assert listener(df).get("pid") == pb.pid and claude_state(df)["name"] == "bbbbbbbb"
+        update(rj, lambda d: d["events"].append({"type": "send", "stage": "cut", "round": 1, "handled": False}))
+        out_b = pb.communicate(timeout=10)[0]
+        assert out_b.startswith("SEND: desk") and "DESKTOP:" in out_b and "run_in_background" in out_b, out_b
+        assert not listening(df) and load(rj)["claude"]["last"]["session"] == "d-2", "the newest wait got the notes"
+    finally:
+        for k, v in env0.items():
+            os.environ.pop(k, None) if v is None else os.environ.__setitem__(k, v)
+
+
 def demo():
     import contextlib
     import io
@@ -6054,6 +6208,7 @@ def demo():
     os.environ["AI_EDITOR_NO_REOPEN"] = "1"
     assert reopen(rf, rf / "review.json", force=True) is None and len(opened) == n_open, "AI_EDITOR_NO_REOPEN: nothing opens"
     os.environ.pop("AI_EDITOR_NO_REOPEN")   # off for the rest: launcher.open_claude stays the recorder above
+    demo_sessions(tmp, opened, typed)
     w = who_claude()   # this demo's own process tree: a `claude` above it only when Claude Code runs it
     assert not w or (w["pid"] and "session" in w), w
     # a page no session owns takes only questions with no session: another project's Claude never asks there
@@ -7515,6 +7670,8 @@ def main():
             (folder / "review" / ".claude").touch()
         if askhook.session():   # this session's questions now go to this edit's page
             (folder / "review" / ".session").write_text(askhook.session(), encoding="utf-8")
+        if a.cmd != "start":
+            note_session(folder, a.cmd)   # where the page's notes go next (claude.last)
     if a.cmd == "start":
         if not Path(a.video).exists():
             sys.exit(f"no such file: {a.video}")
@@ -7531,7 +7688,8 @@ def main():
         else:
             print("already serving this edit" + ("" if a.no_open else "; opened it"))
     elif a.cmd == "wait":
-        cmd_wait(folder)
+        if cmd_wait(folder) != "superseded" and listen_hint(folder):
+            print(listen_hint(folder))
     elif a.cmd == "round":
         cmd_round(a, folder)
     elif a.cmd == "resolve":
