@@ -84,17 +84,21 @@ const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; c
   );
 };
 
+// volume is a gain: 1 is the file as it is, up to VMAX (+12 dB). The export's ffmpeg volume filter applies it as is; the
+// page's player needs the Web Audio API for a gain above 1 (an element's own volume stops at 1): useWebAudioApi
+export const VMAX = 3.981;
 const vol = (it: Item, fps: number, muted: boolean) => muted ? 0 : (f: number) => {
   const t = f / fps, len = it.end - it.start;
-  return Math.max(0, Math.min(1, (it.volume ?? 1) * Math.min(1, it.fade_in ? t / it.fade_in : 1, it.fade_out ? (len - t) / it.fade_out : 1)));
+  return Math.max(0, Math.min(VMAX, (it.volume ?? 1) * Math.min(1, it.fade_in ? t / it.fade_in : 1, it.fade_out ? (len - t) / it.fade_out : 1)));
 };
+const amp = () => live() ? { useWebAudioApi: true } : {};
 
 const VideoItem: React.FC<{ it: Item; a?: Asset; W: number; H: number; muted: boolean; hidden: boolean }> = ({ it, a, W, H, muted, hidden }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const V = live() ? Video : OffthreadVideo;
   const props = { src: urlOf(a), trimBefore: Math.round((it.in ?? 0) * fps), playbackRate: it.speed ?? 1,
-    volume: (it.volume ?? 1) <= 0 ? 0 : vol(it, fps, muted), muted: muted || (it.volume ?? 1) <= 0 };
+    volume: (it.volume ?? 1) <= 0 ? 0 : vol(it, fps, muted), muted: muted || (it.volume ?? 1) <= 0, ...amp() };
   if (hidden) return muted || (it.volume ?? 1) <= 0 ? null : <Audio {...props} />;
   // a clip with alpha (VP9 WebM): the page's <video> keeps it; the export extracts its frames as PNG to keep it
   const alpha = !live() && a?.alpha ? { transparent: true } : {};
@@ -204,7 +208,7 @@ export const SceneEdit: React.FC<SceneDoc> = ({ tracks, assets, background }) =>
             const a = it.asset ? assets[it.asset] : undefined;
             if (tr.kind === "audio")
               return tr.muted || !a ? null : seq(it, <Audio src={urlOf(a)} trimBefore={Math.round((it.in ?? 0) * fps)} playbackRate={it.speed ?? 1}
-                volume={vol(it, fps, false)} />);
+                volume={vol(it, fps, false)} {...amp()} />);
             if (it.type === "video") return seq(it, <VideoItem it={it} a={a} W={W} H={H} muted={!!tr.muted} hidden={!!tr.hidden} />, true);
             if (tr.hidden) return null;
             if (it.type === "card") return t >= it.start && t < it.end + 0.4 ? <CardItem key={it.id} it={it} t={t} W={W} H={H} /> : null;

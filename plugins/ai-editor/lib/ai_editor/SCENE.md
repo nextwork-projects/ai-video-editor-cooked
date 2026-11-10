@@ -172,7 +172,15 @@ and Up / Down jump between them.
   else a new one. It lasts the file, up to the scene's end. The panel lists the sounds picked for a moment first.
 - `GET /scene/peaks/<id>?alt=` is an asset's waveform (`scene.peaks`: 50 values a second, cached in
   `.scene/<id>.peaks.json`); each audio clip draws the part it plays. A top corner of an audio clip drags its fade.
-- Volume is 0 to 1: the player and the export play no louder than the file.
+- `volume` is a gain: 1 is the file as it is, 0 silence, up to 3.981 (+12 dB, SceneEdit's `VMAX`). The export applies it
+  in Remotion's ffmpeg mix (its `volume` filter takes any gain); the page's player routes each clip through a Web Audio
+  GainNode (`useWebAudioApi`), since a media element's own volume stops at 1. There is no limiter: a loud clip boosted
+  past full scale clips in the export, so boost quiet sound, not loud sound.
+- Every clip with sound (audio, and video from its asset's sound, with its waveform from the same peaks route) has a volume
+  line: drag it up or down (half a dB a pixel, Shift a tenth), a label shows the level in dB, it snaps to 0 dB within 1 dB,
+  and below -48 dB is silence. Every picked clip with sound moves by the same dB. The waveform grows and shrinks with it.
+  The player is heard changing while dragging; letting go is one op and one undo. The trim edges (8 px each side) and the
+  fade handles (top corners) keep their own presses. Properties shows the same volume in dB.
 
 ## Footage covers the frame
 

@@ -2,6 +2,13 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.45, creator-teardown 2.7.45 (2026-11-09)
+- Turn a clip's sound up or down on the timeline. Every clip with sound has a volume line across it: drag it up or down and you hear the change as you drag. A label shows the level in dB, and it snaps back to 0 dB, the sound as it was.
+- Boost up to +12 dB, in the player and in the export. Down to silence at the bottom.
+- Video clips show their waveform too, and it grows and shrinks with the volume.
+- With several clips picked, dragging one line moves them all by the same dB.
+- Properties shows the volume in dB with the same range.
+
 ## ai-editor 2.7.44, creator-teardown 2.7.44 (2026-11-09)
 - Notes reach the Claude that last worked on the video, in the Claude desktop app too. A desktop session listens in the background and wakes up the moment you press Submit feedback to Claude.
 - The top bar says where your notes go: your desktop session, your Terminal Claude, or a new Claude, with the session's short id and whether it is listening, working or not listening.
