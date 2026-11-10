@@ -29,9 +29,29 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .scj:hover>span{display:flex}.scj>span{pointer-events:auto}.scj em{font-style:normal;color:var(--muted)}.scj>span::after{content:"";position:absolute;left:0;right:0;top:100%;height:10px}.scj button{align-self:flex-start;height:28px;padding:0 10px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.scj button:hover{border-color:var(--ink)}
 #edtracks[data-ld="scv"] .newl[data-row="scv"],#edtracks[data-ld="sca"] .newl[data-row="sca"]{display:flex}#edtracks[data-ld] .edwrap{--nl:30px}.etrack.scdrop{outline:2px dashed var(--ink);outline-offset:-2px}
 .scadd{display:flex;flex-wrap:wrap;gap:4px;padding:8px 0 0 4px}.scadd button{height:24px;padding:0 7px;white-space:nowrap;border-radius:6px;border:1px solid var(--line2);font-size:11px;font-weight:600;color:var(--body)}.scadd button:hover{border-color:var(--ink);color:var(--ink)}
-.sckey{width:24px;height:24px;flex-shrink:0;border-radius:6px;display:grid;place-items:center;color:var(--muted)}.sckey::before{content:"";width:8px;height:8px;transform:rotate(45deg);border:1.5px solid currentColor}.sckey.on{color:#FFD60A}.sckey.on::before{background:currentColor}.sckey:hover{background:var(--hover)}
-#ibody textarea.scta{width:100%;min-height:64px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);padding:8px;font:inherit;font-size:13px;resize:vertical}
-#ibody input[type=color]{width:40px;height:28px;border:1px solid var(--line2);border-radius:6px;background:none;padding:2px}
+/* the inspector, Figma's design panel: sections under a hairline, filled 32 px fields with a short label inside, 8 px apart,
+   one 24 px keyframe column on the right (quiet when nothing is keyed, solid when animated, filled yellow on a key here) */
+#ibody .ihead{margin:0 0 12px}#ibody .scsec{border-top:1px solid var(--line)}
+#ibody details>summary{display:flex;align-items:center;justify-content:space-between;height:40px;list-style:none;cursor:pointer;font-size:12px;line-height:16px;font-weight:600;color:var(--strong);-webkit-user-select:none;user-select:none}
+#ibody details>summary::-webkit-details-marker{display:none}#ibody details>summary::after{content:"";width:5px;height:5px;margin-right:10px;border:solid var(--muted);border-width:0 1.5px 1.5px 0;transform:rotate(-45deg)}
+#ibody details[open]>summary::after{transform:translateY(-2px) rotate(45deg)}#ibody details>summary:hover::after{border-color:var(--ink)}
+#ibody .scsb{display:flex;flex-direction:column;gap:8px;padding-bottom:16px}#ibody .scmore>summary{height:32px;font-weight:500;color:var(--muted)}#ibody .scmore>.scsb{padding:0}
+.scrow{display:flex;align-items:center;gap:8px;min-height:32px}.scsk{width:24px;flex-shrink:0}
+.scf{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:6px;height:32px;padding:0 8px;border-radius:8px;background:var(--chip);border:1px solid transparent;font-size:13px;color:var(--strong)}
+.scf:hover{border-color:var(--line)}.scf:focus-within{border-color:var(--line2)}.scl{flex-shrink:0;font-size:12px;color:var(--muted);white-space:nowrap;-webkit-user-select:none;user-select:none}.scl[data-scrub]{cursor:ew-resize}
+.scf input[type=number]{flex:1;min-width:0;width:100%;height:100%;border:0;padding:0;background:none;color:inherit;font:inherit;font-variant-numeric:tabular-nums;outline:none;-moz-appearance:textfield}
+.scf input::-webkit-inner-spin-button,.scf input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}.scf em{font-style:normal;font-size:12px;color:var(--quiet)}
+.scf.sel{position:relative}.scf select{flex:1;min-width:0;height:100%;border:0;padding:0 14px 0 0;background:none;color:inherit;font:inherit;outline:none;-webkit-appearance:none;appearance:none;cursor:pointer}
+.scf.sel::after{content:"";position:absolute;right:11px;top:50%;width:5px;height:5px;margin-top:-4px;border:solid var(--muted);border-width:0 1.5px 1.5px 0;transform:rotate(45deg);pointer-events:none}.scf select option{background:var(--panel);color:var(--strong)}
+.scf input[type=color]{-webkit-appearance:none;appearance:none;flex-shrink:0;width:16px;height:16px;padding:0;border:0;background:none;cursor:pointer}
+.scf input[type=color]::-webkit-color-swatch-wrapper{padding:0}.scf input[type=color]::-webkit-color-swatch{border:1px solid var(--line2);border-radius:4px}.schex{font-weight:400;font-variant-numeric:tabular-nums;cursor:pointer}
+.scrow.tight{gap:4px}.scrow.tight .scf{padding:0 6px;gap:4px}
+.scsw{flex:1;min-width:0;display:flex;align-items:center;justify-content:space-between;height:32px;font-size:13px;color:var(--body);cursor:pointer}
+.scswi{-webkit-appearance:none;appearance:none;position:relative;flex-shrink:0;width:28px;height:16px;margin:0 8px 0 0;border-radius:8px;background:var(--track);cursor:pointer;transition:background .15s}
+.scswi::before{content:"";position:absolute;left:2px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--quiet);transition:transform .15s,background .15s}.scswi:checked{background:var(--ink)}.scswi:checked::before{transform:translateX(12px);background:var(--onink)}
+#ibody textarea.scta{flex:1;min-width:0;min-height:64px;border:1px solid transparent;border-radius:8px;background:var(--chip);color:var(--strong);padding:7px 8px;font:inherit;font-size:13px;line-height:18px;resize:vertical;outline:none}#ibody textarea.scta:focus{border-color:var(--line2)}
+#ibody .scsb .ifull,#ibody #scdel{height:32px;font-size:12px;font-weight:500;color:var(--body)}#ibody #scdel{margin-top:8px}#ibody .scsb .ifull:hover,#ibody #scdel:hover{color:var(--ink)}
+.sckey{width:24px;height:24px;flex-shrink:0;border-radius:6px;display:grid;place-items:center;color:var(--quiet)}.sckey::before{content:"";width:7px;height:7px;transform:rotate(45deg);border:1.5px solid currentColor}.sckey.has{color:var(--strong)}.sckey.on{color:#FFD60A}.sckey.on::before{background:currentColor}.sckey:hover{background:var(--hover);color:var(--ink)}.sckey.on:hover{color:#FFD60A}
 #scl video{background:transparent}   /* the page's video{background} would paint a clip with alpha black */
 .eitem.sc .scby{position:absolute;right:3px;top:3px;width:11px;height:11px;color:#D97757;pointer-events:none;filter:drop-shadow(0 0 1px rgba(0,0,0,.6))}
 /* the picked clip's keyframe lane: a thin row per animated property under its track, a diamond per key */
@@ -48,7 +68,6 @@ body.scene .edleft{width:156px}.eruler .scj{top:auto;bottom:0;height:6px;width:3
 .sccr .num{color:var(--muted)}.sccr b{font-weight:600;color:var(--strong)}.sccr em{grid-column:2/3;font-style:normal;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sccr button{grid-row:1/3;grid-column:3;height:26px;padding:0 9px;border-radius:7px;border:1px solid var(--line2);font-size:12px;font-weight:600;color:var(--ink)}.sccr button:hover{border-color:var(--ink)}
 .tzoom .scbtn{display:none}body.scene .tzoom .scbtn{display:grid;place-items:center}body.scene #scdelb{margin-right:6px}.tzoom .scbtn svg{width:15px;height:15px}
-#ibody .tf.keyed>span{color:#FFD60A}#ibody .tf.keyed .inum{border-color:rgba(255,214,10,.6)}.sckey.has{color:#FFD60A}.sckey.has::before{background:none}
 .sckds{border:1px solid rgba(255,214,10,.4);border-radius:8px;padding:4px 8px;margin-bottom:8px}
 /* an audio clip: its waveform, its fades shaded, a handle on each top corner to drag a fade (on the picked clip, or on hover) */
 .eitem.sc.snd svg.wv{pointer-events:none}.scfd{position:absolute;top:0;bottom:0;background:rgba(0,0,0,.45);pointer-events:none}.scfd.in{left:0;clip-path:polygon(0 0,100% 0,0 100%)}.scfd.out{right:0;clip-path:polygon(0 0,100% 0,100% 100%)}
@@ -356,51 +375,82 @@ document.addEventListener('click',e=>{const el=$('sccuts');if(!el)return;if(!el.
   const bb=e.target.closest('[data-cback]');if(bb){Promise.resolve(SC.bringBack(bb.dataset.cback)).then(()=>SC.cutsDraw());return}
   const r=e.target.closest('.sccr'),q=r&&scGet(r.dataset.cid);if(q){v.pause();v.currentTime=q.it.start;edPh();SC.draw();SC.cutsCur()}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('sccuts')){$('sccuts').remove();e.stopImmediatePropagation()}},true);
-// ---- the inspector (the left panel): every field of the picked item; several picked, the fields they share
+// ---- the inspector (the left panel), laid out like Figma's design panel: the item's name and type, then sections in the order a
+// person reaches for them (per type), each collapsible and remembered; paired fields share a row; the short label inside a number
+// field scrubs it (drag); one keyframe column on the right. Several picked: the fields they share
 const SCAN=[['none','None'],['cut','Cut'],['fade','Fade'],['pop','Pop'],['slide-up','Slide up']],SCFONT=['TikTok Sans','Inter','Montserrat','Poppins','Bebas Neue','Georgia'];
 const KEYP=['x','y','scale','w','h','rotation','opacity'],SCEASE=[['linear','Linear'],['in','Ease in'],['out','Ease out'],['inout','Ease in and out'],['hold','Hold']];
-function scFields(it){const V=scVis(it),F=[];const n=(p,l,st,u,o)=>F.push({p,l,k:'num',st,u,...o}),c=(p,l)=>F.push({p,l,k:'col'}),s=(p,l,opts)=>F.push({p,l,k:'sel',opts}),tg=(p,l,def)=>F.push({p,l,k:'tog',def});
-  if(it.type==='text'){F.push({p:'text',l:'Words',k:'txt'});s('font','Font',SCFONT.map(f=>[f,f]));n('size','Size',1,'px');s('weight','Weight',[[400,'Regular'],[500,'Medium'],[600,'Semibold'],[700,'Bold'],[800,'Heavy'],[900,'Black']]);c('color','Colour');
-    s('align','Align',[['left','Left'],['center','Centre'],['right','Right']]);n('line_height','Line height',.05,'');tg('box','Box',{color:'#000000',pad:16,radius:12});if(it.box){c('box.color','Box colour');n('box.pad','Box padding',1,'px');n('box.radius','Box radius',1,'px')}
-    tg('outline','Outline',{color:'#000000',width:4});if(it.outline){c('outline.color','Outline colour');n('outline.width','Outline width',1,'px')}}
-  if(it.type==='shape'){c('fill','Fill');tg('stroke','Stroke',{color:'#FFFFFF',width:4});if(it.stroke){c('stroke.color','Stroke colour');n('stroke.width','Stroke width',1,'px')}}
-  if(V){n('x','Position X',1,'px');n('y','Position Y',1,'px');if(it.type!=='card')n('scale','Scale',.01,'x',{min:.05});n('w',it.type==='text'?'Wrap width':'Width',1,'px');if(it.type!=='text')n('h','Height',1,'px');n('rotation','Rotation',1,'°');n('opacity','Opacity',.05,'',{min:0,max:1});
-    if(/^(video|image)$/.test(it.type)){s('fit','Fit',[['cover','Fill'],['contain','Fit']]);n('crop.l','Crop left',.01,'',{min:0,max:.95});n('crop.t','Crop top',.01,'',{min:0,max:.95});n('crop.r','Crop right',.01,'',{min:0,max:.95});n('crop.b','Crop bottom',.01,'',{min:0,max:.95})}
-    n('radius','Corners',1,'px');tg('shadow','Shadow',{blur:24,y:8,opacity:.4});if(it.shadow){n('shadow.blur','Shadow blur',1,'px');n('shadow.y','Shadow Y',1,'px');n('shadow.opacity','Shadow opacity',.05,'')}
-    tg('border','Border',{width:4,color:'#FFFFFF'});if(it.border){n('border.width','Border width',1,'px');c('border.color','Border colour')}
-    s('anim.in','Animation in',SCAN);s('anim.out','Animation out',SCAN);n('anim.dur','Animation time',.05,'s')}
-  if(/^(video|audio)$/.test(it.type)){n('volume_db','Volume',.5,'dB',{min:SCDBMIN,max:SCDBMAX});n('speed','Speed',.05,'x',{min:.1,max:8});n('fade_in','Fade in',.05,'s',{min:0});n('fade_out','Fade out',.05,'s',{min:0});n('in','Starts in source',.01,'s',{min:0})}
-  n('start','Start',.01,'s',{min:0});n('end','End',.01,'s',{min:0});return F}
+const SCSEC={text:'Text',fill:'Fill',layout:'Layout',crop:'Crop',look:'Look',more:'More',anim:'Animation',sound:'Sound',time:'Timing'};
+// a field: p the path, l its name, g its section, r its row (fields with the same r share one), pr the short label inside it ('' none)
+function scFields(it){const V=scVis(it),F=[];let g='';const n=(p,l,st,u,o)=>F.push({g,p,l,k:'num',st,u,...o}),c=(p,l,o)=>F.push({g,p,l,k:'col',pr:'',...o}),s=(p,l,opts,o)=>F.push({g,p,l,k:'sel',opts,...o}),tg=(p,l,def)=>F.push({g,p,l,k:'tog',def});
+  if(it.type==='text'){g='text';F.push({g,p:'text',l:'Words',k:'txt'});s('font','Font',SCFONT.map(f=>[f,f]),{pr:''});
+    s('weight','Weight',[[400,'Regular'],[500,'Medium'],[600,'Semibold'],[700,'Bold'],[800,'Heavy'],[900,'Black']],{r:'ws',pr:''});n('size','Size',1,'px',{r:'ws'});
+    c('color','Colour',{r:'ca'});s('align','Align',[['left','Left'],['center','Centre'],['right','Right']],{r:'ca',pr:''});n('line_height','Line height',.05,'');
+    tg('box','Box',{color:'#000000',pad:16,radius:12});if(it.box){c('box.color','Box colour');n('box.pad','Box padding',1,'px',{r:'bx',pr:'Padding'});n('box.radius','Box radius',1,'px',{r:'bx',pr:'Radius'})}
+    tg('outline','Outline',{color:'#000000',width:4});if(it.outline){c('outline.color','Outline colour',{r:'ol'});n('outline.width','Outline width',1,'px',{r:'ol',pr:'Width'})}}
+  if(it.type==='shape'){g='fill';c('fill','Fill');tg('stroke','Stroke',{color:'#FFFFFF',width:4});if(it.stroke){c('stroke.color','Stroke colour',{r:'sk'});n('stroke.width','Stroke width',1,'px',{r:'sk',pr:'Width'})}}
+  if(V){g='layout';n('x','Position X',1,'px',{r:'pos',pr:'X'});n('y','Position Y',1,'px',{r:'pos',pr:'Y'});
+    if(it.type==='text')n('w','Wrap width',1,'px');else{n('w','Width',1,'px',{r:'size',pr:'W'});n('h','Height',1,'px',{r:'size',pr:'H'})}
+    if(it.type!=='card')n('scale','Scale',.01,'x',{min:.05});n('rotation','Rotation',1,'°');
+    if(/^(video|image)$/.test(it.type)){g='crop';s('fit','Fit',[['cover','Fill'],['contain','Fit']]);[['l','Left'],['t','Top'],['r','Right'],['b','Bottom']].forEach(([k,w])=>n('crop.'+k,'Crop '+w.toLowerCase(),.01,'',{min:0,max:.95,r:'crop',pr:w[0]}))}
+    g='look';n('opacity','Opacity',.05,'',{min:0,max:1});g='more';n('radius','Corners',1,'px');
+    tg('shadow','Shadow',{blur:24,y:8,opacity:.4});if(it.shadow){n('shadow.blur','Shadow blur',1,'px',{r:'sh',pr:'Blur'});n('shadow.y','Shadow Y',1,'px',{r:'sh',pr:'Y'});n('shadow.opacity','Shadow opacity',.05,'',{pr:'Opacity'})}
+    tg('border','Border',{width:4,color:'#FFFFFF'});if(it.border){c('border.color','Border colour',{r:'bd'});n('border.width','Border width',1,'px',{r:'bd',pr:'Width'})}
+    g='anim';s('anim.in','Animation in',SCAN,{r:'an',pr:'In'});s('anim.out','Animation out',SCAN,{r:'an',pr:'Out'});n('anim.dur','Animation time',.05,'s',{pr:'Length'})}
+  if(/^(video|audio)$/.test(it.type)){g='sound';n('volume_db','Volume',.5,'dB',{min:SCDBMIN,max:SCDBMAX});n('fade_in','Fade in',.05,'s',{min:0,r:'fd'});n('fade_out','Fade out',.05,'s',{min:0,r:'fd'});n('speed','Speed',.05,'x',{min:.1,max:8})}
+  g='time';n('start','Start',.01,'s',{min:0,r:'se'});n('end','End',.01,'s',{min:0,r:'se'});if(/^(video|audio)$/.test(it.type))n('in','Starts in source',.01,'s',{min:0});return F}
 const scPath=(it,p)=>p.split('.').reduce((o,k)=>o==null?o:o[k],it);
 function scPut(it,p,x,t){if(p==='volume_db'){it.volume=scGain(x);return}const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
+// which sections are open, per user: Timing and More start closed
+let scSecs={};try{scSecs=JSON.parse(localStorage.getItem('review-scsec')||'{}')||{}}catch(e){}
+const scOpen=id=>id in scSecs?!!scSecs[id]:!/^(time|more)$/.test(id);
 SC.insp=function(){if(!SC.on||SC.noside)return;const ids=[...SC.sel].filter(k=>scGet(k)),B=$('ibody');
   if(!ids.length){if(tool&&tool!=='insp')return;if(tool!=='insp')openTool('insp');const h='<p class="ihead"><b>Nothing picked</b><span>Click anything on the video or the timeline to change it here.</span></p>';if(B._h!==h)B.innerHTML=B._h=h;return}
   if(tool&&tool!=='insp'&&!SC.pick)return;SC.pick=0;if(tool!=='insp')openTool('insp');const t=scNow(),its=ids.map(k=>scGet(k).it),one=its[0],fs=scFields(one).filter(f=>f.k!=='txt'||its.length===1).filter(f=>its.every(i=>scFields(i).some(g=>g.p===f.p)));
-  const val=f=>f.p==='volume_db'?Math.round(Math.max(SCDBMIN,scDb(one.volume??1))*10)/10:KEYP.includes(f.p)?scVal(one,f.p,t):scPath(one,f.p),hk=p=>(one.keys&&one.keys[p]||[]).some(q=>Math.abs(one.start+q[0]-t)<1/(SC.s.fps||30)),has=p=>its.length===1&&KEYP.includes(p)&&!!(one.keys&&one.keys[p]&&one.keys[p].length),
-    kb=f=>KEYP.includes(f.p)&&its.length===1?`<button class="sckey${hk(f.p)?' on':has(f.p)?' has':''}" data-kp="${f.p}" title="${hk(f.p)?'Remove the keyframe here':has(f.p)?'Animated: add a keyframe here (the value now)':'Animate: add a keyframe here, then change the value at another time'}" aria-label="keyframe ${f.l.toLowerCase()}"></button>`:'';
-  const row=f=>{const x=val(f),id='sci-'+f.p.replace('.','-');let c;
-    if(f.k==='num')c=`<input type="number" class="inum" id="${id}" data-p="${f.p}" step="${f.st}"${f.min!=null?` min="${f.min}"`:''}${f.max!=null?` max="${f.max}"`:''} value="${x==null?'':+(+x).toFixed(f.st<1?2:0)}"><em>${f.u}</em>`;
-    else if(f.k==='col')c=`<input type="color" id="${id}" data-p="${f.p}" value="${/^#[0-9a-f]{6}$/i.test(x||'')?x:'#FFFFFF'}">`;
-    else if(f.k==='sel')c=`<select id="${id}" data-p="${f.p}">${(f.opts.some(o=>String(o[0])===String(x))||x==null?f.opts:[[x,x],...f.opts]).map(([k,n])=>`<option value="${k}"${String(k)===String(x??'')?' selected':''}>${n}</option>`).join('')}</select>`;
-    else if(f.k==='tog')c=`<select id="${id}" data-p="${f.p}" data-tog="${esc(JSON.stringify(f.def))}"><option value=""${x?'':' selected'}>Off</option><option value="1"${x?' selected':''}>On</option></select>`;
-    else return `<div class="tf top"><span>${f.l}</span><div class="tfv"><textarea class="scta" id="${id}" data-p="text">${esc(x||'')}</textarea></div></div>`;
-    return `<div class="tf${has(f.p)?' keyed':''}"><span>${f.l}</span><div class="tfv">${c}</div>${kb(f)}</div>`};
-  const nm=its.length>1?`${its.length} picked`:esc(one.name||(one.type==='text'?one.text:one.type).replace(/^./,m=>m.toUpperCase())),sub=its.length>1?'A change goes on all of them':`${one.type.replace(/^./,m=>m.toUpperCase())} · ${fmtx(one.start)} to ${fmtx(one.end)}`;
+  const val=f=>f.p==='volume_db'?Math.round(Math.max(SCDBMIN,scDb(one.volume??1))*10)/10:KEYP.includes(f.p)?scVal(one,f.p,t):scPath(one,f.p),hk=p=>(one.keys&&one.keys[p]||[]).some(q=>Math.abs(one.start+q[0]-t)<1/(SC.s.fps||30)),has=p=>its.length===1&&KEYP.includes(p)&&!!(one.keys&&one.keys[p]&&one.keys[p].length);
+  const kc=its.length===1&&scVis(one),slot='<i class="scsk"></i>',   // the keyframe column, on every row of one picked visual so the fields line up
+    kb=r=>{if(!kc)return '';const ps=r.filter(f=>KEYP.includes(f.p)).map(f=>f.p),on=ps.some(hk),hs=ps.some(has),nm=r.map(f=>f.l.toLowerCase()).join(' and ');
+      return ps.length?`<button class="sckey${on?' on':hs?' has':''}" data-kp="${ps}" title="${on?'Remove the keyframe here':hs?'Animated: add a keyframe here (the value now)':'Animate: add a keyframe here, then change the value at another time'}" aria-label="keyframe ${nm}"></button>`:slot};
+  const fld=f=>{const x=val(f),pr=f.pr??f.l,a=` id="sci-${f.p.replace('.','-')}" data-p="${f.p}" aria-label="${f.l}"`,lb=s=>pr?`<span class="scl"${s?' data-scrub':''}>${pr}</span>`:'';
+    if(f.k==='num')return `<div class="scf" title="${f.l}">${lb(1)}<input type="number"${a} step="${f.st}"${f.min!=null?` min="${f.min}"`:''}${f.max!=null?` max="${f.max}"`:''}${f.r==='crop'?' placeholder="0"':''} value="${x==null?'':+(+x).toFixed(f.st<1?2:0)}">${f.u&&f.u!=='px'?`<em>${f.u}</em>`:''}</div>`;
+    if(f.k==='col'){const cv=/^#[0-9a-f]{6}$/i.test(x||'')?x:'#FFFFFF';return `<label class="scf" title="${f.l}">${lb()}<input type="color"${a} value="${cv}"><b class="schex">${cv.toUpperCase()}</b></label>`}
+    return `<div class="scf sel" title="${f.l}">${lb()}<select${a}>${(f.opts.some(o=>String(o[0])===String(x))||x==null?f.opts:[[x,x],...f.opts]).map(([k,n])=>`<option value="${k}"${String(k)===String(x??'')?' selected':''}>${n}</option>`).join('')}</select></div>`};
+  const row=r=>{const f=r[0];
+    if(f.k==='txt')return `<div class="scrow"><textarea class="scta" id="sci-text" data-p="text" aria-label="Words">${esc(val(f)||'')}</textarea>${kc?slot:''}</div>`;
+    if(f.k==='tog')return `<div class="scrow"><label class="scsw"><span>${f.l}</span><input type="checkbox" class="scswi" id="sci-${f.p}" data-p="${f.p}" data-tog="${esc(JSON.stringify(f.def))}" aria-label="${f.l}"${val(f)?' checked':''}></label>${kc?slot:''}</div>`;
+    return `<div class="scrow${f.r==='crop'?' tight':''}">${r.map(fld).join('')}${kb(r)}</div>`};
+  const rows=g=>{const R=[];fs.filter(f=>f.g===g).forEach(f=>{const l=R[R.length-1];if(f.r&&l&&l[0].r===f.r)l.push(f);else R.push([f])});return R.map(row).join('')},
+    sec=(g,body,c)=>`<details class="${c}" data-sec="${g}"${scOpen(g)?' open':''}><summary>${SCSEC[g]}</summary><div class="scsb">${body}</div></details>`,
+    gs=[...new Set(fs.map(f=>f.g))].filter(g=>g!=='more');
+  const body=gs.map(g=>sec(g,rows(g)+(g==='look'&&fs.some(f=>f.g==='more')?sec('more',rows('more'),'scmore'):'')+(g==='crop'&&its.length===1?`<button class="ifull" id="sccrop">${SC.crop?'Done cropping':'Crop on the video (C)'}</button>`:''),'scsec')).join('');
+  const nm=its.length>1?`${its.length} picked`:esc(one.name||(one.type==='text'?one.text:one.type).replace(/^./,m=>m.toUpperCase())),sub=its.length>1?'A change goes on all of them':one.type.replace(/^./,m=>m.toUpperCase());
   const kd=its.length===1&&scKd(),kg=kd&&KG.find(x=>x[0]===kd.g),kk=kd?scKeysAt(one,kg[2],kd.u):[],ke=kk.length?kk[0][2]||'linear':null;   // the keyframe picked on the lane
   const kh=kk.length?`<div class="isec sckds"><div class="tf"><span>${kg[1]} keyframe</span><div class="tfv"><em class="num">${fmtx(one.start+kd.u)}</em></div></div><div class="tf"><span>Ease to the next</span><div class="tfv"><select id="scke" aria-label="ease to the next keyframe">${(SCEASE.some(o=>o[0]===ke)?SCEASE:[[ke,ke],...SCEASE]).map(([k,n])=>`<option value="${k}"${k===ke?' selected':''}>${n}</option>`).join('')}</select></div></div><button class="ifull" id="sckdel">Delete keyframe</button></div>`:'';
-  const h=`<p class="ihead"><b>${nm}</b><span>${sub}</span></p>${kh}<div class="isec">${fs.map(row).join('')}</div>${its.length===1&&/^(video|image)$/.test(one.type)?`<button class="ifull" id="sccrop">${SC.crop?'Done cropping':'Crop (C)'}</button>`:''}<button class="ifull" id="scdel">Delete</button>`;
-  if(B._h===h)return;const f=document.activeElement;if(f&&B.contains(f)&&f.dataset.p)return;B._h=h;B.innerHTML=h};
-$('ibody').addEventListener('input',e=>{if(!SC.on||!e.target.dataset.p||e.target.dataset.tog!=null)return;if(!SC.ib)SC.ib=scCopy(SC.s);const p=e.target.dataset.p,t=scNow(),raw=e.target.value;
+  const h=`<p class="ihead"><b>${nm}</b><span>${sub}</span></p>${kh}${body}<button class="ifull" id="scdel">Delete</button>`;
+  if(B._h===h||SC.scrub)return;const f=document.activeElement;if(f&&B.contains(f)&&f.dataset.p&&f.dataset.tog==null)return;   // a switch just flipped re-draws at once: its fields appear under it
+  B._h=h;B.innerHTML=h};
+$('ibody').addEventListener('toggle',e=>{const d=e.target,g=d.dataset&&d.dataset.sec;if(!g||scOpen(g)===d.open)return;scSecs[g]=d.open;try{localStorage.setItem('review-scsec',JSON.stringify(scSecs))}catch(x){}},true);
+$('ibody').addEventListener('input',e=>{if(!SC.on||!e.target.dataset.p||e.target.dataset.tog!=null)return;if(e.target.type==='color'&&e.target.nextElementSibling)e.target.nextElementSibling.textContent=e.target.value.toUpperCase();if(!SC.ib)SC.ib=scCopy(SC.s);const p=e.target.dataset.p,t=scNow(),raw=e.target.value;
   const x=e.target.type==='number'?(raw===''?null:+raw):p==='weight'?+raw:raw;if(x==null&&e.target.type==='number')return;
   SC.sel.forEach(k=>{const q=scGet(k);if(q)scPut(q.it,p,x,t)});SC.show(true)},true);
+// drag the label inside a number field to change it, as Figma does: a step per 2 px, shift for 10; the same input and change
+// events as typing, so it is live and one undo
+$('ibody').addEventListener('pointerdown',e=>{const h=e.target.closest('[data-scrub]'),inp=h&&h.parentNode.querySelector('input[type=number]');if(!SC.on||!inp||e.button)return;e.preventDefault();
+  const x0=e.clientX,v0=+inp.value||0,st=+inp.step||1,mn=inp.min===''?-Infinity:+inp.min,mx=inp.max===''?Infinity:+inp.max,dp=st<1?2:0;let moved=false;h.setPointerCapture(e.pointerId);
+  const mv=ev=>{const d=Math.round((ev.clientX-x0)/2);if(!d&&!moved)return;moved=SC.scrub=true;const s=String(+Math.min(mx,Math.max(mn,v0+d*st*(ev.shiftKey?10:1))).toFixed(dp));if(inp.value!==s){inp.value=s;inp.dispatchEvent(new Event('input',{bubbles:true}))}},
+    up=()=>{h.removeEventListener('pointermove',mv);h.removeEventListener('pointerup',up);h.removeEventListener('pointercancel',up);SC.scrub=false;if(moved)inp.dispatchEvent(new Event('change',{bubbles:true}));else inp.focus()};
+  h.addEventListener('pointermove',mv);h.addEventListener('pointerup',up);h.addEventListener('pointercancel',up)});
 $('ibody').addEventListener('change',e=>{if(!SC.on||e.target.id!=='scke')return;const k=scKd(),x=e.target.value;if(!k)return;const ps=KEYP;$('ibody')._h=null;
   SC.change('ease a keyframe',s=>{const it=scAll(s).find(o=>o.it.id===k.id).it;ps.forEach(p=>(it.keys&&it.keys[p]||[]).forEach(q=>{if(Math.abs(q[0]-k.u)<scHalf())q[2]=x}))})},true);
 $('ibody').addEventListener('change',e=>{if(!SC.on||!e.target.dataset.p)return;const p=e.target.dataset.p,t=scNow();let b=SC.ib||scCopy(SC.s);SC.ib=null;
-  if(e.target.dataset.tog!=null){const on=!!e.target.value,d=JSON.parse(e.target.dataset.tog);b=scCopy(SC.s);SC.sel.forEach(k=>{const q=scGet(k);if(q)q.it[p]=on?(q.it[p]||d):null})}
+  if(e.target.dataset.tog!=null){const on=e.target.type==='checkbox'?e.target.checked:!!e.target.value,d=JSON.parse(e.target.dataset.tog);b=scCopy(SC.s);SC.sel.forEach(k=>{const q=scGet(k);if(q)q.it[p]=on?(q.it[p]||d):null})}
   $('ibody')._h=null;SC.show();SC.commit(b,'change '+p.replace('.',' ').replace('_',' '))},true);
+// a row's diamond keys every property on it (Position: x and y, Size: w and h, as the lanes group them): a key here on any of
+// them takes them all off, else each gets one at the value now
 $('ibody').addEventListener('click',e=>{if(!SC.on)return;const k=e.target.closest('[data-kp]'),t=scNow();
-  if(k){const p=k.dataset.kp,id=[...SC.sel][0];return SC.change('keyframe',s=>{const it=scAll(s).find(o=>o.it.id===id).it,u=+(t-it.start).toFixed(3),ks=(it.keys=it.keys||{})[p]=it.keys[p]||[],i=ks.findIndex(q=>Math.abs(q[0]-u)<1/(s.fps||30)/2);
-    if(i>=0){ks.splice(i,1);if(!ks.length){delete it.keys[p];if(!Object.keys(it.keys).length)delete it.keys}}else{if(!ks.length&&it[p]==null)it[p]=scVal(it,p,t);ks.push([u,scVal(it,p,t),'inout']);ks.sort((a,b)=>a[0]-b[0])}})}
+  if(k){const ps=k.dataset.kp.split(','),id=[...SC.sel][0];return SC.change('keyframe',s=>{const it=scAll(s).find(o=>o.it.id===id).it,u=+(t-it.start).toFixed(3),f=1/(s.fps||30)/2,at=p=>(it.keys&&it.keys[p]||[]).findIndex(q=>Math.abs(q[0]-u)<f),off=ps.some(p=>at(p)>=0);
+    ps.forEach(p=>{const i=at(p);if(off){if(i<0)return;it.keys[p].splice(i,1);if(!it.keys[p].length){delete it.keys[p];if(!Object.keys(it.keys).length)delete it.keys}return}
+      const ks=(it.keys=it.keys||{})[p]=it.keys[p]||[];if(!ks.length&&it[p]==null)it[p]=scVal(it,p,t);ks.push([u,scVal(it,p,t),'inout']);ks.sort((a,b)=>a[0]-b[0])})})}
   if(e.target.id==='sckdel')return SC.keyDel();
   if(e.target.id==='sccrop'){SC.crop=!SC.crop;$('ibody')._h=null;return SC.show()}
   if(e.target.id==='scdel'){const ids=[...SC.sel];SC.sel.clear();return SC.change('delete',s=>s.tracks.forEach(tr=>tr.items=tr.items.filter(i=>!ids.includes(i.id))))}},true);
