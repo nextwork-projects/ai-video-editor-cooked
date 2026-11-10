@@ -2,7 +2,7 @@
 // player (preview/live.tsx mountScene) and for the export (scene.py render). Every element is an item with its own
 // transform, so the page moves, crops and trims each one and the export is what the page shows.
 // Track order is draw order (the first visual track is the bottom); inside a track a later item draws on top.
-import React, { useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AbsoluteFill, Audio, CalculateMetadataFunction, Img, OffthreadVideo, Sequence, Video, getRemotionEnvironment, staticFile,
   useCurrentFrame, useVideoConfig } from "remotion";
 import { Captions, CaptionStyle, Chunk, useFamily } from "./Captions";
@@ -117,22 +117,87 @@ const ShapeItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) =
   return <Frame it={{ ...it, crop: null }} lt={frame / fps} W={W} H={H}>{() => null}</Frame>;
 };
 
-/** Text: as wide as its words up to w, centred on x, y; a box behind each line (TikTok's look) or one block box. */
+/** The outline of a box behind each line (Instagram's text background): one rounded box per line, lines touching, the
+ *  steps where a wider line meets a narrower one turned with a small inside curve. ls: [left, right, top, bottom] per
+ *  line, top to bottom; a gap (an empty line) starts a new shape. */
+export function lineBoxPath(ls: number[][], R: number): string {
+  const groups: number[][][] = [];
+  ls.forEach((l, i) => (i && Math.abs(ls[i - 1][3] - l[2]) < 0.5 ? groups[groups.length - 1].push(l) : groups.push([l])));
+  const f = (n: number) => +n.toFixed(2);
+  return groups.map((g) => {
+    const pts: [number, number, number][] = [];   // the outline's corners, clockwise from the top left: x, y, radius
+    const rad = (...ds: number[]) => Math.max(0, Math.min(R, ...ds.map((d) => Math.abs(d) / 2)));
+    const h = (l: number[]) => l[3] - l[2];
+    pts.push([g[0][0], g[0][2], rad(g[0][1] - g[0][0], h(g[0]))], [g[0][1], g[0][2], rad(g[0][1] - g[0][0], h(g[0]))]);
+    for (let i = 0; i + 1 < g.length; i++) {   // the right side going down
+      const d = g[i + 1][1] - g[i][1], y = g[i][3], c = rad(d, h(g[i]), h(g[i + 1]));
+      if (Math.abs(d) >= 0.5) pts.push([g[i][1], y, c], [g[i + 1][1], y, c]);
+    }
+    const n = g[g.length - 1];
+    pts.push([n[1], n[3], rad(n[1] - n[0], h(n))], [n[0], n[3], rad(n[1] - n[0], h(n))]);
+    for (let i = g.length - 2; i >= 0; i--) {   // the left side going up
+      const d = g[i][0] - g[i + 1][0], y = g[i][3], c = rad(d, h(g[i]), h(g[i + 1]));
+      if (Math.abs(d) >= 0.5) pts.push([g[i + 1][0], y, c], [g[i][0], y, c]);
+    }
+    // each corner: in along the edge from the previous corner, a quarter curve round it, out towards the next
+    const K = 0.5523, out: string[] = [];
+    pts.forEach(([x, y, c], i) => {
+      const [px, py] = pts[(i + pts.length - 1) % pts.length], [nx, ny] = pts[(i + 1) % pts.length];
+      const u = (ax: number, ay: number) => { const L = Math.hypot(ax - x, ay - y) || 1; return [(ax - x) / L, (ay - y) / L]; };
+      const [ux, uy] = u(px, py), [vx, vy] = u(nx, ny);
+      const a = [x + ux * c, y + uy * c], b = [x + vx * c, y + vy * c];
+      out.push(`${i ? "L" : "M"}${f(a[0])} ${f(a[1])}`);
+      if (c > 0) out.push(`C${f(a[0] - ux * c * K)} ${f(a[1] - uy * c * K)} ${f(b[0] - vx * c * K)} ${f(b[1] - vy * c * K)} ${f(b[0])} ${f(b[1])}`);
+    });
+    return out.join("") + "Z";
+  }).join("");
+}
+
+/** Text: as wide as its words up to w, centred on x, y; a box behind each line (TikTok's and Instagram's look) or one
+ *  block box. Each line's box is measured from where the browser broke the lines and drawn as one outline behind
+ *  them: the lines touch, every line gets the same side padding, the first and last get the top and bottom padding. */
 const TextItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const family = useFamily(it.font ?? "TikTok Sans", it.weight ?? 700);
-  if (!family) return null;
-  const p = placed(it, frame / fps, W, H), fs = it.size ?? Math.min(W, H) * 0.05, b = it.box;
+  const ref = useRef<HTMLDivElement>(null), span = useRef<HTMLSpanElement>(null);
+  const [shape, setShape] = useState<{ d: string; w: number; h: number } | null>(null);
+  const p = placed(it, frame / fps, W, H), fs = it.size ?? Math.min(W, H) * 0.05, b = it.box, lh = it.line_height ?? 1.2;
   const pad = Array.isArray(b?.pad) ? b!.pad : [b?.pad ?? fs * 0.25, b?.pad ?? fs * 0.1];
-  const line: React.CSSProperties = b && !b.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0,
-    WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" } as React.CSSProperties : {};
+  const lines = !!b && !b.block;
+  useLayoutEffect(() => {   // after every layout: where the lines broke, in the element's own px (its transform and the player's scale taken off)
+    const e = ref.current, sp = span.current;
+    if (!lines || !e || !sp) return void (shape && setShape(null));
+    const tf = e.style.transform;
+    e.style.transform = "none";
+    const cr = e.getBoundingClientRect(), k = cr.width ? e.offsetWidth / cr.width : 1, L = lh * fs, top = pad[1];
+    const rows: number[][] = [];
+    const tn = sp.firstChild, rg = document.createRange(), rs: DOMRect[] = [];
+    if (tn) for (const m of (tn.textContent ?? "").matchAll(/\S+/g)) {   // word by word: a space where a line broke gets no box
+      rg.setStart(tn, m.index!); rg.setEnd(tn, m.index! + m[0].length); rs.push(...Array.from(rg.getClientRects()));
+    }
+    for (const r of rs) {
+      if (r.width < 0.5) continue;
+      const i = Math.max(0, Math.floor((((r.top + r.bottom) / 2 - cr.top) * k - top) / L));
+      const x0 = (r.left - cr.left) * k - pad[0], x1 = (r.right - cr.left) * k + pad[0];
+      rows[i] = rows[i] ? [Math.min(rows[i][0], x0), Math.max(rows[i][1], x1)] : [x0, x1];
+    }
+    e.style.transform = tf;
+    const ls: number[][] = [];
+    rows.forEach((r, i) => r && ls.push([r[0], r[1], top + i * L - (i && rows[i - 1] ? 0 : pad[1]), top + (i + 1) * L + (rows[i + 1] ? 0 : pad[1])]));
+    const next = { d: lineBoxPath(ls, b!.radius ?? 0), w: e.offsetWidth, h: e.offsetHeight };
+    if (!shape || shape.d !== next.d || shape.w !== next.w || shape.h !== next.h) setShape(next);
+  });
+  if (!family) return null;
   return (
-    <div data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
+    <div ref={ref} data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
       opacity: p.o, width: "max-content", maxWidth: p.w, textAlign: it.align ?? "center", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-      fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: it.line_height ?? 1.2,
-      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}) }}>
-      <span style={{ ...line, ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>
+      fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: lh,
+      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}),
+      ...(lines ? { padding: `${pad[1]}px ${pad[0]}px`, boxSizing: "border-box" } : {}) }}>
+      {lines && shape ? <svg width={shape.w} height={shape.h} style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
+        <path d={shape.d} fill={b!.color} /></svg> : null}
+      <span ref={span} style={{ position: "relative", ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>
         {it.text}</span>
     </div>
   );

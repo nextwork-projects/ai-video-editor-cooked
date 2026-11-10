@@ -78,9 +78,9 @@ const TXB={};function scTextBox(it){const W=SC.s.width,fs=it.size||Math.min(W,SC
   const sig=[it.id,it.text,it.font,it.weight,fs,mw,it.line_height,JSON.stringify(b)].join('|');if(TXB[sig])return TXB[sig];
   const e=document.querySelector(`#scl [data-sc="${CSS.escape(it.id)}"]`);let c,w,h;
   if(e){c=e.cloneNode(true);c.removeAttribute('data-sc');c.style.visibility='hidden';e.parentElement.appendChild(c)}
-  else{c=document.createElement('div');c.innerHTML='<span></span>';c.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;width:max-content;white-space:pre-wrap;overflow-wrap:anywhere;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700}`;document.body.appendChild(c)}
-  Object.assign(c.style,{fontSize:fs+'px',maxWidth:mw+'px',lineHeight:String(it.line_height??1.2),padding:b&&b.block?`${pd[1]}px ${pd[0]}px`:'0'});
-  const sp=c.firstElementChild;if(sp){sp.textContent=it.text||'';sp.style.padding=b&&!b.block?`${pd[1]}px ${pd[0]}px`:'0'}
+  else{c=document.createElement('div');c.innerHTML='<span></span>';c.style.cssText=`position:absolute;visibility:hidden;left:-9999px;top:0;width:max-content;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700}`;document.body.appendChild(c)}
+  Object.assign(c.style,{fontSize:fs+'px',maxWidth:mw+'px',lineHeight:String(it.line_height??1.2),padding:b?`${pd[1]}px ${pd[0]}px`:'0'});   // a box (per line or one block) pads the element itself
+  const sp=c.querySelector('span');if(sp)sp.textContent=it.text||'';
   const rs=[c.getBoundingClientRect(),...(sp?sp.getClientRects():[])],k=rs[0].width?c.offsetWidth/rs[0].width:1;   // a box behind each line can reach past the element: its line boxes count
   const L=Math.min(...rs.map(r=>r.left)),T=Math.min(...rs.map(r=>r.top)),Rr=Math.max(...rs.map(r=>r.right)),B=Math.max(...rs.map(r=>r.bottom)),c0=rs[0];
   const r=[(Rr-L)*k,(B-T)*k,((L+Rr)/2-(c0.left+c0.right)/2)*k,((T+B)/2-(c0.top+c0.bottom)/2)*k];c.remove();if(e)TXB[sig]=r;return r}   // [w, h, and the line boxes' centre off the element's]
