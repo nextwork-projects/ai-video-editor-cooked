@@ -2,6 +2,10 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.46, creator-teardown 2.7.46 (2026-11-10)
+- Text with a box over two or more lines looks like Instagram's text box: one rounded box per line, every line centred with the same padding, the lines touching cleanly with smooth inside corners. No line cuts into the one above any more.
+- Properties is calmer, laid out like Figma's design panel: sections you can fold (Text, Layout, Crop, Look, Animation, Sound, Timing), paired fields on one row (X and Y, W and H, fades, start and end), crop as one row, switches for shadow, border, box and outline, keyframe diamonds in one column. Drag a field's label to scrub its number. Timing and the extra look settings start folded.
+
 ## ai-editor 2.7.45, creator-teardown 2.7.45 (2026-11-09)
 - Turn a clip's sound up or down on the timeline. Every clip with sound has a volume line across it: drag it up or down and you hear the change as you drag. A label shows the level in dB, and it snaps back to 0 dB, the sound as it was.
 - Boost up to +12 dB, in the player and in the export. Down to silence at the bottom.
