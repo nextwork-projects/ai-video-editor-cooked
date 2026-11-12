@@ -29,7 +29,7 @@ one video item: it moves, resizes, crops and trims like any other.
 |---|---|
 | `video` | `asset`, `in` (source seconds), `speed` 1, `volume` 1, `fade_in`, `fade_out`, + visual |
 | `image` | `asset`, + visual |
-| `text` | `text`, `font`, `weight`, `size` (px), `color`, `align` (left, center, right), `line_height`, `box` ({`color`, `pad`, `radius`} or null), `outline` ({`color`, `width`} or null), + visual (`w` is the wrap width, `h` is ignored) |
+| `text` | `text`, `font`, `weight`, `size` (px), `color`, `align` (left, center, right), `line_height`, `box` ({`color`, `pad`, `radius`, `opacity`} or null), `outline` ({`color`, `width`} or null), + visual (`w` is the wrap width, `h` is ignored) |
 | `shape` | `fill`, `stroke` ({`color`, `width`} or null), + visual |
 | `audio` | `asset`, `in`, `speed`, `volume`, `fade_in`, `fade_out` |
 | `captions` | `words` [{`w`, `start`, `end`, `p`?, `emph`?}], `style` (the caption style keys plan.py uses today), `asset` (words on that asset's clock, shown through its clips; null: the scene's clock), `pages` ([{`start`, `end`, `treat`?...}] on the same clock, `p` indexes it; without them `style.words_per_caption` pages the words), `motion` |
@@ -37,11 +37,14 @@ one video item: it moves, resizes, crops and trims like any other.
 
 Visual fields: `x`, `y` (the item's centre), `w`, `h`, `rotation` (degrees), `opacity` (0-1), `fit` (cover or
 contain), `crop` ({`l`, `t`, `r`, `b`} as fractions of the source), `radius` (px), `shadow` ({`blur`, `y`,
-`opacity`} or null), `border` ({`width`, `color`} or null), `anim` ({`in`, `out`: none, cut, fade, pop,
+`opacity`, `color`, `distance`, `angle`} or null), `border` ({`width`, `color`} or null), `anim` ({`in`, `out`: none, cut, fade, pop,
 slide-up; `dur` seconds}), `keys` ({prop: [[t, value, ease]]}, t from the item's start; props x, y, w, h,
 scale, rotation, opacity; ease linear, in, out, inout, hold; scale is about the centre), `grade` ({`brightness`,
 `saturate`}). Text `box.pad` is px or [x, y]; `box.block: true` is one box round the whole text, else a box behind
 each line. `outline.width` is the CSS text stroke (half of it shows outside the letters).
+`box.opacity` (0-1, default 1) is the box's fill only. `shadow.color` defaults to black, `shadow.opacity` to 0.35; a shadow
+with `distance` sits that far away at `angle` (degrees, 90 is straight down), else straight down by `y`. On a text the shadow
+is behind the letters (CSS text-shadow); on a picture, clip or shape it is behind the box.
 
 ## Page and server
 
@@ -161,6 +164,23 @@ and Up / Down jump between them.
   keyframe), drag moves it in time, Delete removes it. The ◇ beside a field in Properties adds or removes a key at the
   playhead; a keyed field shows in yellow. Scale has no plain field: one key holds it.
 - A field being typed in lets go on any press on the video or the rows, so the next pick and its keys always work.
+
+## Adding things: where they go
+
+- A new item (Add text, a text look, + Shape, a picture or clip from Media, a dropped or pasted file, a sound, a paste, Claude's
+  `scene.py add`) goes on a track of its own kind: texts with texts, pictures, clips, shapes and cards together, sounds with
+  sounds. The first such track (top first) that is unlocked, shown and free for its whole time takes it; else a new track
+  of that kind just above the others of its kind (`scene.lane`, the page's `scPlace`). Never the footage track (the magnet
+  one), never over another clip. A drop onto a row (or `--track`) uses that row only when it holds that kind and is free.
+- The Text panel (the rail's Text): Add text (the white box look) and a tile per look (`SCLOOK` in review-scene.js; the
+  `p` ones are Properties' tiles). Click: at the playhead; drag: onto the video (there) or a timeline row (that time). One
+  undo each, and the caret goes in the text. Double-click a text to type in it: Enter is a new line, Esc or a click away saves.
+- Copy and paste: Cmd+C copies the picked items (not captions) to the system clipboard as `cooked-scene:` + JSON
+  ({`from`: the edit folder, `items`: [{`it`, `tr`, `ti`}], `assets`}) and the page's memory; Cmd+V pastes at the playhead,
+  each original track's items together on one free track of their kind, the gaps kept, new ids; Cmd+D duplicates right
+  after, Cmd+X cuts; right-click has the same. A paste from another edit copies each file in first:
+  `POST /scene/import-asset {from_edit, src}` (an edit in the library, a picture, clip or sound inside it) answers `{src}`
+  in this edit's `media/` (`scene.bring_in`). A picture on the clipboard pastes as an image item. Each paste is one undo.
 
 ## Adding audio
 

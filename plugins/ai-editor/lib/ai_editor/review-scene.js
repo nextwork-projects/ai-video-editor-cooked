@@ -18,7 +18,7 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .scbox i[data-h=rot]{border-radius:50%;cursor:grab}.scbox i[data-h=rot]::before{content:"";position:absolute;left:50%;top:100%;width:calc(1.5px / var(--k));height:calc(18px / var(--k));background:#FFFFFF}
 .scbox i[data-h=rot].dn::before{top:auto;bottom:100%}.scbox.crop i{background:#FFD60A}.scghost{position:absolute;outline:calc(1px / var(--k)) dashed rgba(255,255,255,.6);background:rgba(0,0,0,.35);pointer-events:none}
 .scg{position:absolute;background:#FF2D92;pointer-events:none}
-.sced{position:absolute;outline:calc(1.5px / var(--k)) solid #0A84FF;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:#FFFFFF;cursor:text}
+.sced{position:absolute;outline:calc(1.5px / var(--k)) dashed rgba(255,255,255,.95);outline-offset:calc(3px / var(--k));white-space:pre-wrap;overflow-wrap:anywhere;caret-color:#FFFFFF;cursor:text}
 .eitem.sc{cursor:grab;overflow:visible}.eitem.sc>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;pointer-events:none}.eitem.sc.sel{outline:2px solid #FFFFFF;outline-offset:1px;z-index:2}
 .eitem.sc::before,.eitem.sc::after{content:"";position:absolute;top:0;bottom:0;width:8px;cursor:ew-resize;z-index:2}.eitem.sc::before{left:-1px}.eitem.sc::after{right:-1px}
 .eitem.sc img{height:18px;width:auto;max-width:32px;border-radius:3px;margin-right:4px;pointer-events:none}.eitem.sc.shp{background:#4A3B2A;border-color:#8A6A44;color:#FFFFFF;padding:0 6px}
@@ -55,7 +55,7 @@ body.scene #hits,body.scene #tlayer,body.scene #tedit,body.scene #clayer,body.sc
 .sctile em{font-style:normal;font-size:11px;line-height:14px;color:var(--muted)}.sctile.on em{color:var(--strong)}
 .sclooks{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.sclook{height:64px;gap:2px;padding:8px 0 6px;grid-template-rows:1fr auto}
 .sclook span{font-family:'TikTok Sans',system-ui,sans-serif;font-weight:700;font-size:15px;line-height:20px;color:#FFFFFF;padding:0 5px}.sclook{background:#3A3836}.sclook em{color:rgba(255,255,255,.7)}.sclook.on em{color:#FFFFFF}
-.scl-outline{-webkit-text-stroke:3px #000;paint-order:stroke fill}.scl-box,.scl-block{background:#FFFFFF;color:#000!important;border-radius:4px}.scl-block{padding:3px 8px!important;border-radius:6px!important}.scl-dark{background:#000;border-radius:4px}.scl-shadow{text-shadow:0 2px 6px rgba(0,0,0,.9)}
+.sclook span.scllive{padding:0;max-width:92%;white-space:nowrap;overflow:hidden}.scst{color:var(--strong);font-weight:600}
 #ibody .sclook.on{outline-color:var(--ink)}
 .scfonts{display:grid;grid-template-columns:1fr 1fr;gap:6px}.scfonts .sctile{height:34px;font-size:14px;font-weight:600;padding:0 8px}.scfonts .sctile span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .scseg{display:flex;gap:2px;padding:2px;border-radius:8px;background:var(--chip)}.scseg .sctile{flex:1;height:28px;padding:0 10px;background:none;border-radius:6px;outline:0;color:var(--muted);font-weight:500}.scseg .sctile:hover{color:var(--ink)}
@@ -255,13 +255,19 @@ SC.apply=function(ev,dx,dy,h,G,g0,t,L,b0){const sh=ev.shiftKey,free=ev.metaKey||
   put(w,hh);scSet(it,'w',+(w/s).toFixed(2),t);scSet(it,'h',+(hh/s).toFixed(2),t);SC.draw(gd)};
 SC.rot=function(ev,it,G,t){const[px,py]=scPt(ev);let r=Math.atan2(py-G.y,px-G.x)*180/Math.PI+90;if(ev.shiftKey)r=Math.round(r/15)*15;else for(const s of[0,90,180,-90,-180])if(Math.abs(r-s)<3)r=s;
   r=((r+540)%360)-180;scSet(it,'rotation',Math.round(r*10)/10,t);SC.draw()};
-// double-click a text: its words typed in place, saved when you click away (Escape too)
-$('scover').addEventListener('dblclick',e=>{if(!SC.on)return;const t=scNow(),[px,py]=scPt(e),o=scHit(px,py,t).find(o=>o.it.type==='text'&&!o.tr.locked);if(!o)return;
-  const it=o.it,g=scGeo(it,t),d=document.createElement('div');d.className='sced';d.contentEditable='plaintext-only';d.textContent=it.text||'';
-  d.style.cssText=`left:${g.x-g.w/2}px;top:${g.y-g.h/2}px;width:${g.w}px;min-height:${g.h}px;transform:rotate(${g.r}deg);font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700};font-size:${(it.size||64)*g.s}px;line-height:${it.line_height||1.15};color:${it.color||'#FFFFFF'};text-align:${it.align||'center'};${it.box?`background:${it.box.color};padding:${it.box.pad||0}px;border-radius:${it.box.radius||0}px;`:''}`;
-  SC.edit=it.id;SC.show(true);$('scover').appendChild(d);d.focus();document.getSelection().selectAllChildren(d);
-  d.addEventListener('keydown',k=>{k.stopPropagation();if(k.key==='Escape'||k.key==='Enter'&&(k.metaKey||k.ctrlKey)){k.preventDefault();SC.edDone()}});d.addEventListener('blur',()=>setTimeout(SC.edDone))});
-SC.edDone=function(){const d=$('scover').querySelector('.sced'),id=SC.edit;if(!id)return;SC.edit=null;if(d)d.remove();const q=scGet(id),x=d?d.innerText.replace(/\n$/,''):null;
+// double-click a text: its words typed in place, in its look, with a caret; Enter is a new line, Escape or a click away
+// finishes (a new text from Add text or a look starts here with its words picked)
+$('scover').addEventListener('dblclick',e=>{if(!SC.on)return;const t=scNow(),[px,py]=scPt(e),o=scHit(px,py,t).find(o=>o.it.type==='text'&&!o.tr.locked);if(o)SC.editText(o.it.id,false,e)});
+SC.editText=function(id,all,ev){const q=scGet(id);if(!q||q.it.type!=='text')return;SC.edDone();const t=scNow(),it=q.it;if(!(it.start<=t+1e-4&&t<it.end)){v.pause();v.currentTime=it.start+.01}
+  const g=scGeo(it,scNow()),d=document.createElement('div'),fs=(it.size||64)*g.s;d.className='sced';d.contentEditable='plaintext-only';d.spellcheck=false;d.textContent=it.text||'';
+  const lk=scLookCss({...it,box:it.box&&{...it.box,block:true}},fs,it.size||64);
+  d.style.cssText=`left:${g.x-g.w/2}px;top:${g.y-g.h/2}px;min-width:${g.w}px;min-height:${g.h}px;transform:rotate(${g.r}deg);font-family:'${it.font||'TikTok Sans'}',system-ui,sans-serif;font-weight:${it.weight||700};font-size:${fs}px;line-height:${it.line_height||1.15};text-align:${it.align||'center'};caret-color:${it.color||'#FFFFFF'};${lk};display:block;box-sizing:border-box`;
+  const tip=document.createElement('em');tip.className='scedtip';tip.textContent='Enter: new line · Esc: done';d.appendChild(tip);tip.contentEditable='false';
+  SC.edit=it.id;SC.sel=new Set([it.id]);SC.show(true);$('scover').appendChild(d);d.focus();
+  const r=document.createRange(),sel=getSelection(),at=ev&&!all&&document.caretRangeFromPoint?document.caretRangeFromPoint(ev.clientX,ev.clientY):null;
+  if(at&&d.contains(at.startContainer)&&at.startContainer!==tip&&!tip.contains(at.startContainer))r.setStart(at.startContainer,at.startOffset);else{r.selectNodeContents(d.firstChild||d);if(!all)r.collapse(false)}sel.removeAllRanges();sel.addRange(r);
+  d.addEventListener('keydown',k=>{k.stopPropagation();if(k.key==='Escape'||k.key==='Enter'&&(k.metaKey||k.ctrlKey)){k.preventDefault();SC.edDone()}});d.addEventListener('blur',()=>setTimeout(SC.edDone))};
+SC.edDone=function(){const d=$('scover').querySelector('.sced'),id=SC.edit;if(!id)return;SC.edit=null;if(d)d.remove();const tp=d&&d.querySelector('.scedtip');if(tp)tp.remove();const q=scGet(id),x=d?d.innerText.replace(/\n$/,''):null;
   if(q&&x!=null&&x!==q.it.text&&x.trim())SC.change('text',s=>{scAll(s).find(o=>o.it.id===id).it.text=x});else SC.show()};
 // ---- the timeline: one row per track. Visual tracks top down as they draw (the top row is on top, the bottom one
 // is the first visual track, Resolve's order), then captions, then audio
@@ -374,6 +380,11 @@ SC.key=function(e){if(!SC.on||KM.off()||typingIn(e.target)||SC.edit||document.bo
     SC.change('nudge',s=>ids.forEach(k=>{const it=scAll(s).find(o=>o.it.id===k).it;if(!scVis(it))return;scSet(it,'x',scVal(it,'x',t)+ar[0]*n,t);scSet(it,'y',scVal(it,'y',t)+ar[1]*n,t)}));return true}
   const up=KM.is(e,'edge_prev');if((up||KM.is(e,'edge_next'))&&scMainCuts().length){e.preventDefault();SC.cutJump(up?-1:1);return true}   // up and down: the AI's cuts
   if(e.key.toLowerCase()==='c'&&!e.metaKey&&!e.ctrlKey&&ids.length===1&&/^(video|image)$/.test(scGet(ids[0]).it.type)){e.preventDefault();SC.crop=!SC.crop;SC.show();return true}
+  if((e.metaKey||e.ctrlKey)&&!e.altKey&&!e.shiftKey){const k=e.key.toLowerCase();   // copy, cut, paste, duplicate: any items, several at once
+    if(k==='c'&&ids.length&&!String(getSelection())){SC.copyIds(ids);return true}   // the copy event that follows puts them on the system clipboard
+    if(k==='x'&&ids.length){SC.copyIds(ids);SC.del(ids);return true}
+    if(k==='d'&&ids.length){e.preventDefault();SC.dup(ids);return true}
+    if(k==='v')return true}   // the paste event does it: our items, or a picture on the clipboard
   if(e.key==='Escape'&&scKd()){SC.kd=null;SC.show();return true}
   if(e.key==='Escape'&&(ids.length||SC.crop)){SC.crop?SC.crop=false:SC.sel.clear();SC.show();return true}
   return false};
@@ -415,21 +426,43 @@ const KEYP=['x','y','scale','w','h','rotation','opacity'],SCEASE=[['linear','Lin
 const SCSW=['#FFFFFF','#000000','#FFD60A','#FF3B30','#0A84FF','#34C759'];
 // every field an item has (the schema the panel draws from; several picked share a control only when all have its field)
 function scFields(it){const V=scVis(it),F=[],a=p=>F.push(p);
-  if(it.type==='text'){a('text');a('font');a('weight');a('size');a('color');a('align');a('line_height');a('box');if(it.box){a('box.color');a('box.pad');a('box.radius')}a('outline');if(it.outline){a('outline.color');a('outline.width')}}
+  if(it.type==='text'){a('text');a('font');a('weight');a('size');a('color');a('align');a('line_height');a('box');if(it.box){a('box.color');a('box.pad');a('box.radius');a('box.opacity')}a('outline');if(it.outline){a('outline.color');a('outline.width')}if(it.shadow){a('shadow.color');a('shadow.distance');a('shadow.angle')}}
   if(it.type==='shape'){a('fill');a('stroke');if(it.stroke){a('stroke.color');a('stroke.width')}}
   if(V){['x','y','w'].forEach(a);if(it.type!=='text')a('h');if(it.type!=='card')a('scale');a('rotation');a('opacity');if(/^(video|image)$/.test(it.type)){a('fit');['l','t','r','b'].forEach(k=>a('crop.'+k))}
     a('radius');a('shadow');if(it.shadow){a('shadow.blur');a('shadow.y');a('shadow.opacity')}a('border');if(it.border){a('border.width');a('border.color')}a('anim.in');a('anim.out');a('anim.dur')}
   if(/^(video|audio)$/.test(it.type)){a('volume_db');a('speed');a('fade_in');a('fade_out');a('in')}
   a('start');a('end');return F}
-const scPath=(it,p)=>p.split('.').reduce((o,k)=>o==null?o:o[k],it);
-function scPut(it,p,x,t){if(p==='volume_db'){it.volume=scGain(x);return}const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
-// the text looks, as the Text panel names them, sized to the text (the house box: .24em x .06em padding, .18em corners)
-const SCLOOK={plain:['Plain',it=>({color:'#FFFFFF',box:null,outline:null,shadow:null})],outline:['Outline',it=>({color:'#FFFFFF',box:null,outline:{color:'#000000',width:Math.max(2,Math.round((it.size||60)*.08))},shadow:null})],
-  box:['White box',it=>({color:'#000000',box:{color:'#FFFFFF',pad:[+((it.size||60)*.24).toFixed(2),+((it.size||60)*.06).toFixed(2)],radius:+((it.size||60)*.18).toFixed(2)},outline:null,shadow:null,line_height:1.32})],
-  dark:['Black box',it=>({color:'#FFFFFF',box:{color:'#000000',pad:[+((it.size||60)*.24).toFixed(2),+((it.size||60)*.06).toFixed(2)],radius:+((it.size||60)*.18).toFixed(2)},outline:null,shadow:null,line_height:1.32})],
-  block:['Block',it=>({color:'#000000',box:{color:'#FFFFFF',pad:[+((it.size||60)*.4).toFixed(2),+((it.size||60)*.22).toFixed(2)],radius:+((it.size||60)*.28).toFixed(2),block:true},outline:null,shadow:null})],
-  shadow:['Shadow',it=>({color:'#FFFFFF',box:null,outline:null,shadow:{blur:24,y:8,opacity:.6}})]};
-const scLookOf=it=>it.box?(it.box.block?'block':/^#0{6}$/i.test(it.box.color||'')?'dark':'box'):it.outline?'outline':it.shadow?'shadow':'plain';
+const scPath=(it,p)=>{const x=p.split('.').reduce((o,k)=>o==null?o:o[k],it);return p==='box.pad'&&Array.isArray(x)?x[0]:x};
+function scPut(it,p,x,t){if(p==='volume_db'){it.volume=scGain(x);return}
+  if(p==='box.pad'&&it.box){const o=it.box.pad,r=Array.isArray(o)&&o[0]>0?o[1]/o[0]:Array.isArray(o)?.25:1;it.box={...it.box,pad:Array.isArray(o)||r!==1?[x,+(x*r).toFixed(2)]:x};return}   // the side padding; the top keeps its share
+  if((p==='shadow.distance'||p==='shadow.angle')&&it.shadow){const sh={...it.shadow};if(sh.distance==null)sh.distance=sh.y??12;if(sh.angle==null)sh.angle=90;sh[p.slice(7)]=x;it.shadow=sh;return}const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
+// the text looks: the Text panel's tiles (all of them) and Properties' (p: the style-only ones). Each sets the style rows
+// (colour, stroke, background, shadow) sized to the text; the panel's also bring their words, size and place.
+// House box: .24em x .06em padding, .18em corners (scene.text_items)
+const scPad=(z,a,b)=>[+(z*a).toFixed(2),+(z*b).toFixed(2)],scR=(z,k)=>+(z*k).toFixed(2);
+const SCLOOK={
+  plain:['Plain',it=>({color:'#FFFFFF',box:null,outline:null,shadow:null}),{p:1}],
+  box:['White box',it=>({color:'#000000',box:{color:'#FFFFFF',pad:scPad(it.size||60,.24,.06),radius:scR(it.size||60,.18)},outline:null,shadow:null,line_height:1.32}),{p:1}],
+  dark:['Black box',it=>({color:'#FFFFFF',box:{color:'#000000',pad:scPad(it.size||60,.24,.06),radius:scR(it.size||60,.18)},outline:null,shadow:null,line_height:1.32}),{p:1}],
+  pill:['Pill',it=>({color:'#000000',box:{color:'#FFFFFF',pad:scPad(it.size||60,.42,.1),radius:scR(it.size||60,.7)},outline:null,shadow:null,line_height:1.32})],
+  outline:['Outline',it=>({color:'#FFFFFF',box:null,outline:{color:'#000000',width:Math.max(2,Math.round((it.size||60)*.14))},shadow:null}),{p:1,name:'Bold outline',add:{weight:900}}],
+  shadow:['Shadow',it=>({color:'#FFFFFF',box:null,outline:null,shadow:{color:'#000000',blur:24,distance:6,angle:90,opacity:.6}}),{p:1,name:'Soft shadow'}],
+  hilite:['Highlight',it=>({color:'#000000',box:{color:'#FFD60A',pad:scPad(it.size||60,.2,.04),radius:scR(it.size||60,.1)},outline:null,shadow:null,line_height:1.3})],
+  block:['Block',it=>({color:'#000000',box:{color:'#FFFFFF',pad:scPad(it.size||60,.4,.22),radius:scR(it.size||60,.28),block:true},outline:null,shadow:null}),{p:1,name:'White card',add:{weight:800}}],
+  cta:['Comment box',it=>({color:'#FFFFFF',box:{color:'#0B0B0C',pad:scPad(it.size||60,.5,.3),radius:scR(it.size||60,.3),block:true},outline:null,shadow:null,line_height:1.2}),{add:(W,H)=>({text:'Comment "WORD"',size:64,weight:800,y:Math.round(H*.7)})}],
+  lower:['Name label',it=>({color:'#FFFFFF',box:{color:'#000000',opacity:.75,pad:scPad(it.size||60,.45,.25),radius:scR(it.size||60,.25),block:true},outline:null,shadow:null,line_height:1.25}),{add:(W,H)=>({text:'Your name\nWhat you do',size:44,weight:700,y:Math.round(H*.76)})}],
+  title:['Big title',it=>({color:'#FFFFFF',box:null,outline:null,shadow:{color:'#000000',blur:30,distance:4,angle:90,opacity:.5}}),{add:(W,H)=>({text:'Big title',size:132,weight:900,line_height:1,y:Math.round(H*.24),w:Math.round(W*.9)})}]};
+const SCPLOOK=Object.keys(SCLOOK).filter(k=>SCLOOK[k][2]&&SCLOOK[k][2].p);   // Properties' tiles
+// a look's mark: the same colour, background (its colour, one block or per line), stroke and shadow on or off
+const scSig=it=>[(it.color||'').toUpperCase(),it.box?String(it.box.color||'').toUpperCase()+(it.box.block?'B':'L'):'',it.outline?'O':'',it.shadow?'S':''].join('|');
+const scLookOf=it=>SCPLOOK.find(k=>scSig({...it,...SCLOOK[k][1](it)})===scSig(it))||'';
+// a look drawn as CSS on a sample of the words at font size px (the Text panel's and Properties' tiles; the editor on the video)
+function scLookCss(st,px,base){const k=px/(base||60),b=st.box,o=st.outline,sh=st.shadow,c=[`color:${st.color||'#FFFFFF'}`];
+  if(b){const pd=Array.isArray(b.pad)?b.pad:[b.pad??(base||60)*.25,b.pad??(base||60)*.1];c.push(`background:${scRgba(b.color,b.opacity??1)}`,`padding:${(pd[1]*k).toFixed(1)}px ${(pd[0]*k).toFixed(1)}px`,`border-radius:${((b.radius||0)*k).toFixed(1)}px`,b.block?'display:inline-block':'-webkit-box-decoration-break:clone;box-decoration-break:clone')}
+  if(o)c.push(`-webkit-text-stroke:${Math.max(1,o.width*k).toFixed(1)}px ${o.color}`,'paint-order:stroke fill');
+  if(sh)c.push(`text-shadow:${scShadowCss(sh,k)}`);return c.join(';')}
+const scRgba=(c,o)=>{const m=/^#([0-9a-f]{6})$/i.exec(c||'');if(!m||o>=1)return c||'#000000';const n=parseInt(m[1],16);return `rgba(${n>>16},${(n>>8)&255},${n&255},${o})`};
+const scShadowCss=(sh,k=1)=>{const a=(sh.angle??90)*Math.PI/180,d=sh.distance,[dx,dy]=d==null?[0,sh.y??12]:[d*Math.cos(a),d*Math.sin(a)];return `${(dx*k).toFixed(1)}px ${(dy*k).toFixed(1)}px ${((sh.blur??30)*k).toFixed(1)}px ${scRgba(sh.color||'#000000',sh.opacity??.35)}`};
 let scSecs={},scTabs={};try{scSecs=JSON.parse(localStorage.getItem('review-scsec')||'{}')||{};scTabs=JSON.parse(localStorage.getItem('review-sctab')||'{}')||{}}catch(e){}
 const scOpen=id=>id in scSecs?!!scSecs[id]:false,scSave=(k,o)=>{try{localStorage.setItem(k,JSON.stringify(o))}catch(e){}};
 function scTabsOf(it){const m={text:'Text',shape:'Shape',video:'Video',image:'Image',card:'Card',captions:'Captions'}[it.type];
@@ -454,19 +487,29 @@ SC.insp=function(){if(!SC.on||SC.noside)return;const ids=[...SC.sel].filter(k=>s
   const pos=()=>sh('x')?`<div class="scc"><div class="scrow"><span class="sct">Position</span>${num('x','Position X',1,{pr:'X'})}${num('y','Position Y',1,{pr:'Y'})}${kb(['x','y'],'Position')}</div></div>`:'',
     size=()=>sh('w')?`<div class="scrow"><span class="sct">${one.type==='text'?'Wrap width':'Size'}</span>${num('w',one.type==='text'?'Wrap width':'Width',1,{pr:'W'})}${sh('h')?num('h','Height',1,{pr:'H'}):''}${kb(sh('h')?['w','h']:['w'],'Size')}</div>`:'',
     xform=()=>slider('scale','Scale',.05,4,.01,{k:100,u:'%',max:20})+pos()+slider('rotation','Rotation',-180,180,1,{u:'°',min:-3600,max:3600})+slider('opacity','Opacity',0,1,.01,{k:100,u:'%'}),
-    more=()=>fold('more','Advanced',size()+field('line_height','Line height',.05)+tog('box','Box',{color:'#000000',pad:16,radius:12},swatch('box.color','Box colour')+field('box.pad','Box padding',1)+field('box.radius','Box corners',1))
-      +tog('outline','Outline',{color:'#000000',width:4},swatch('outline.color','Outline colour')+field('outline.width','Outline width',1))+tog('stroke','Stroke',{color:'#FFFFFF',width:4},swatch('stroke.color','Stroke colour')+field('stroke.width','Stroke width',1))
-      +field('radius','Corners',1)+tog('shadow','Shadow',{blur:24,y:8,opacity:.4},field('shadow.blur','Shadow blur',1)+field('shadow.y','Shadow Y',1)+field('shadow.opacity','Shadow opacity',.05,{min:0,max:1}))+tog('border','Border',{width:4,color:'#FFFFFF'},field('border.width','Border width',1)+swatch('border.color','Border colour')));
+    // Style, CapCut's Basic panel: Stroke, Background and Shadow, each a switch with its colour and sliders. Live while
+    // dragging, one undo on letting go; a look tile sets them all, a row changed after it keeps the rest
+    z=one.size||60,
+    style=()=>grp(`<div class="sch scst"><span>Style</span></div>`
+      +tog('outline','Stroke',{color:'#000000',width:Math.max(2,Math.round(z*.08))},swatch('outline.color','Stroke colour')+slider('outline.width','Width',0,40,.5,{u:'px',max:200}))
+      +tog('box','Background',{color:'#000000',pad:scPad(z,.24,.06),radius:scR(z,.18)},swatch('box.color','Background colour')+slider('box.opacity','Opacity',0,1,.01,{k:100,u:'%',def:1})
+        +slider('box.radius','Roundness',0,Math.max(60,Math.round(z)),1,{u:'px',max:1000})+slider('box.pad','Padding',0,Math.max(60,Math.round(z)),1,{u:'px',max:1000}))
+      +tog('shadow','Shadow',{color:'#000000',blur:24,distance:6,angle:90,opacity:.6},swatch('shadow.color','Shadow colour')+slider('shadow.opacity','Opacity',0,1,.01,{k:100,u:'%',def:.35})
+        +slider('shadow.blur','Blur',0,80,1,{u:'px',max:400,def:30})+slider('shadow.distance','Distance',0,60,1,{u:'px',max:400,def:(one.shadow&&one.shadow.y)??12})+slider('shadow.angle','Angle',-180,180,1,{u:'°',def:90}))),
+    more=()=>fold('more','Advanced',size()+field('line_height','Line height',.05)+(one.type==='text'?'':tog('box','Box',{color:'#000000',pad:16,radius:12},swatch('box.color','Box colour')+field('box.pad','Box padding',1)+field('box.radius','Box corners',1))
+      +tog('outline','Outline',{color:'#000000',width:4},swatch('outline.color','Outline colour')+field('outline.width','Outline width',1)))+tog('stroke','Stroke',{color:'#FFFFFF',width:4},swatch('stroke.color','Stroke colour')+field('stroke.width','Stroke width',1))
+      +field('radius','Corners',1)+(one.type==='text'?'':tog('shadow','Shadow',{blur:24,y:8,opacity:.4},field('shadow.blur','Shadow blur',1)+field('shadow.y','Shadow Y',1)+field('shadow.opacity','Shadow opacity',.05,{min:0,max:1})))+tog('border','Border',{width:4,color:'#FFFFFF'},field('border.width','Border width',1)+swatch('border.color','Border colour')));
   // the tabs this pick has (several: the ones they all have), the open one remembered per kind
   const tl=scTabsOf(one).filter(([k])=>its.every(i=>scTabsOf(i).some(x=>x[0]===k))),kind=its.every(i=>i.type===one.type)?one.type:'mixed',tab=tl.some(x=>x[0]===scTabs[kind])?scTabs[kind]:(tl[0]||[])[0];
   let body='';
   if(tab==='main'){
     if(sh('text'))body+=grp(`${solo?`<textarea class="scta" id="sci-text" data-p="text" aria-label="Words">${esc(val('text')||'')}</textarea>`:''}
-      <div class="sclooks" role="group" aria-label="Look">${Object.entries(SCLOOK).map(([k,[n]])=>`<button class="sctile sclook${its.every(i=>scLookOf(i)===k)?' on':''}" data-look="${k}" title="${n}"><span class="scl-${k}">Aa</span><em>${n}</em></button>`).join('')}</div>`
+      <div class="sclooks" role="group" aria-label="Look">${SCPLOOK.map(k=>{const n=SCLOOK[k][0];return `<button class="sctile sclook${its.every(i=>scLookOf(i)===k)?' on':''}" data-look="${k}" title="${n}"><span class="scllive" style="${scLookCss(SCLOOK[k][1]({size:60}),17)}">Aa</span><em>${n}</em></button>`}).join('')}</div>`
       +tiles('font',SCFONT.map(f=>[f,f,`<span style="font-family:'${f}',system-ui">${f}</span>`]),'scfonts','Font')
       +slider('size','Size',8,300,1,{max:2000})
       +(sh('weight')?`<div class="scrow"><div class="scf sel" title="Weight"><select id="sci-weight"${A('weight','Weight')}>${[[400,'Regular'],[500,'Medium'],[600,'Semibold'],[700,'Bold'],[800,'Heavy'],[900,'Black']].map(([k,n])=>`<option value="${k}"${+k===+val('weight')?' selected':''}>${n}</option>`).join('')}</select></div>${tiles('align',[['left','Left',SCI.left],['center','Centre',SCI.center],['right','Right',SCI.right]],'scseg','Align')}</div>`:'')
-      +swatch('color','Colour'));
+      +swatch('color','Text colour'));
+    if(sh('text'))body+=style();
     if(sh('fill'))body+=grp(swatch('fill','Fill'));
     body+=grp(xform());
     if(sh('fit'))body+=grp(`<div class="scrow"><span class="sct">Fit</span>${tiles('fit',[['cover','Fill'],['contain','Fit']],'scseg','Fit')}</div>${solo?`<button class="ifull" id="sccrop">${SC.crop?'Done cropping':'Crop on the video (C)'}</button>`:''}`);
@@ -516,25 +559,43 @@ $('ibody').addEventListener('click',e=>{if(!SC.on)return;const B=$('ibody'),k=e.
   if(e.target.id==='sccrop'){SC.crop=!SC.crop;B._h=null;return SC.show()}
   if(e.target.id==='scdel'){const ids=[...SC.sel];SC.sel.clear();return SC.change('delete',s=>s.tracks.forEach(tr=>tr.items=tr.items.filter(i=>!ids.includes(i.id))))}},true);
 // ---- add: text, a shape, an image or video from Media, a sound; files dropped on the video or the rows (review.html sends them here)
-const scTop=(s,kind)=>{let tr=[...s.tracks].reverse().find(x=>x.kind===kind&&!x.locked&&!x.hidden);if(!tr){tr={id:scId(kind==='audio'?'a':'v'),kind,name:kind==='audio'?'Audio':'Overlay',items:[],locked:false};s.tracks.push(tr)}return tr};
-SC.add=function(what,item,kind,asset){const t=item.start??scNow(),it={id:scId('i'),start:+t.toFixed(3),end:+(t+(item.dur||3)).toFixed(3),...item};delete it.dur;
-  return SC.change('add '+what,s=>{if(asset)(s.assets=s.assets||{})[it.asset]=asset;scTop(s,kind||'visual').items.push(it)}).then(()=>{SC.sel=new Set([it.id]);SC.zone='v';SC.show()})};
-SC.addText=t=>SC.add('text',{type:'text',name:'Text',text:'Your text',font:'TikTok Sans',weight:700,size:72,color:'#FFFFFF',align:'center',line_height:1.15,box:null,outline:null,x:SC.s.width/2,y:Math.round(SC.s.height*.4),w:Math.round(SC.s.width*.8),rotation:0,opacity:1,start:t});
+// where a new item goes (scene.lane): a track of its own kind (texts with texts, pictures and clips together, sounds with
+// sounds) that is unlocked, shown and free from a to b, the top one first; else a new track of that kind just above the
+// others of its kind. Never the footage track (the magnet one), never over a clip. pref: a track it was dropped on, used
+// when it fits
+const scLK=t=>t==='text'?'text':t==='audio'?'audio':t==='captions'?'captions':'media';
+function scPlace(s,type,a,b,pref,spans){spans=spans||[[a,b]];const k=scLK(type),kind=k==='audio'?'audio':k==='captions'?'captions':'visual',main=s.tracks.find(x=>x.kind==='visual');
+  const fits=t=>t.kind===kind&&!t.locked&&!(kind==='audio'?t.muted:t.hidden)&&!(kind==='visual'&&(t.magnet??t===main))&&t.items.every(i=>scLK(i.type)===k)&&!t.items.some(i=>spans.some(([a,b])=>i.start<b-1e-3&&i.end>a+1e-3));
+  const pt=pref&&s.tracks.find(x=>x.id===pref);if(pt&&fits(pt))return pt;
+  const hit=pref!=='new'&&[...s.tracks].reverse().find(fits);if(hit)return hit;
+  const mine=s.tracks.map((t,i)=>t.kind===kind&&t.items.length&&t.items.every(x=>scLK(x.type)===k)&&!(kind==='visual'&&(t.magnet??t===main))?i:-1).filter(i=>i>=0),kinds=s.tracks.map(t=>t.kind);
+  const idx=mine.length?mine[mine.length-1]+1:kind==='visual'?kinds.lastIndexOf('visual')+1:s.tracks.length;
+  const base={text:'Text',audio:'Audio',media:type==='image'?'Images':type==='video'?'Video':'Shapes'}[k]||'Track',names=new Set(s.tracks.map(t=>t.name));let name=base;for(let n=2;names.has(name);n++)name=base+' '+n;
+  const tr={id:scId(kind==='audio'?'a':'v'),kind,name,items:[],locked:false,...(kind==='audio'?{muted:false}:{hidden:false})};s.tracks.splice(idx,0,tr);return tr}
+SC.add=function(what,item,kind,asset,pref){const t=item.start??scNow(),it={id:scId('i'),start:+t.toFixed(3),end:+(t+(item.dur||3)).toFixed(3),...item};delete it.dur;
+  return SC.change('add '+what,s=>{if(asset)(s.assets=s.assets||{})[it.asset]=asset;const tr=scPlace(s,it.type,it.start,it.end,pref);tr.items.push(it);tr.items.sort((a,b)=>a.start-b.start)}).then(()=>{SC.sel=new Set([it.id]);SC.zone='v';SC.show();return it.id})};
+// a text in a look (SCLOOK) at t: the look's words, size and place, at (px, py) % of the frame when dropped on the video,
+// on the track it was dropped on when free. One undo. edit: the caret goes in it, ready to type
+SC.addLook=function(k,t,o={}){const L=SCLOOK[k]||SCLOOK.box,W=SC.s.width,H=SC.s.height,ex=L[2]&&L[2].add,add=typeof ex==='function'?ex(W,H):ex||{};
+  const it={type:'text',name:'Text',text:'Your text',font:'TikTok Sans',weight:700,size:72,color:'#FFFFFF',align:'center',line_height:1.15,box:null,outline:null,shadow:null,
+    x:Math.round(W/2),y:Math.round(H*.4),w:Math.round(W*.8),rotation:0,opacity:1,...add,start:t};
+  Object.assign(it,L[1](it));if(o.px!=null){it.x=Math.round(o.px/100*W);it.y=Math.round(o.py/100*H)}
+  return SC.add('text',it,'visual',null,o.track).then(id=>{if(o.edit!==false&&id)setTimeout(()=>SC.editText(id,true),60);return id})};
+SC.addText=t=>SC.addLook('box',t);
 SC.addShape=t=>SC.add('shape',{type:'shape',name:'Shape',fill:'#FFFFFF',stroke:null,x:SC.s.width/2,y:SC.s.height/2,w:400,h:400,rotation:0,opacity:1,radius:24,start:t});
 SC.addMedia=async function(m,t,px,py){const sz=await medSize(m),vid=/\.(mp4|mov|m4v|webm)$/i.test(m.src),W=SC.s.width,H=SC.s.height,f=Math.min(W*.7/sz[0],H*.4/sz[1]),a=scId('m');
   let d=3;if(vid)d=await new Promise(res=>{const x=document.createElement('video');x.preload='metadata';x.onloadedmetadata=()=>res(Math.min(x.duration||3,30));x.onerror=()=>res(3);x.src='/live/media/'+encodeURI(m.src)});
-  return SC.add(vid?'a video':'an image',{type:vid?'video':'image',name:m.src.split('/').pop(),asset:a,...(vid?{in:0,speed:1,volume:1,fade_in:0,fade_out:0}:{}),x:Math.round(px!=null?px/100*W:W/2),y:Math.round(py!=null?py/100*H:H*.35),w:Math.round(sz[0]*f),h:Math.round(sz[1]*f),rotation:0,opacity:1,fit:'cover',start:t,dur:d},'visual',{src:m.src,kind:vid?'video':'image',w:sz[0],h:sz[1],url:'/live/media/'+encodeURI(m.src),...(vid?{duration:d}:{})})};
+  const dp=SC.dropPref&&Date.now()-SC.dropPref.at<20000?SC.dropPref.id:null;SC.dropPref=null;
+  return SC.add(vid?'a video':'an image',{type:vid?'video':'image',name:m.src.split('/').pop(),asset:a,...(vid?{in:0,speed:1,volume:1,fade_in:0,fade_out:0}:{}),x:Math.round(px!=null?px/100*W:W/2),y:Math.round(py!=null?py/100*H:H*.35),w:Math.round(sz[0]*f),h:Math.round(sz[1]*f),rotation:0,opacity:1,fit:'cover',start:t,dur:d},'visual',{src:m.src,kind:vid?'video':'image',w:sz[0],h:sz[1],url:'/live/media/'+encodeURI(m.src),...(vid?{duration:d}:{})},dp)};
 // ---- audio, CapCut's way: a library sound, a file from + Audio, a file dropped from Finder. Each is a file in the edit's
 // media/ (review.py /scene/sound copies a library sound in, /scene/upload streams a file in), an asset, and an audio item
 // at t on the first audio track free there (a new track when every one is busy), as long as the file, up to the scene's end
-function scFreeAudio(s,a,b){let tr=s.tracks.find(x=>x.kind==='audio'&&!x.locked&&!x.muted&&!x.items.some(i=>i.start<b-1e-3&&i.end>a+1e-3));
-  if(!tr){tr={id:scId('a'),kind:'audio',name:'Audio '+(s.tracks.filter(x=>x.kind==='audio').length+1),muted:false,locked:false,items:[]};s.tracks.push(tr)}return tr}
 SC.addAudio=function(src,dur,t){const s0=SC.s,D=scDur(s0),a=+Math.max(0,t).toFixed(3),name=src.split('/').pop().replace(/\.[a-z0-9]+$/i,'');
   let e=a+(dur||3);if(a<D-.1)e=Math.min(e,D);e=+Math.max(a+.1,e).toFixed(3);
   let aid=Object.keys(s0.assets||{}).find(k=>s0.assets[k].src===src);
   if(!aid){const base=name.toLowerCase().replace(/[^a-z0-9]/g,'-').slice(0,24)||'a';aid=base;for(let n=2;(s0.assets||{})[aid];n++)aid=base+'-'+n}
   const it={id:scId('i'),type:'audio',name,asset:aid,in:0,speed:1,volume:1,fade_in:0,fade_out:0,start:a,end:e};
-  return SC.change('add '+name,s=>{s.assets=s.assets||{};if(!s.assets[aid])s.assets[aid]={src,kind:'audio',duration:dur};scFreeAudio(s,a,e).items.push(it)})
+  return SC.change('add '+name,s=>{s.assets=s.assets||{};if(!s.assets[aid])s.assets[aid]={src,kind:'audio',duration:dur};scPlace(s,'audio',a,e).items.push(it)})
     .then(()=>{if(!scGet(it.id))return;SC.sel=new Set([it.id]);SC.zone='t';SC.show();toast(`${name} added at ${fmtx(a)}.`)})};
 SC.addSound=async function(name,t){const r=await post('/scene/sound',{name});if(!r.ok)return toast(r.error||'That sound was not added.');return SC.addAudio(r.src,r.duration,t)};
 SC.addFile=async function(f,t){toast(`Adding ${f.name}...`);
@@ -581,7 +642,7 @@ SC.volDrag=function(e,vl){const el=vl.closest('.eitem.sc'),id=el&&el.dataset.sid
     if(moved)await SC.commit(b0,'volume');else SC.show()};
   document.addEventListener('pointermove',mv,true);document.addEventListener('pointerup',up,true)};
 document.addEventListener('keydown',e=>{if(SC.key(e))e.stopImmediatePropagation()},true);
-$('railtext').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();if(SC.noside)scSide(true);SC.addText(scNow())},true);
+$('railtext').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();if(tool==='sctext'&&!SC.noside){scSide(false);scOT(null)}else openTool('sctext')},true);
 $('scover').addEventListener('click',e=>e.stopPropagation());
 // ---- the transcript follows the clips: a raw word inside a clip of the main track is kept, one in a gap is struck
 SC.txSync=function(){if(!SC.on||typeof W==='undefined'||!W.length)return;const main=SC.s.tracks.find(tr=>tr.kind==='visual'&&tr.items.some(i=>i.cut))||null;if(!main)return;
@@ -595,7 +656,7 @@ document.addEventListener('pointerdown',e=>{if(!SC.on||e.button||!e.target.close
 try{SC.noside=localStorage.getItem('review-scside')==='0'}catch(e){}
 function scSide(open){SC.noside=!open;document.body.classList.toggle('scnoside',!open);try{localStorage.setItem('review-scside',open?'1':'0')}catch(e){}}
 document.body.classList.toggle('scnoside',!!SC.noside);
-const scOT=openTool;openTool=function(n){if(SC.on&&n&&SC.noside)scSide(true);return scOT(n)};
+const scOT=openTool;openTool=function(n){if(SC.on&&n&&SC.noside)scSide(true);const r=scOT(n);$('xbody').hidden=n!=='sctext';if(n==='sctext'){$('tsht').textContent='Text';$('railtext').classList.add('on');SC.textPanel()}return r};
 $('tclose').addEventListener('click',e=>{if(!SC.on)return;e.stopImmediatePropagation();scSide(false);scOT(null)},true);
 $('railinsp').onclick=()=>{if(SC.noside||tool!=='insp'){scSide(true);openTool('insp');SC.insp()}else{scSide(false);scOT(null)}};
 // the timeline's Split and Delete buttons (beside the zoom, in the one row of controls): the same as S / ⌘B and Delete
@@ -605,3 +666,82 @@ $('railinsp').onclick=()=>{if(SC.noside||tool!=='insp'){scSide(true);openTool('i
   const S2='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>';
   if(z){z.prepend(mk('scdelb','Delete the picked clip',S2,()=>{const ids=[...SC.sel].filter(k=>scGet(k));if(scKd())return SC.keyDel();if(!ids.length)return toast('Pick a clip first, then Delete takes it out.');SC.del(ids)}));
     z.prepend(mk('scsplit','Split at the playhead',S1,()=>SC.split()))}}
+
+// ---- the Text panel (the left rail's Text in a scene): a big Add text, then the looks drawn in their look. A click adds the
+// look at the playhead on a free text track, a drag puts it where it lands on the video or the timeline; one undo each, and
+// the caret goes in it, ready to type
+{const st=document.createElement('style');st.textContent=`
+#xbody{flex:1;overflow:auto;padding:12px 16px 20px;display:flex;flex-direction:column;gap:12px}#xbody[hidden]{display:none}
+.scaddt{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border-radius:10px;border:0;background:var(--strong);color:var(--panel);font-size:14px;font-weight:600;cursor:pointer}.scaddt:hover{opacity:.88}.scaddt svg{width:16px;height:16px}
+.sctl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.sctlk{display:grid;grid-template-rows:1fr auto;place-items:center;gap:4px;height:100px;padding:10px 6px 7px;border:0;border-radius:10px;background:#2C2C2E;cursor:grab;outline:1.5px solid transparent;outline-offset:-1.5px;min-width:0}
+.sctlk:hover{outline-color:var(--line2)}.sctlk:active{cursor:grabbing}.sctlk em{font-style:normal;font-size:12px;line-height:16px;color:rgba(255,255,255,.75)}
+.sctlw{max-width:100%;overflow:hidden;text-align:center;line-height:1.25}.sctlw span{white-space:pre}
+.sced .scedtip{position:absolute;left:50%;top:100%;margin-top:calc(10px / var(--k));transform:translateX(-50%);padding:calc(4px / var(--k)) calc(8px / var(--k));border-radius:calc(6px / var(--k));background:rgba(0,0,0,.8);color:#FFFFFF;
+  font:500 calc(12px / var(--k)) system-ui,sans-serif;white-space:nowrap;pointer-events:none;-webkit-text-stroke:0!important;text-shadow:none!important;-webkit-user-select:none;user-select:none}
+#scmenu{position:fixed;z-index:40;min-width:160px;padding:4px;border-radius:10px;background:var(--raise,var(--panel));border:1px solid var(--line);box-shadow:var(--pop,0 8px 24px rgba(0,0,0,.4))}
+#scmenu button{display:flex;justify-content:space-between;gap:16px;width:100%;height:30px;padding:0 10px;border:0;border-radius:6px;background:none;color:var(--ink);font-size:13px;text-align:left;cursor:pointer}
+#scmenu button:hover:not(:disabled){background:var(--chip)}#scmenu button:disabled{color:var(--muted);cursor:default}#scmenu kbd{font:inherit;color:var(--muted)}`;document.head.appendChild(st)}
+{const x=document.createElement('div');x.id='xbody';x.hidden=true;$('tside').appendChild(x)}
+SC.textPanel=function(){const B=$('xbody');if(B._done)return;B._done=1;const W=SC.s?SC.s.width:1080,H=SC.s?SC.s.height:1920;
+  const tile=k=>{const[n,f,o]=SCLOOK[k],ex=o&&o.add,add=typeof ex==='function'?ex(W,H):ex||{},it={size:72,weight:700,...add},st=f(it),z=it.size,L=Math.max(...String(add.text||'Your text').split('\n').map(l=>l.length)),px=Math.max(11,Math.min(30,z*.25,150/L));
+    return `<button class="sctlk" draggable="true" data-addlook="${k}" title="Add ${esc((o&&o.name||n).toLowerCase())}" aria-label="Add ${esc((o&&o.name||n).toLowerCase())}"><span class="sctlw"><span style="font-family:'TikTok Sans',system-ui,sans-serif;font-weight:${it.weight};font-size:${px.toFixed(1)}px;line-height:${it.line_height||1.2};${scLookCss(st,px,z)}">${esc(add.text||'Your text')}</span></span><em>${esc(o&&o.name||n)}</em></button>`};
+  B.innerHTML=`<button class="scaddt" id="scaddt" title="Add a text at the playhead and type"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>Add text</button>
+    <p class="tsub">Click a look to add it at the playhead. Drag one onto the video or the timeline to put it there.</p>
+    <div class="sctl" role="group" aria-label="Text looks">${Object.keys(SCLOOK).map(tile).join('')}</div>`};
+$('xbody').addEventListener('click',e=>{if(!SC.on)return;if(e.target.closest('#scaddt'))return SC.addText(scNow());const b=e.target.closest('[data-addlook]');if(b)SC.addLook(b.dataset.addlook,scNow())});
+$('xbody').addEventListener('dragstart',e=>{const b=e.target.closest('[data-addlook]');if(!b)return;e.dataTransfer.setData('application/x-cooked-look',b.dataset.addlook);e.dataTransfer.effectAllowed='copy'});
+// a look dropped on the video lands where it was let go; on the timeline at that time, on that row when it is free (else a free
+// text track, else a new one); on "Drop here for a new track" on a new one. A Media drop on a row goes there too (SC.dropPref)
+['p1','timeline'].forEach(id=>{const el=$(id);if(!el)return;
+  el.addEventListener('dragover',e=>{if(SC.on&&[...e.dataTransfer.types].includes('application/x-cooked-look')){e.preventDefault();e.dataTransfer.dropEffect='copy'}},true);
+  el.addEventListener('drop',e=>{if(!SC.on)return;const tk=e.target.closest&&e.target.closest('.etrack'),pref=tk?(tk.dataset.new?'new':tk.dataset.sctk||null):null;
+    const k=e.dataTransfer.getData('application/x-cooked-look');if(!k){if(pref)SC.dropPref={id:pref,at:Date.now()};return}
+    e.preventDefault();e.stopImmediatePropagation();document.querySelectorAll('.etrack.dropon').forEach(x=>x.classList.remove('dropon'));
+    if(id==='p1'){const r=$('scover').getBoundingClientRect(),px=(e.clientX-r.left)/r.width*100,py=(e.clientY-r.top)/r.height*100,on=px>=0&&px<=100&&py>=0&&py<=100;
+      return SC.addLook(k,scNow(),on?{px,py}:{})}
+    SC.addLook(k,+Math.max(0,dropT(e)).toFixed(3),{track:pref,edit:false})},true)});
+// ---- copy and paste, CapCut's: Cmd+C copies the picked items (any kind, several, their timing and lanes kept), Cmd+V pastes at
+// the playhead on free tracks of their kinds, Cmd+D duplicates right after, Cmd+X cuts. The copy rides the system clipboard
+// (and this page's memory), so a paste works in another video's page too: the files it plays are copied into that edit first
+// (/scene/import-asset). A picture on the clipboard (a screenshot) pastes as an image. Each paste is one undo
+const SCCLIP='cooked-scene:';
+SC.copyIds=function(ids){const its=scAll().filter(o=>ids.includes(o.it.id)&&o.it.type!=='captions');if(!its.length)return toast('Captions are not copied.');
+  const as={};its.forEach(o=>{const a=o.it.asset&&SC.s.assets[o.it.asset];if(a)as[o.it.asset]={src:a.src,kind:a.kind,w:a.w,h:a.h,duration:a.duration,alpha:a.alpha}});
+  SC.clip={v:1,from:S&&S.folder,alt,items:its.map(o=>({it:scCopy(o.it),tr:o.tr.id,ti:o.ti})),assets:as};SC.clipOut=1;
+  const txt=SCCLIP+JSON.stringify(SC.clip);try{localStorage.setItem('cooked-scene-clip',txt)}catch(e){}
+  try{navigator.clipboard&&navigator.clipboard.writeText(txt).catch(()=>{})}catch(e){}
+  toast(its.length>1?`Copied ${its.length} items.`:'Copied. '+((KM.keys('paste').map(KM.fmt)[0])||'Paste')+' pastes it at the playhead.')};
+['copy','cut'].forEach(k=>document.addEventListener(k,e=>{if(!SC.on||!SC.clipOut||typingIn(e.target))return;SC.clipOut=0;e.clipboardData.setData('text/plain',SCCLIP+JSON.stringify(SC.clip));e.preventDefault()}));
+document.addEventListener('paste',async e=>{if(!SC.on||typingIn(e.target)||SC.edit||!(S&&view&&view.stage==='edit'))return;const cd=e.clipboardData,txt=cd?cd.getData('text/plain'):'';
+  if(txt.startsWith(SCCLIP)){e.preventDefault();let c;try{c=JSON.parse(txt.slice(SCCLIP.length))}catch(x){return}return SC.paste(c,scNow())}
+  const fs=[...(cd&&cd.files||[])].filter(isMedia);
+  if(fs.length){e.preventDefault();const t=scNow(),ms=await medUpload(fs);for(const m of ms)await SC.addMedia(m,t);return}
+  if(!txt&&SC.clip){e.preventDefault();SC.paste(SC.clip,scNow())}});
+// the items of a copy at t: each original track's items together on one free track of their kind; new ids; files from another
+// video copied in first and named in this scene's assets (the same file reused, never copied twice)
+SC.paste=async function(c,t,what){if(!c||!c.items||!c.items.length)return;const same=!c.from||!S||c.from===S.folder,amap={};
+  for(const[aid,a]of Object.entries(c.assets||{})){let src=a.src;
+    if(!same){const r=await post('/scene/import-asset',{from_edit:c.from,src});if(!r.ok)return toast(r.error||'That did not paste.');src=r.src}
+    const as=SC.s.assets||{},hit=Object.keys(as).find(k=>as[k].src===src);let id=hit;if(!id){id=aid;for(let n=2;as[id];n++)id=aid+'-'+n}amap[aid]=[id,hit?null:{...a,src}]}
+  const t0=Math.min(...c.items.map(x=>x.it.start)),ids=[],groups={};c.items.forEach(x=>(groups[x.tr]=groups[x.tr]||[]).push(x));
+  await SC.change(what||(c.items.length>1?`paste ${c.items.length} items`:'paste'),s=>{s.assets=s.assets||{};
+    for(const[id,a]of Object.values(amap))if(a&&!s.assets[id])s.assets[id]=a;
+    Object.values(groups).sort((a,b)=>a[0].ti-b[0].ti).forEach(g=>{const its=g.map(x=>{const it={...scCopy(x.it),id:scId('i')},d=it.end-it.start;delete it.cut;delete it.by;delete it.locked;
+        it.start=+(t+x.it.start-t0).toFixed(3);it.end=+(it.start+d).toFixed(3);if(it.asset&&amap[it.asset])it.asset=amap[it.asset][0];ids.push(it.id);return it});
+      const tr=scPlace(s,its[0].type,its[0].start,its[0].end,null,its.map(i=>[i.start,i.end]));tr.items.push(...its);tr.items.sort((a,b)=>a.start-b.start)})});
+  SC.sel=new Set(ids.filter(scGet));SC.show();toast(`${what==='duplicate'?'Duplicated':'Pasted'} at ${fmtx(t)}.`)};
+SC.dup=function(ids){SC.copyIds(ids);SC.clipOut=0;const e=Math.max(...ids.map(k=>scGet(k).it.end));return SC.paste(SC.clip,e,'duplicate')};
+SC.clipSaved=()=>{if(SC.clip)return SC.clip;try{const x=localStorage.getItem('cooked-scene-clip');return x&&x.startsWith(SCCLIP)?JSON.parse(x.slice(SCCLIP.length)):null}catch(e){return null}};
+// right-click a clip on the timeline or an item on the video: Copy, Paste, Duplicate, Delete
+const scMenuOff=()=>{const m=$('scmenu');if(m)m.remove()};
+document.addEventListener('contextmenu',e=>{if(!SC.on)return;const el=e.target.closest('.eitem.sc'),ov=e.target.closest('#scover');let id=el&&el.dataset.sid;
+  if(!id&&ov){const[px,py]=scPt(e),o=scHit(px,py,scNow()).filter(o=>!o.tr.locked)[0];id=o&&o.it.id}
+  if(!id&&!ov&&!e.target.closest('#edtracks .etrack'))return;e.preventDefault();scMenuOff();if(id&&!SC.sel.has(id)){SC.sel=new Set([id]);SC.show()}
+  const ids=[...SC.sel].filter(scGet),f=k=>(KM.keys(k).map(KM.fmt)[0])||'',m=document.createElement('div');m.id='scmenu';m.setAttribute('role','menu');
+  m.innerHTML=[['copy','Copy',f('copy'),!ids.length],['paste','Paste',f('paste'),!SC.clipSaved()],['dup','Duplicate',f('duplicate'),!ids.length],['del','Delete','',!ids.length]]
+    .map(([k,n,kb,off])=>`<button role="menuitem" data-scm="${k}"${off?' disabled':''}>${n}<kbd>${kb}</kbd></button>`).join('');
+  document.body.appendChild(m);m.style.left=Math.min(innerWidth-m.offsetWidth-8,e.clientX)+'px';m.style.top=Math.min(innerHeight-m.offsetHeight-8,e.clientY)+'px'});
+document.addEventListener('pointerdown',e=>{if($('scmenu')&&!e.target.closest('#scmenu'))scMenuOff()},true);
+document.addEventListener('click',e=>{const b=e.target.closest('#scmenu [data-scm]');if(!b)return;const k=b.dataset.scm,ids=[...SC.sel].filter(scGet);scMenuOff();
+  if(k==='copy')SC.copyIds(ids);if(k==='paste')SC.paste(SC.clipSaved(),scNow());if(k==='dup')SC.dup(ids);if(k==='del')SC.del(ids)});

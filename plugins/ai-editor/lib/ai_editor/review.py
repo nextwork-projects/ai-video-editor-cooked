@@ -574,6 +574,21 @@ def scene_library_sound(folder, name):
     return {"src": src, "duration": round(scene.probe(Path(folder) / src).get("duration") or 0, 3)}
 
 
+def scene_import_asset(folder, from_edit, src):
+    """A paste from another video's page: the file one of its items plays (src, relative to that edit) copied into this
+    edit's media/ (a clone; the same file once), so the paste plays and exports here. Only from an edit in the library,
+    only a picture, clip or sound inside it. Returns {"src"}; ValueError with the words to show."""
+    import library
+    lib = library.path(make=False).resolve()
+    e = Path(str(from_edit or "")).expanduser().resolve()
+    if not e.is_dir() or not (lib in e.parents or e in {Path(x).resolve() for x in library.edit_dirs()}):
+        raise ValueError("That video is not in your library.")
+    f = (e / str(src or "")).resolve()
+    if e not in f.parents or not f.is_file() or f.suffix.lower() not in (*SCENE_AUDIO_EXT, *sfx_mod().SOUND_EXT, ".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        raise ValueError("That file cannot be pasted here.")
+    return {"src": scene.bring_in(folder, f)}
+
+
 _SHAPE = {}
 
 
@@ -3684,6 +3699,11 @@ def make_handler(folder, token):
                     return self.send(200, {"ok": True, **scene_library_sound(folder, str(body.get("name") or ""))})
                 except (ValueError, OSError, scene.SceneError) as e:
                     return self.send(400, {"error": str(e)})
+            if path == "/scene/import-asset":   # a paste from another video: the file it plays copied in ({from_edit, src})
+                try:
+                    return self.send(200, {"ok": True, **scene_import_asset(folder, body.get("from_edit"), body.get("src"))})
+                except (ValueError, OSError) as e:
+                    return self.send(400, {"error": str(e)})
             if path == "/scene/claude":   # Undo or Redo of one of Claude's changes, by its own ops: {"n", "undo": true | false, "alt"}
                 alt = body.get("alt") or None
                 try:
@@ -6696,6 +6716,18 @@ def demo():
             except urllib.error.HTTPError as e:
                 assert e.code == 400
         assert not (folder / "media" / "quiet.wav").exists(), "a file with no sound is not kept"
+        # a paste from another video in the library: the file it plays copied in once; anything outside an edit refused
+        other = tmp / "soundlib" / "edits" / "other"
+        (other / "media").mkdir(parents=True, exist_ok=True)
+        (other / "media" / "pic.png").write_bytes(b"\x89PNG fake")
+        ia = post("/scene/import-asset", {"from_edit": str(other), "src": "media/pic.png"})
+        assert ia == {"ok": True, "src": "media/pic.png"} and (folder / "media" / "pic.png").read_bytes() == b"\x89PNG fake", ia
+        for bad in ({"from_edit": str(other), "src": "../../../review.json"}, {"from_edit": str(tmp), "src": "ding.wav"}, {"from_edit": str(other), "src": "nope.png"}):
+            try:
+                post("/scene/import-asset", bad)
+                raise AssertionError(bad)
+            except urllib.error.HTTPError as e:
+                assert e.code == 400, bad
         post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
         clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
         assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip

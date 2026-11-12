@@ -2,6 +2,13 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.47, creator-teardown 2.7.47 (2026-11-11)
+- Text is added the CapCut way. The Text button opens a Text panel: a big Add text button, then every look as a large tile drawn in its look (plain, white box, black box, pill, bold outline, soft shadow, highlight, white card, a Comment "WORD" box, a name label, a big title). Click a tile to add it at the playhead, or drag it onto the video or onto the timeline to put it there.
+- A new text starts with the caret in it, ready to type. Double-click any text on the video to type in it: Enter is a new line, Esc or a click away finishes.
+- Properties has a Style section like CapCut's: text colour, then Stroke, Background and Shadow, each with a switch, colour swatches and sliders (stroke width; background opacity, roundness and padding; shadow opacity, blur, distance and angle). The video changes while you drag, and letting go is one undo. A look tile sets these rows, and changing a row afterwards keeps the rest. Text shadows now show in the player and the export.
+- New things never land on another kind of track or on top of a clip. A text goes on a free text track, a picture or video on a free picture track, a sound on a free sound track, or a new track of that kind just above the others. Dropping onto a row puts it there only when that spot is free.
+- Copy and paste anything on the scene: Cmd+C copies the picked items (several at once, keeping their timing and rows), Cmd+V pastes them at the playhead, Cmd+D duplicates right after, Cmd+X cuts. Right-click a clip for Copy, Paste, Duplicate and Delete. Pasting into another video copies the files it needs into that video. A screenshot on the clipboard pastes as a picture.
+
 ## ai-editor 2.7.46, creator-teardown 2.7.46 (2026-11-10)
 - Text with a box over two or more lines looks like Instagram's text box: one rounded box per line, every line centred with the same padding, the lines touching cleanly with smooth inside corners. No line cuts into the one above any more.
 - Properties works like CapCut's panel: tabs per kind (Text | Animation, Video | Audio | Animation | Speed, Audio | Speed), text looks as picture tiles (plain, outline, white box, black box, block, shadow), fonts shown in their own font, colour swatches, animations as tiles that play on hover with one duration slider, sliders with the number beside them for size, scale, opacity, rotation, volume and speed (plus 0.5x to 2x buttons). Width, height and the extra look settings sit under Advanced; timing sits at the bottom, folded.

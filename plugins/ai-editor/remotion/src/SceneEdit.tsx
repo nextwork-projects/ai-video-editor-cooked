@@ -12,13 +12,14 @@ import { resolveLook, useFonts } from "./look";
 
 type Key = [number, number, string?];
 export type Asset = { src: string; url?: string; proxy?: string; kind?: string; w?: number; h?: number; duration?: number; alpha?: boolean };
-type Box = { color: string; pad?: number | [number, number]; radius?: number; block?: boolean };
+type Box = { color: string; pad?: number | [number, number]; radius?: number; block?: boolean; opacity?: number };
+type Shadow = { blur?: number; y?: number; opacity?: number; color?: string; distance?: number; angle?: number };
 export type Item = {
   id: string; type: "video" | "image" | "text" | "shape" | "audio" | "captions" | "card"; start: number; end: number; name?: string;
   asset?: string; in?: number; speed?: number; volume?: number; fade_in?: number; fade_out?: number; locked?: boolean;
   x?: number; y?: number; w?: number; h?: number; rotation?: number; opacity?: number; fit?: "cover" | "contain";
   crop?: { l?: number; t?: number; r?: number; b?: number } | null; radius?: number;
-  shadow?: { blur?: number; y?: number; opacity?: number } | null; border?: { width: number; color: string } | null;
+  shadow?: Shadow | null; border?: { width: number; color: string } | null;
   anim?: { in?: string; out?: string; dur?: number } | null; keys?: Record<string, Key[]>; grade?: { brightness?: number; saturate?: number };
   text?: string; font?: string; weight?: number; size?: number; color?: string; align?: "left" | "center" | "right"; line_height?: number;
   box?: Box | null; outline?: { color: string; width: number } | null; fill?: string; stroke?: { color: string; width: number } | null;
@@ -63,6 +64,20 @@ const placed = (it: Item, lt: number, W: number, H: number) => {
   return { x: k("x", it.x ?? W / 2), y: k("y", it.y ?? H / 2), w: k("w", it.w ?? W), h: k("h", it.h ?? H), r: k("rotation", it.rotation ?? 0), s: s * sc, o, ty };
 };
 
+/** A colour (#RRGGBB) at an opacity, as CSS. */
+export const rgba = (c: string | undefined, o = 1) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(c ?? "");
+  if (!m) return c ?? "#000000";
+  const n = parseInt(m[1], 16);
+  return o >= 1 ? c! : `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${o})`;
+};
+/** A shadow as CSS: offset by distance at angle (degrees, 90 straight down) when set, else straight down by y. */
+export const shadowCss = (sh: Shadow) => {
+  const a = ((sh.angle ?? 90) * Math.PI) / 180, d = sh.distance;
+  const [dx, dy] = d == null ? [0, sh.y ?? 12] : [d * Math.cos(a), d * Math.sin(a)];
+  return `${+dx.toFixed(2)}px ${+dy.toFixed(2)}px ${sh.blur ?? 30}px ${rgba(sh.color ?? "#000000", sh.opacity ?? 0.35)}`;
+};
+
 /** The box a picture or clip sits in: its crop shown, fitted (cover or contain), rounded, shadowed, bordered. */
 const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; children: (st: React.CSSProperties) => React.ReactNode }> = ({ it, a, lt, W, H, children }) => {
   const p = placed(it, lt, W, H);
@@ -76,7 +91,7 @@ const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; c
   return (
     <div data-sc={it.id} style={{ position: "absolute", left: p.x - p.w / 2, top: p.y - p.h / 2, width: p.w, height: p.h, opacity: p.o,
       transform: `translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`, borderRadius: it.radius ?? 0, overflow: "hidden",
-      boxShadow: sh_ ? `0 ${sh_.y ?? 12}px ${sh_.blur ?? 30}px rgba(0,0,0,${sh_.opacity ?? 0.35})` : undefined, background: it.type === "shape" ? it.fill : undefined }}>
+      boxShadow: sh_ ? shadowCss(sh_) : undefined, background: it.type === "shape" ? it.fill : undefined }}>
       {children(media)}
       {it.border || it.stroke ? <div style={{ position: "absolute", inset: 0, borderRadius: it.radius ?? 0,
         border: `${(it.border ?? it.stroke)!.width}px solid ${(it.border ?? it.stroke)!.color}` }} /> : null}
@@ -193,11 +208,12 @@ const TextItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) =>
     <div ref={ref} data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
       opacity: p.o, width: "max-content", maxWidth: p.w, textAlign: it.align ?? "center", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
       fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: lh,
-      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}),
+      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: rgba(b.color, b.opacity ?? 1), padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}),
       ...(lines ? { padding: `${pad[1]}px ${pad[0]}px`, boxSizing: "border-box" } : {}) }}>
       {lines && shape ? <svg width={shape.w} height={shape.h} style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
-        <path d={shape.d} fill={b!.color} /></svg> : null}
-      <span ref={span} style={{ position: "relative", ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>
+        <path d={shape.d} fill={rgba(b!.color, b!.opacity ?? 1)} /></svg> : null}
+      <span ref={span} style={{ position: "relative", ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}),
+        ...(it.shadow ? { textShadow: shadowCss(it.shadow) } : {}) } as React.CSSProperties}>
         {it.text}</span>
     </div>
   );

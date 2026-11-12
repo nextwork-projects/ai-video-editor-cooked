@@ -21,6 +21,7 @@ Skills write scenes with the helper: Scene(w, h, fps).video(src, start, end, ...
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -59,7 +60,7 @@ def jload(p):
 def jsave(p, d):
     p = Path(p)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")   # per thread: two saves at once never share a temp file
     tmp.write_text(json.dumps(d, indent=1, ensure_ascii=False), encoding="utf-8")
     tmp.replace(p)
 
@@ -178,6 +179,16 @@ def validate(sc):
                 errs.append(f"{where}: speed must be above 0")
             if t == "captions" and not isinstance(it.get("words", []), list):
                 errs.append(f"{where}: words must be a list")
+            for k in ("box", "shadow"):   # a box's fill and a shadow's colour see-through, 0-1
+                o = it[k].get("opacity") if isinstance(it.get(k), dict) else None
+                if o is not None and not (num(o) and 0 <= o <= 1):
+                    errs.append(f"{where}: {k}.opacity must be 0 to 1 (got {o!r})")
+            sh = it.get("shadow") if isinstance(it.get("shadow"), dict) else {}
+            for sub in ("blur", "y", "distance", "angle"):
+                if sh.get(sub) is not None and not num(sh[sub]):
+                    errs.append(f"{where}: shadow.{sub} must be a number (got {sh[sub]!r})")
+            if sh.get("color") is not None and not (isinstance(sh["color"], str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sh["color"])):
+                errs.append(f"{where}: shadow.color must be #RRGGBB (got {sh['color']!r})")
             a = it.get("anim")
             if a and (a.get("in", "none") not in ANIMS or a.get("out", "none") not in ANIMS):
                 errs.append(f"{where}: anim in and out must be one of {', '.join(sorted(ANIMS))}")
@@ -1229,6 +1240,35 @@ def peaks(edit, aid, a):
     return d
 
 
+def lane_kind(typ):
+    """What shares a track: texts with texts, sounds with sounds, pictures and clips (and shapes, cards) with each other."""
+    return "text" if typ == "text" else "audio" if typ == "audio" else "captions" if typ == "captions" else "media"
+
+
+def lane(sc, typ, a, b, track=None):
+    """Where a new item goes (the page's scPlace): the named track when it holds this kind and is free from a to b, else the
+    first track of this kind that is unlocked, shown and free then (top first), else a new track of this kind just above the
+    others of its kind. Never the footage track (the magnet one), never over a clip. Returns (track id, ops making it)."""
+    k, kind = lane_kind(typ), TYPES[typ]
+    def fits(t):
+        return (t["kind"] == kind and not t.get("locked") and not t.get("muted" if kind == "audio" else "hidden")
+                and not (kind == "visual" and magnet(sc, t)) and all(lane_kind(i.get("type")) == k for i in t["items"])
+                and not any(i["start"] < b - 1e-3 and i["end"] > a + 1e-3 for i in t["items"]))
+    pool = [t for t in sc["tracks"] if track in (t["id"], t.get("name"))] if track else list(reversed(sc["tracks"]))
+    for t in pool:
+        if fits(t):
+            return t["id"], []
+    ids, kinds = {t["id"] for t in sc["tracks"]}, [t["kind"] for t in sc["tracks"]]
+    tid = next(f"{kind[0]}{n}" for n in range(1, 999) if f"{kind[0]}{n}" not in ids)
+    mine = [i for i, t in enumerate(sc["tracks"]) if t["kind"] == kind and t["items"] and all(lane_kind(x.get("type")) == k for x in t["items"])
+            and not (kind == "visual" and magnet(sc, t))]
+    idx = mine[-1] + 1 if mine else (len(kinds) - kinds[::-1].index("visual") if kind == "visual" and "visual" in kinds else len(kinds))
+    base = track or {"text": "Text", "audio": "Sounds", "media": "Images" if typ == "image" else "Motion" if typ == "video" else "Shapes"}[k]
+    names = {t.get("name") for t in sc["tracks"]}
+    name = base if base not in names else next(f"{base} {n}" for n in range(2, 999) if f"{base} {n}" not in names)
+    return tid, [{"op": "add_track", "track": {"id": tid, "kind": kind, "name": name}, "index": idx}]
+
+
 def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=None, extra=None):
     """scene.py add: the ops that put one item on the scene (its file copied into the edit's media/ when it is outside)."""
     e, W, H = Path(edit), sc["width"], sc["height"]
@@ -1263,18 +1303,9 @@ def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=
         it.setdefault("w", round(W * 0.3))
         it.setdefault("h", round(W * 0.3))
     it["end"] = round(float(end) if end is not None else float(start) + 3, 6)
-    kind = TYPES[typ]
-    name = track or {"video": "Motion", "image": "Images", "text": "Text", "shape": "Shapes", "audio": "Sounds"}[typ]
-    tr = next((t for t in sc["tracks"] if t["kind"] == kind and name in (t["id"], t["name"])), None)
-    if not tr or (kind == "visual" and magnet(sc, tr) and typ != "video"):
-        if tr:   # never onto the footage
-            name += " 2"
-        ids = {t["id"] for t in sc["tracks"]}
-        tid = next(f"{kind[0]}{n}" for n in range(1, 999) if f"{kind[0]}{n}" not in ids)
-        kinds = [t["kind"] for t in sc["tracks"]]
-        idx = len(kinds) - kinds[::-1].index("visual") if kind == "visual" and "visual" in kinds else len(kinds)   # on top of the pictures
-        ops.append({"op": "add_track", "track": {"id": tid, "kind": kind, "name": name}, "index": idx})
-        tr = {"id": tid}
+    tid, more = lane(sc, typ, it["start"], it["end"], track)
+    ops += more
+    tr = {"id": tid}
     ops.append({"op": "add", "track": tr["id"], "item": it})
     return ops
 
@@ -1403,6 +1434,22 @@ def demo():
         assert all(key_at(a["keys"]["x"], t) - 540 * key_at(a["keys"]["scale"], t) <= 0 for t in (0, 0.5, 1, 1.5)), "the left edge is covered"
         plain = normalise({**sl, "covered": False, "tracks": [{"id": "v", "kind": "visual", "items": [{**sl["tracks"][0]["items"][1], "x": 600}]}]})
         assert cover(plain) == ["b"] and plain["tracks"][0]["items"][0]["w"] >= 1200, "no keys: the clip grows"
+        # a new item: a free track of its own kind, else a new one above its kind; never the footage, never over a clip
+        ln = normalise({"width": 1080, "height": 1920, "fps": 30, "assets": {"c": {"src": "take.mp4"}}, "tracks": [
+            {"id": "v", "kind": "visual", "items": [{"id": "a", "type": "video", "asset": "c", "start": 0, "end": 9}]},
+            {"id": "x", "kind": "visual", "name": "Text", "items": [{"id": "t", "type": "text", "text": "hi", "start": 1, "end": 3}]}]})
+        assert lane(ln, "text", 4, 5) == ("x", []), "a free text track"
+        tid, op = lane(ln, "text", 2, 4)
+        assert tid == "v1" and op[0]["index"] == 2 and op[0]["track"]["name"] == "Text 2", op   # busy: a new one above it
+        tid, op = lane(ln, "image", 1, 2)
+        assert tid == "v1" and op[0]["track"]["name"] == "Images", "a picture never goes on the text track or the footage"
+        assert validate(normalise({**ln, "tracks": [{"id": "x", "kind": "visual", "items": [{"type": "text", "start": 0, "end": 1,
+                        "box": {"color": "#FFFFFF", "opacity": 0.5}, "shadow": {"color": "#FF0000", "distance": 8, "angle": 45}}]}]}))
+        try:
+            validate(normalise({**ln, "tracks": [{"id": "x", "kind": "visual", "items": [{"type": "text", "start": 0, "end": 1, "box": {"color": "#FFFFFF", "opacity": 2}}]}]}))
+            raise AssertionError("box opacity 2 passed")
+        except SceneError as e:
+            assert "box.opacity" in str(e), e
     print("scene demo ok")
 
 
