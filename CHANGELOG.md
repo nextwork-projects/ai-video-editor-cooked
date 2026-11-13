@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.48, creator-teardown 2.7.48 (2026-11-12)
+- Click a keyframe diamond on a clip and the playhead jumps to it, with that keyframe open in Properties. Before, only the diamonds in the rows under the clip did this.
+- Zoomed-in footage shows all its handles. A box bigger than the frame draws past it, over the stage, and its corner and rotate handles move in to the edge you can see, so you can always drag to resize or rotate.
+- Every number in Properties (scale, position, rotation, opacity, size) changes when you drag across it, left or right, like CapCut. Shift for bigger steps. A click without a drag still types in it.
+
 ## ai-editor 2.7.47, creator-teardown 2.7.47 (2026-11-11)
 - Text is added the CapCut way. The Text button opens a Text panel: a big Add text button, then every look as a large tile drawn in its look (plain, white box, black box, pill, bold outline, soft shadow, highlight, white card, a Comment "WORD" box, a name label, a big title). Click a tile to add it at the playhead, or drag it onto the video or onto the timeline to put it there.
 - A new text starts with the caret in it, ready to type. Double-click any text on the video to type in it: Enter is a new line, Esc or a click away finishes.
