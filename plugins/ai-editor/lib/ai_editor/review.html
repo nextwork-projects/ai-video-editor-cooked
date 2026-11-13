@@ -2872,7 +2872,7 @@ async function delText(id,fresh){const was=fresh?null:(S.texts||[]).find(x=>Stri
   if(tx&&tx.edit&&String(tx.edit.id)===String(id))setText(null);toast(r.error||'Text deleted');
   if(was&&!r.error){let cur=id;edPush('delete text',async()=>{const a=await post('/text/add',TXF(was));if(!(a.id||a.ok))throw new Error(a.error||'');cur=a.text_id||a.id;await load()},()=>edSave('/text/delete',{id:cur}))}
   await load()}
-$('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool(tool==='captions'?null:'captions');$('railsnd').onclick=()=>openTool(tool==='sounds'?null:'sounds');$('railmed').onclick=()=>openTool(tool==='media'?null:'media');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
+$('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool('captions');$('railsnd').onclick=()=>openTool('sounds');$('railmed').onclick=()=>openTool('media');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
 $('tbody').addEventListener('click',async e=>{
   const st=e.target.closest('#ttiles [data-ts]');if(st){if(tx){tx.style=st.dataset.ts;tsig=null;$('tbody')._tf=null;renderTextPanel();renderTexts()}else setText(st.dataset.ts);return}
   const tc=e.target.closest('[data-tc]');if(tc&&tx){setTcol(tc.dataset.tc);return}

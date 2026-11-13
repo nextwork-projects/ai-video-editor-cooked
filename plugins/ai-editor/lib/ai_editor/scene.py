@@ -1240,6 +1240,41 @@ def peaks(edit, aid, a):
     return d
 
 
+STRIP_H = 72         # a filmstrip frame's height in pixels (the timeline shows it at about half, sharp on a Retina screen)
+STRIP_MAX = 240      # frames at most in one strip: a long take samples further apart
+
+
+def strip(edit, aid, a):
+    """A video asset's frames for its timeline clips, CapCut's filmstrip: one JPEG of frames side by side, a frame every
+    "step" seconds of the source from 0. {"step", "n", "w", "h", "file"}; cached in .scene/<aid>.strip.jpg by the file it reads."""
+    f = path_of(edit, a, False)
+    st = f.stat()
+    sig = f"{a.get('src')}|{st.st_size}|{st.st_mtime_ns}"
+    meta, img = Path(edit) / ".scene" / f"{aid}.strip.json", Path(edit) / ".scene" / f"{aid}.strip.jpg"
+    try:
+        d = jload(meta)
+        if d.get("sig") == sig and img.is_file():
+            return {**d, "file": img}
+    except (OSError, ValueError):
+        pass
+    pr = probe(f)
+    if pr["kind"] != "video" or not pr.get("duration"):
+        raise SceneError(f"{aid} has no frames to show")
+    dur, step = pr["duration"], max(1.0, round(pr["duration"] / STRIP_MAX, 2))
+    n = max(1, min(STRIP_MAX, int(dur // step) + 1))
+    w = max(2, round(STRIP_H * pr["w"] / pr["h"] / 2) * 2)
+    img.parent.mkdir(parents=True, exist_ok=True)
+    tmp = img.with_suffix(".part.jpg")
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(f), "-an", "-vf", f"fps=1/{step},scale={w}:{STRIP_H},tile={n}x1",
+                        "-frames:v", "1", "-q:v", "5", str(tmp)], capture_output=True, text=True)
+    if r.returncode or not tmp.is_file():
+        raise SceneError(f"could not draw the frames of {aid}: {r.stderr.strip()[-200:]}")
+    tmp.replace(img)
+    d = {"sig": sig, "step": step, "n": n, "w": w, "h": STRIP_H}
+    jsave(meta, d)
+    return {**d, "file": img}
+
+
 def lane_kind(typ):
     """What shares a track: texts with texts, sounds with sounds, pictures and clips (and shapes, cards) with each other."""
     return "text" if typ == "text" else "audio" if typ == "audio" else "captions" if typ == "captions" else "media"

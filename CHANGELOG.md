@@ -2,6 +2,14 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.49, creator-teardown 2.7.49 (2026-11-13)
+- The timeline works like CapCut's. It runs the whole width of the window under the panels, the video and the notes, and a bar above it drags to make it taller or shorter.
+- One toolbar on top of the timeline: undo, redo, split, delete to the playhead (Q), delete from the playhead (W), delete, add Text, add Audio, add a Track, and the zoom on the right.
+- Clips show what is in them. A video shows its frames over its sound wave (a silent clip is frames only), a picture shows itself, and the rows for footage, pictures and sound are taller than text rows. Track rows start with an icon for their kind.
+- Clips are solid blocks in one colour per kind. The picked clip gets white grips on both ends to drag, and hovering a clip shows its grips.
+- Properties has its own column beside Media, Text, Captions or Sounds, so picking something never swaps out the panel you were using. Media, Text, Captions and Sounds always open when clicked (× closes them). Properties opens and closes from its rail button or its ×.
+- The video no longer jumps up while you work.
+
 ## ai-editor 2.7.48, creator-teardown 2.7.48 (2026-11-12)
 - Click a keyframe diamond on a clip and the playhead jumps to it, with that keyframe open in Properties. Before, only the diamonds in the rows under the clip did this.
 - Zoomed-in footage shows all its handles. A box bigger than the frame draws past it, over the stage, and its corner and rotate handles move in to the edge you can see, so you can always drag to resize or rotate.

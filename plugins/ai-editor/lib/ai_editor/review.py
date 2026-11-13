@@ -2995,6 +2995,14 @@ def make_handler(folder, token):
                     return self.send(404, {})
                 p = scene.path_of(folder, a)
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream") if p.is_file() else self.send(404, {})
+            if path.startswith("/scene/strip/"):   # a video asset's frames for its timeline clips (scene.strip, cached)
+                try:
+                    aid = unquote(path[len("/scene/strip/"):])
+                    jpg = aid.endswith(".jpg")
+                    d = scene.strip(folder, aid[:-4] if jpg else aid, scene.load(folder, scene.name_of(q.get("alt")))["assets"][aid[:-4] if jpg else aid])
+                    return self.file(d["file"], "image/jpeg") if jpg else self.send(200, {k: d[k] for k in ("step", "n", "w", "h")})
+                except (scene.SceneError, OSError, KeyError, ValueError):
+                    return self.send(404, {})
             if path.startswith("/scene/peaks/"):   # an asset's waveform for its timeline clips (scene.peaks, cached)
                 try:
                     aid = unquote(path[len("/scene/peaks/"):])
