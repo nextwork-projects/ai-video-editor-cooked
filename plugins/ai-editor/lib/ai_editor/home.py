@@ -19,6 +19,7 @@ for it, and reports back with `status`:
                                                  (several clips as one video: join them in the listed order)
                                                  (either may end with script=DIR/edits/a/script.md before root=)
         JOB video ... skill=<name> chain=motion   a skill style; chain= is the style's "What runs" when not the default
+        JOB video ... skill=<s> format=<id> cut=<preset> look=<s> visuals=<id>   a pick from the library's skill-tree.json
         JOB video ~/.ai-video-editor/home/sample/sample-take.mp4 as=@sample-card-edit aspect=9:16 edit=DIR/edits/sample-video sample=1 root=DIR
                                                  (Try it with a sample video: its decisions are already in edit=)
         JOB style-change @handle style=DIR/creator-teardowns/handle/style.json text=<the user's words>
@@ -95,6 +96,7 @@ import library  # noqa: E402
 import links  # noqa: E402
 import live  # noqa: E402
 import presets  # noqa: E402
+import skilltree  # noqa: E402
 from review import disposition, download_name, load, now, save, set_theme, theme, themed  # noqa: E402  (atomic write; review.py's server owns the rest)
 
 HTML = Path(__file__).with_name("home.html")
@@ -1745,6 +1747,7 @@ def job_line(j, root):
         return f"JOB video {src} as={a['as']} aspect={a['aspect']}" + (f" edit={a['edit']}" if a.get("edit") else "") + \
             (f" script={a['script']}" if a.get("script") else "") + (f" skill={a['skill']}" if a.get("skill") else "") + \
             (f" chain={a['chain']}" if a.get("chain") else "") + (" sample=1" if a.get("sample") else "") + \
+            "".join(f" {k}={a[k]}" for k in ("format", "cut", "look", "visuals") if a.get(k)) + \
             (f" assets={Path(a['edit']) / 'assets.json'}" if a.get("edit") and (Path(a["edit"]) / "assets.json").exists() else "") + \
             (f" broll={a['broll']}" if a.get("broll") else "") + (f" instructions={a['instructions']}" if a.get("instructions") else "") + \
             (f" mode={a['mode']}" if a.get("mode") else "") + \
@@ -2154,7 +2157,8 @@ def make_handler(token):
                 return self.send(200, {"path": root, "place": place(root), "env": bool(os.environ.get("AI_EDITOR_LIBRARY", "").strip()),
                                        "custom": str(custom.path(False)), "videos": vids, "folders": folders(),
                                        "styles": [c for c in cards if c["id"] not in arch], "archived_styles": [c for c in cards if c["id"] in arch],
-                                       "default_style": default_style(cards), "to_review": to_review(vids)})
+                                       "default_style": default_style(cards), "to_review": to_review(vids),
+                                       "tree": skilltree.for_page(root)})   # a skill tree: Pick a style is four steps
             if path == "/skills":   # the Skills view and New style, "Use your own skill"
                 return self.send(200, editing_skills(read()["root"]))
             if path == "/recent":
@@ -2217,6 +2221,15 @@ def make_handler(token):
                 with open(f, "rb") as fh:
                     shutil.copyfileobj(fh, self.wfile)
                 return
+            if path == "/tree/example":   # a skill tree's example still; only files the tree names (skilltree.example_file)
+                try:
+                    f = skilltree.example_file(read()["root"], q.get("kind", [""])[0], q.get("id", [""])[0], int(q.get("n", ["0"])[0]))
+                except ValueError:
+                    f = None
+                if not f:
+                    return self.send(404, {"error": "no such example"})
+                ct = {".png": "image/png", ".webp": "image/webp"}.get(f.suffix.lower(), "image/jpeg")
+                return self.send(200, f.read_bytes(), ct, cache="private, max-age=3600")
             if path in ("/style/cover", "/style/face", "/style/thumb", "/style/example"):
                 d = style_dir(read()["root"], q.get("id", [""])[0])
                 f = face_pic(d) if path.endswith("face") else d / {"/style/cover": "cover.jpg", "/style/thumb": "thumb.jpg",
@@ -2786,8 +2799,14 @@ def make_handler(token):
             if bad:
                 return self.send(400, bad)
             want, td = str(b.get("as") or "creator"), latest(d, "teardown")
-            skill = None
-            if want.startswith("@"):
+            skill, tree = None, None
+            if isinstance(b.get("tree"), dict):   # Pick a style's four steps (skilltree): the format's skill makes the edit
+                try:
+                    tree = skilltree.pick(d["root"], b["tree"], "16:9" if b.get("aspect") == "16:9" else "9:16")
+                except ValueError as e:
+                    return self.send(400, {"ok": False, "msg": str(e)})
+                style, skill, chain = "mine", tree.pop("skill"), None
+            elif want.startswith("@"):
                 h = re.sub(r"[^a-z0-9._-]", "", want[1:].lower())
                 studying = any(j["type"] == "teardown" and j["args"].get("handle") == h and j["state"] in ("queued", "taken")
                                for j in d["jobs"])   # the cut starts now; the styled pass waits for the study
@@ -2828,7 +2847,8 @@ def make_handler(token):
             # Terminal window did not start): that video again, never a second job and a second Claude
             making = {tuple(j["args"].get("paths") or [j["args"].get("path")]): j for j in d["jobs"]
                       if j["type"] == "video" and j["state"] == "queued" and j["args"].get("as") == style
-                      and j["args"].get("mode") == ("broll-reel" if reel else None)}
+                      and j["args"].get("mode") == ("broll-reel" if reel else None)
+                      and all(j["args"].get(k) == (tree or {}).get(k) for k in ("format", "cut", "look", "visuals"))}
             again = []
             for g in groups:
                 same = making.get(tuple(p["path"] for p in g))
@@ -2843,7 +2863,7 @@ def make_handler(token):
                     continue
                 edit = new_edit(Path(d["root"]), SAMPLE_NAME if sample else g[0]["name"])
                 args = {"path": g[0]["path"], "paths": [p["path"] for p in g], "as": style, "aspect": "9:16" if reel else aspect,
-                        "edit": str(edit), **({"skill": skill} if skill else {}), **({"chain": chain} if chain else {}),
+                        "edit": str(edit), **({"skill": skill} if skill else {}), **({"chain": chain} if chain else {}), **(tree or {}),
                         **({"mode": "broll-reel"} if reel else {})}
                 if len(g) > 1:
                     t = edit / "takes.txt"
@@ -3745,6 +3765,28 @@ def demo():
     r3 = post("/job", {"type": "video", "paths": [str(vid), str(vid)], "join": False, "aspect": "9:16", "as": "mine"})
     assert [p for _, p in opened] == [f"/ai-editor:start take job {i}" for i in r3["ids"]], opened
     assert not (Path(r3["edits"][0]) / "assets.json").exists() and " assets=" not in job_line(latest(read(), "video"), root)
+    # a skill tree in the library: Pick a style's four steps; the format's skill makes the edit (skilltree.py)
+    assert get("/library")["tree"] is None
+    (root / skilltree.NAME).write_text(json.dumps({"formats": [
+        {"id": "talk", "label": "Talking reel", "kind": "open", "aspect": "9:16", "cut": "tight",
+         "look": {"default": "auto-by-aspect", "options": ["look-a", "look-b"]}, "visuals": {"default": "real", "options": ["real"]}},
+        {"id": "rec", "label": "Recipe", "kind": "recipe", "aspect": "9:16", "skill": "rec-skill"}],
+        "cuts": {"skill": "cut", "presets": {"tight": "jump cut"}},
+        "looks": {"auto-by-aspect": {"9:16": "look-b", "16:9": "look-a"}, "look-a": {"label": "A"}, "look-b": {"label": "B"}},
+        "visuals": {"real": {"label": "Real"}}}), encoding="utf-8")
+    assert [f["id"] for f in get("/library")["tree"]["formats"]] == ["talk", "rec"]
+    post("/job", {"type": "video", "path": str(vid), "aspect": "9:16", "as": "@nope", "tree": {"format": "talk"}})
+    tl = job_line(latest(read(), "video"), root)
+    assert " as=mine " in tl and " skill=look-b " in tl and " format=talk cut=tight look=look-b visuals=real " in tl, tl
+    post("/job", {"type": "video", "path": str(vid), "aspect": "9:16", "as": "mine", "tree": {"format": "rec"}})
+    tl = job_line(latest(read(), "video"), root)
+    assert " skill=rec-skill " in tl and " format=rec " in tl and " look=" not in tl, tl
+    try:
+        post("/job", {"type": "video", "path": str(vid), "aspect": "9:16", "as": "mine", "tree": {"format": "talk", "look": "look-z"}})
+        raise AssertionError("a look outside the format")
+    except urllib.error.HTTPError as e:
+        assert e.code == 400
+    (root / skilltree.NAME).unlink()
     # no terminal can open (Linux without x-terminal-emulator): the job keeps the command, the editor shows it to run
     rec = launcher.open_claude
     launcher.open_claude = lambda folder, prompt: (False, "claude '" + prompt + "'")
