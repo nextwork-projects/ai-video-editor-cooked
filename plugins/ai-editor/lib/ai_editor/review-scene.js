@@ -380,7 +380,10 @@ $('edtracks').addEventListener('pointerdown',e=>{const el=e.target.closest('.eit
       if(!tr){tr={id:scId(dest.new==='audio'?'a':'v'),kind:dest.new,name:dest.new==='audio'?'Audio '+(SC.s.tracks.filter(x=>x.kind==='audio').length+1):'Video '+(SC.s.tracks.filter(x=>x.kind==='visual').length+1),items:[],locked:false,...(dest.new==='audio'?{muted:false}:{hidden:false})};
         SC.s.tracks.splice(dest.new==='audio'?SC.s.tracks.length:SC.s.tracks.map(x=>x.kind).lastIndexOf('visual')+1,0,tr)}
       tr.items.push(it.it);tr.items.sort((a,b)=>a.start-b.start)}
-    await SC.commit(b0,slip?'slip':side==='m'?(dest?'move to another track':'move'):'trim')};
+    // dropped on top of another clip: it goes onto a new row of its kind (CapCut), never over it. The main footage keeps its row
+    let nl=false;if(side==='m'&&!slip)for(const k of SC.sel){const q=scGet(k);if(!q||q.tr.kind==='captions'||q.it.type==='video'&&scMag(q.tr))continue;const it=q.it;
+      if(q.tr.items.some(o=>o!==it&&!SC.sel.has(o.id)&&o.start<it.end-1e-3&&o.end>it.start+1e-3)){q.tr.items.splice(q.tr.items.indexOf(it),1);const tr=scPlace(SC.s,it.type,it.start,it.end,'new');tr.items.push(it);tr.items.sort((a,b)=>a.start-b.start);nl=true}}
+    await SC.commit(b0,slip?'slip':side==='m'?(dest||nl?'move to another track':'move'):'trim')};
   document.addEventListener('pointermove',mv,true);document.addEventListener('pointerup',up,true)},true);
 // ---- keys: delete, split, nudge, crop, Escape. Returns true when it took the key (review.html asks first)
 SC.key=function(e){if(!SC.on||KM.off()||typingIn(e.target)||SC.edit||document.body.classList.contains('edro'))return false;const ids=[...SC.sel].filter(k=>scGet(k));
@@ -397,7 +400,7 @@ SC.key=function(e){if(!SC.on||KM.off()||typingIn(e.target)||SC.edit||document.bo
     if(k==='c'&&ids.length&&!String(getSelection())){SC.copyIds(ids);return true}   // the copy event that follows puts them on the system clipboard
     if(k==='x'&&ids.length){SC.copyIds(ids);SC.del(ids);return true}
     if(k==='d'&&ids.length){e.preventDefault();SC.dup(ids);return true}
-    if(k==='v')return true}   // the paste event does it: our items, or a picture on the clipboard
+    if(k==='v'){SC.pasteAt=performance.now();const t=scNow();setTimeout(()=>{if(SC.pasteAt&&performance.now()-SC.pasteAt>=140){SC.pasteAt=0;const c=SC.clipSaved();if(c)SC.paste(c,t)}},150);return true}}   // the paste event does it (our items, or a picture on the clipboard); a window that sends none (an app pane) pastes cooked.'s own copy
   if(e.key==='Escape'&&scKd()){SC.kd=null;SC.show();return true}
   if(e.key==='Escape'&&(ids.length||SC.crop)){SC.crop?SC.crop=false:SC.sel.clear();SC.show();return true}
   return false};
@@ -751,7 +754,7 @@ SC.copyIds=function(ids){const its=scAll().filter(o=>ids.includes(o.it.id)&&o.it
   try{navigator.clipboard&&navigator.clipboard.writeText(txt).catch(()=>{})}catch(e){}
   toast(its.length>1?`Copied ${its.length} items.`:'Copied. '+((KM.keys('paste').map(KM.fmt)[0])||'Paste')+' pastes it at the playhead.')};
 ['copy','cut'].forEach(k=>document.addEventListener(k,e=>{if(!SC.on||!SC.clipOut||typingIn(e.target))return;SC.clipOut=0;e.clipboardData.setData('text/plain',SCCLIP+JSON.stringify(SC.clip));e.preventDefault()}));
-document.addEventListener('paste',async e=>{if(!SC.on||typingIn(e.target)||SC.edit||!(S&&view&&view.stage==='edit'))return;const cd=e.clipboardData,txt=cd?cd.getData('text/plain'):'';
+document.addEventListener('paste',async e=>{SC.pasteAt=0;if(!SC.on||typingIn(e.target)||SC.edit||!(S&&view&&view.stage==='edit'))return;const cd=e.clipboardData,txt=cd?cd.getData('text/plain'):'';
   if(txt.startsWith(SCCLIP)){e.preventDefault();let c;try{c=JSON.parse(txt.slice(SCCLIP.length))}catch(x){return}return SC.paste(c,scNow())}
   const fs=[...(cd&&cd.files||[])].filter(isMedia);
   if(fs.length){e.preventDefault();const t=scNow(),ms=await medUpload(fs);for(const m of ms)await SC.addMedia(m,t);return}

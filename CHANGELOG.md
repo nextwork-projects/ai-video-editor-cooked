@@ -7,6 +7,8 @@ What changed for every user, newest first.
 - Before, a new rendered draft could leave the timeline on the old draft's video, so the new draft's texts, cards and sounds were missing from it.
 - Sound effects that came from a full file path, and the red X stamp, are now items on the timeline. They used to be left out.
 - Duplicate this timeline (in the ⋯ menu) copies the timeline on screen, with all your edits, into a new version and opens it. Changing the copy leaves the original as it was.
+- ⌘C and ⌘V on the timeline work everywhere, including windows that don't pass copy and paste through (like an app's built-in browser).
+- A clip dragged on top of another goes onto a new row of its kind, never over it. The main footage keeps its row.
 - Changing the speed of a clip keeps its footage: 2x makes it half as long. On the main video, everything after it moves up and the captions are retimed to match.
 
 ## ai-editor 2.7.49, creator-teardown 2.7.49 (2026-11-13)
