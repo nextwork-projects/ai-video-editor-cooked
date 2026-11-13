@@ -1405,8 +1405,9 @@ function tfollow(){if(zm<=1||!tfol||(v.paused&&!tseek))return;tseek=false;
   if(x<r.left+8||x>r.right-24)tscrollTo(sc.scrollLeft+x-r.left-r.width*.1)}   // page along: the playhead goes back near the left
 // the edit's Text and Sounds rows: every text (made or changing) and every sound in the draft or put there by the user.
 const NOTE_ICON='<svg width="10" height="10" viewBox="0 0 12 12"><path d="M5 1.5v6.2A1.8 1.8 0 1 0 6.3 9.4V4l3.2-1V1z" fill="currentColor"/></svg>';
-function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';
-  return `<svg class="wv" viewBox="0 0 ${n} 20" preserveAspectRatio="none" aria-hidden="true">${peaks.map((v,i)=>`<rect x="${i+.15}" y="${(10-Math.max(.6,v*9)).toFixed(2)}" width=".7" height="${(Math.max(.6,v*9)*2).toFixed(2)}" fill="rgba(255,255,255,.55)"/>`).join('')}</svg>`}
+// the bars on a loudness scale (square root, as CapCut draws them): speech fills the clip, quiet stays small
+function waveSvg(peaks){const n=(peaks||[]).length;if(!n)return '';const h=v=>Math.max(.6,Math.sqrt(Math.max(0,v))*9.4);
+  return `<svg class="wv" viewBox="0 0 ${n} 20" preserveAspectRatio="none" aria-hidden="true">${peaks.map((v,i)=>`<rect x="${i+.15}" y="${(10-h(v)).toFixed(2)}" width=".7" height="${(h(v)*2).toFixed(2)}" fill="rgba(255,255,255,.6)"/>`).join('')}</svg>`}
 // a caption line as it will read: its words with the retyped ones (overrides.json words) in place
 // a caption line as it will read: being typed (capTyping, by its start) wins, then the retyped words (overrides.json words)
 // the edit, tidied like CapCut: the app's pages leave the rail (the logo goes home), the transcript is a left panel,

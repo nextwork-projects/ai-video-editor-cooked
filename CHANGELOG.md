@@ -2,6 +2,12 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.51, creator-teardown 2.7.51 (2026-11-13)
+- A video clip's sound wave fills the clip, centred, until its frames are ready (or when there are none). Before, it sat in a thin strip at the bottom under an empty band.
+- Sound waves draw on a loudness scale like CapCut's, so speech fills the clip instead of a thin line.
+- Delete to the playhead and Delete from the playhead (Q and W) follow your keyboard shortcuts; change them under Keyboard shortcuts.
+- Frames on the timeline come in about 4 times faster on long videos (a 10-minute draft: 11 s instead of 48).
+
 ## ai-editor 2.7.50, creator-teardown 2.7.50 (2026-11-13)
 - Claude keeps your edits. When a new draft comes in, the timeline is built again from it, so everything in the draft is on the timeline, and every change you made on the last one (a move, a resize, a trim, a delete, something you added) is put back on top. Claude's change wins only on something it was asked to change. Claude is also told never to delete or rebuild the timeline.
 - Before, a new rendered draft could leave the timeline on the old draft's video, so the new draft's texts, cards and sounds were missing from it.

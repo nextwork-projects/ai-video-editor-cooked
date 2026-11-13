@@ -809,6 +809,7 @@ body.scene .etrack.vtall,body.scene .ehd.vtall{height:64px}body.scene .etrack.vt
 .scfs{position:absolute;left:0;right:0;top:0;bottom:0;overflow:hidden;border-radius:4px;background-repeat:repeat-x;background-size:auto 100%;background-position:0 0;pointer-events:none;display:flex;opacity:.9}
 .scfs.v{bottom:auto;height:36px;border-radius:4px 4px 0 0}.scfs.v i{flex-shrink:0;background-image:var(--fs);background-size:var(--bs);background-repeat:no-repeat}
 body.scene .eitem.sc.vid svg.wv{position:absolute;left:0;right:0;bottom:1px;top:auto;height:22px!important;width:100%;opacity:.85}
+body.scene .eitem.sc.vid:not(:has(.scfs)) svg.wv{top:20px;bottom:auto;height:calc(100% - 24px)!important}   /* no frames (still coming, or none): the wave fills the clip under its name, centred */
 body.scene .eitem.sc.vid>span,body.scene .eitem.sc.img>span{position:absolute;left:4px;top:3px;bottom:auto;right:auto;max-width:calc(100% - 8px);padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.55);font-size:10px;line-height:13px;z-index:1}
 body.scene .eitem.sc.img{background:#22424D}
 body.scene .eitem.sc{border-radius:4px;border:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:#FFFFFF;padding:0 7px}
@@ -828,14 +829,15 @@ body.scene .eitem.sc:not(.sel):hover::before{left:0;border-radius:4px 0 0 4px}bo
   const sep=()=>{const i=document.createElement('i');i.className='sep';return i};
   tb.append(
     bt('tlsplit','Split at the playhead (S)',ic('<path d="M12 3v18"/><path d="M8 7H4v10h4M16 7h4v10h-4"/>'),()=>SC.split()),
-    bt('tltrl','Delete from the clip start to the playhead (Q)',ic('<path d="M15 3v18"/><path d="M11 7H5v10h6"/><path d="m6 9 4 6M10 9l-4 6"/>'),()=>SC.trimTo('l')),
-    bt('tltrr','Delete from the playhead to the clip end (W)',ic('<path d="M9 3v18"/><path d="M13 7h6v10h-6"/><path d="m14 9 4 6M18 9l-4 6"/>'),()=>SC.trimTo('r')),
+    bt('tltrl','Delete from the clip start to the playhead',ic('<path d="M15 3v18"/><path d="M11 7H5v10h6"/><path d="m6 9 4 6M10 9l-4 6"/>'),()=>SC.trimTo('l')),
+    bt('tltrr','Delete from the playhead to the clip end',ic('<path d="M9 3v18"/><path d="M13 7h6v10h-6"/><path d="m14 9 4 6M18 9l-4 6"/>'),()=>SC.trimTo('r')),
     bt('tldel','Delete the picked clip (Delete)',ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),()=>$('scdelb').click()),
     sep(),
     bt('tladdt','Add text at the playhead',ic('<path d="M5 6V4h14v2M12 4v16M9 20h6"/>')+'Text',()=>SC.addText(scNow()),'tbt'),
     bt('tladda','Add a song, a voice-over or any sound at the playhead',ic('<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>')+'Audio',()=>{$('scaudfile').dataset.t=scNow();$('scaudfile').click()},'tbt'),
     bt('tladdv','Add a video track on top',ic('<path d="M12 5v14M5 12h14"/>')+'Track',()=>document.querySelector('[data-addtk="visual"]')&&document.querySelector('[data-addtk="visual"]').click(),'tbt'),
     Object.assign(document.createElement('div'),{className:'grow'}));
+  [['tltrl','trim_start'],['tltrr','trim_end'],['tlsplit','split'],['tldel','delete']].forEach(([id,k])=>{const b=tb.querySelector('#'+id),t=b.title.replace(/ \(.*\)$/,'');b.onmouseenter=()=>{const ks=KM.keys(k).map(KM.fmt);b.title=t+(ks.length?' ('+ks.join(' or ')+')':'')}});
   const tl=$('timeline'),rz=document.createElement('div');rz.id='rsztl';rz.setAttribute('role','separator');rz.setAttribute('aria-label','drag to make the timeline taller or shorter');rz.title='Drag to resize the timeline';
   tl.before(rz);tl.prepend(tb);
   try{const h=+localStorage.getItem('review-tlh');if(h)document.querySelector('main').style.setProperty('--tlh',h+'px')}catch(e){}
@@ -854,7 +856,8 @@ SC.trimTo=function(side){const t=scNow(),ids=[...SC.sel].filter(k=>{const q=scGe
   if(!ids.length){const m=(SC.s.tracks.find(x=>x.kind==='visual')||{items:[]}).items.find(i=>i.start<t-.05&&i.end>t+.05);if(m)ids.push(m.id)}
   if(!ids.length)return toast('Put the playhead inside a clip first.');
   return SC.change(side==='l'?'delete to the playhead':'delete from the playhead',s=>ids.forEach(id=>{const it=scAll(s).find(o=>o.it.id===id).it;scTrim(s,id,side,side==='l'?t-it.start:t-it.end)}))};
-document.addEventListener('keydown',e=>{if(!SC.on||e.metaKey||e.ctrlKey||e.altKey||typingIn(e.target)||SC.edit)return;const k=e.key.toLowerCase();if(k!=='q'&&k!=='w')return;if(KM.off&&KM.off())return;e.preventDefault();e.stopImmediatePropagation();SC.trimTo(k==='q'?'l':'r')},true);
+// the shortcuts editor's Trim start / Trim end to the playhead (Q and W unless the user changed them)
+document.addEventListener('keydown',e=>{if(!SC.on||typingIn(e.target)||SC.edit||KM.off&&KM.off())return;const l=KM.is(e,'trim_start'),r=!l&&KM.is(e,'trim_end');if(!l&&!r)return;e.preventDefault();e.stopImmediatePropagation();SC.trimTo(l?'l':'r')},true);
 
 // ---- Properties in a column of its own beside the tool panel, CapCut desktop's middle panel: Media, Text or Sounds stay open
 // on the left while a pick shows its settings here. On a narrow window it shares the left panel as before
