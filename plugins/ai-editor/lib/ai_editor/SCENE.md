@@ -29,7 +29,7 @@ one video item: it moves, resizes, crops and trims like any other.
 |---|---|
 | `video` | `asset`, `in` (source seconds), `speed` 1, `volume` 1, `fade_in`, `fade_out`, + visual |
 | `image` | `asset`, + visual |
-| `text` | `text`, `font`, `weight`, `size` (px), `color`, `align` (left, center, right), `line_height`, `box` ({`color`, `pad`, `radius`} or null), `outline` ({`color`, `width`} or null), + visual (`w` is the wrap width, `h` is ignored) |
+| `text` | `text`, `font`, `weight`, `size` (px), `color`, `align` (left, center, right), `line_height`, `box` ({`color`, `pad`, `radius`, `opacity`} or null), `outline` ({`color`, `width`} or null), + visual (`w` is the wrap width, `h` is ignored) |
 | `shape` | `fill`, `stroke` ({`color`, `width`} or null), + visual |
 | `audio` | `asset`, `in`, `speed`, `volume`, `fade_in`, `fade_out` |
 | `captions` | `words` [{`w`, `start`, `end`, `p`?, `emph`?}], `style` (the caption style keys plan.py uses today), `asset` (words on that asset's clock, shown through its clips; null: the scene's clock), `pages` ([{`start`, `end`, `treat`?...}] on the same clock, `p` indexes it; without them `style.words_per_caption` pages the words), `motion` |
@@ -37,11 +37,14 @@ one video item: it moves, resizes, crops and trims like any other.
 
 Visual fields: `x`, `y` (the item's centre), `w`, `h`, `rotation` (degrees), `opacity` (0-1), `fit` (cover or
 contain), `crop` ({`l`, `t`, `r`, `b`} as fractions of the source), `radius` (px), `shadow` ({`blur`, `y`,
-`opacity`} or null), `border` ({`width`, `color`} or null), `anim` ({`in`, `out`: none, cut, fade, pop,
+`opacity`, `color`, `distance`, `angle`} or null), `border` ({`width`, `color`} or null), `anim` ({`in`, `out`: none, cut, fade, pop,
 slide-up; `dur` seconds}), `keys` ({prop: [[t, value, ease]]}, t from the item's start; props x, y, w, h,
 scale, rotation, opacity; ease linear, in, out, inout, hold; scale is about the centre), `grade` ({`brightness`,
 `saturate`}). Text `box.pad` is px or [x, y]; `box.block: true` is one box round the whole text, else a box behind
 each line. `outline.width` is the CSS text stroke (half of it shows outside the letters).
+`box.opacity` (0-1, default 1) is the box's fill only. `shadow.color` defaults to black, `shadow.opacity` to 0.35; a shadow
+with `distance` sits that far away at `angle` (degrees, 90 is straight down), else straight down by `y`. On a text the shadow
+is behind the letters (CSS text-shadow); on a picture, clip or shape it is behind the box.
 
 ## Page and server
 
@@ -67,7 +70,17 @@ each line. `outline.width` is the CSS text stroke (half of it shows outside the 
 
 - Every draft on the edit opens in the scene editor, by itself. There is no other editor and no switch. The cut stage
   and the stills sheet keep their own pages: they are not the edit. `/state`'s `scene` is true on the edit.
-- scene.json is made on the first ask and never over one that is there.
+- scene.json is made on the first ask. When a new rendered draft comes in (not `round --scene`), it is made again from
+  that draft, so everything the draft has is on the timeline, and the user's changes on the old one are carried over
+  (`review.py scene_new_draft`, `scene.carry`): `.scene/scene.base.json` is the scene as the old draft was built, and
+  every field the user changed, item they added or item they deleted goes onto the new one, unless the new draft changed
+  that same field (then Claude was asked). Items are matched by kind, file or words and the nearest start, not by id.
+  `built` names the draft a scene was made for; `carried` says how many changes came over. A scene from before 2.7.50
+  is kept as it is, unless it is only the old draft's MP4.
+- More menu, Duplicate this timeline: `POST /scene/duplicate {alt}` copies the scene on screen, hand edits and all, into
+  a new version "<name> copy" with the same video, transcript and plan (`review.py scene_duplicate`).
+- A speed change on a video or audio clip keeps its footage: the clip gets shorter or longer (and its keyframes); on the
+  main footage everything after it moves and the captions over it are retimed (review-scene.js `scSpeed`).
 - A cooked. plan draft goes through `scene.from_plan` (with texts.json, overrides.json and sounds.json laid on) when its
   video is that plan's render (`review.py plan_draft`): render.stamp.json matches, or render.plan.json is plan.json, and
   the draft is that render (or render.cut.mp4); or the round came from render.mp4 (review.json `src`). A render that
@@ -162,6 +175,23 @@ and Up / Down jump between them.
   playhead; a keyed field shows in yellow. Scale has no plain field: one key holds it.
 - A field being typed in lets go on any press on the video or the rows, so the next pick and its keys always work.
 
+## Adding things: where they go
+
+- A new item (Add text, a text look, + Shape, a picture or clip from Media, a dropped or pasted file, a sound, a paste, Claude's
+  `scene.py add`) goes on a track of its own kind: texts with texts, pictures, clips, shapes and cards together, sounds with
+  sounds. The first such track (top first) that is unlocked, shown and free for its whole time takes it; else a new track
+  of that kind just above the others of its kind (`scene.lane`, the page's `scPlace`). Never the footage track (the magnet
+  one), never over another clip. A drop onto a row (or `--track`) uses that row only when it holds that kind and is free.
+- The Text panel (the rail's Text): Add text (the white box look) and a tile per look (`SCLOOK` in review-scene.js; the
+  `p` ones are Properties' tiles). Click: at the playhead; drag: onto the video (there) or a timeline row (that time). One
+  undo each, and the caret goes in the text. Double-click a text to type in it: Enter is a new line, Esc or a click away saves.
+- Copy and paste: Cmd+C copies the picked items (not captions) to the system clipboard as `cooked-scene:` + JSON
+  ({`from`: the edit folder, `items`: [{`it`, `tr`, `ti`}], `assets`}) and the page's memory; Cmd+V pastes at the playhead,
+  each original track's items together on one free track of their kind, the gaps kept, new ids; Cmd+D duplicates right
+  after, Cmd+X cuts; right-click has the same. A paste from another edit copies each file in first:
+  `POST /scene/import-asset {from_edit, src}` (an edit in the library, a picture, clip or sound inside it) answers `{src}`
+  in this edit's `media/` (`scene.bring_in`). A picture on the clipboard pastes as an image item. Each paste is one undo.
+
 ## Adding audio
 
 - Every sound is a file in the edit's `media/`, an asset, and an `audio` item. `POST /scene/sound {"name"}` copies a
@@ -172,7 +202,15 @@ and Up / Down jump between them.
   else a new one. It lasts the file, up to the scene's end. The panel lists the sounds picked for a moment first.
 - `GET /scene/peaks/<id>?alt=` is an asset's waveform (`scene.peaks`: 50 values a second, cached in
   `.scene/<id>.peaks.json`); each audio clip draws the part it plays. A top corner of an audio clip drags its fade.
-- Volume is 0 to 1: the player and the export play no louder than the file.
+- `volume` is a gain: 1 is the file as it is, 0 silence, up to 3.981 (+12 dB, SceneEdit's `VMAX`). The export applies it
+  in Remotion's ffmpeg mix (its `volume` filter takes any gain); the page's player routes each clip through a Web Audio
+  GainNode (`useWebAudioApi`), since a media element's own volume stops at 1. There is no limiter: a loud clip boosted
+  past full scale clips in the export, so boost quiet sound, not loud sound.
+- Every clip with sound (audio, and video from its asset's sound, with its waveform from the same peaks route) has a volume
+  line: drag it up or down (half a dB a pixel, Shift a tenth), a label shows the level in dB, it snaps to 0 dB within 1 dB,
+  and below -48 dB is silence. Every picked clip with sound moves by the same dB. The waveform grows and shrinks with it.
+  The player is heard changing while dragging; letting go is one op and one undo. The trim edges (8 px each side) and the
+  fade handles (top corners) keep their own presses. Properties shows the same volume in dB.
 
 ## Footage covers the frame
 

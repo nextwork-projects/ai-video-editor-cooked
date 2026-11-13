@@ -987,7 +987,7 @@ body.making #making{display:flex}
 </div>
 <div id="toast" role="status"></div>
 <dialog id="learnov" class="ov" aria-label="teach your style"></dialog>
-<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button><button id="clcnew" role="menuitem" hidden>Start a new Claude</button></div>
+<div id="moremenu" class="pmenu" popover role="menu"><button id="nsopen" role="menuitem">New style from this video</button><button id="scdup" role="menuitem" hidden>Duplicate this timeline</button><button id="clcnew" role="menuitem" hidden>Start a new Claude</button></div>
 <div id="rpop" class="rpop" popover role="dialog" aria-label="make this a rule"><b>Make this a rule</b>
  <label>Rule<input id="rptext" class="lname rin" maxlength="160"></label>
  <label>Save to<select id="rpto" class="rsel"></select></label>
@@ -2527,6 +2527,9 @@ const fsAt=e=>{const r=$('fsscrub').getBoundingClientRect();return Math.min(1,Ma
 $('fsscrub').addEventListener('pointerdown',e=>{fsDrag=true;$('fsscrub').setPointerCapture(e.pointerId);v.currentTime=fsAt(e)*D()});
 $('fsscrub').addEventListener('pointermove',e=>{const h=$('fshover'),f=fsAt(e);h.style.display='block';h.style.left=f*100+'%';h.textContent=fmtx(f*D());if(fsDrag)v.currentTime=f*D()});
 $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscrub').addEventListener('pointerleave',()=>{if(!fsDrag)$('fshover').style.display='none'});
+// Duplicate this timeline (the more menu, on a scene): the version on screen copied with every hand edit, then opened
+$('scdup').onclick=async()=>{$('moremenu').hidePopover?.();const r=await post('/scene/duplicate',{alt:alt||''});if(!r.ok)return toast(r.error||'That did not copy.');
+  await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}toast(`Copied to "${r.name}". Your changes here leave the original as it was.`)};
 $('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
 // the version menu: the app's own list, built from the select (renderMeta fills that), roomy rows, opens up when it has no room below
 {const M=document.createElement('div'),B=$('vbtn');M.id='vmenu';M.hidden=true;M.setAttribute('role','listbox');document.body.append(M);
@@ -2872,7 +2875,7 @@ async function delText(id,fresh){const was=fresh?null:(S.texts||[]).find(x=>Stri
   if(tx&&tx.edit&&String(tx.edit.id)===String(id))setText(null);toast(r.error||'Text deleted');
   if(was&&!r.error){let cur=id;edPush('delete text',async()=>{const a=await post('/text/add',TXF(was));if(!(a.id||a.ok))throw new Error(a.error||'');cur=a.text_id||a.id;await load()},()=>edSave('/text/delete',{id:cur}))}
   await load()}
-$('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool(tool==='captions'?null:'captions');$('railsnd').onclick=()=>openTool(tool==='sounds'?null:'sounds');$('railmed').onclick=()=>openTool(tool==='media'?null:'media');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
+$('railtext').onclick=()=>openTool(tool==='text'?null:'text');$('railcap').onclick=()=>openTool('captions');$('railsnd').onclick=()=>openTool('sounds');$('railmed').onclick=()=>openTool('media');$('tclose').onclick=()=>openTool(null);$('tplus').onclick=()=>setText('outline');
 $('tbody').addEventListener('click',async e=>{
   const st=e.target.closest('#ttiles [data-ts]');if(st){if(tx){tx.style=st.dataset.ts;tsig=null;$('tbody')._tf=null;renderTextPanel();renderTexts()}else setText(st.dataset.ts);return}
   const tc=e.target.closest('[data-tc]');if(tc&&tx){setTcol(tc.dataset.tc);return}

@@ -574,6 +574,21 @@ def scene_library_sound(folder, name):
     return {"src": src, "duration": round(scene.probe(Path(folder) / src).get("duration") or 0, 3)}
 
 
+def scene_import_asset(folder, from_edit, src):
+    """A paste from another video's page: the file one of its items plays (src, relative to that edit) copied into this
+    edit's media/ (a clone; the same file once), so the paste plays and exports here. Only from an edit in the library,
+    only a picture, clip or sound inside it. Returns {"src"}; ValueError with the words to show."""
+    import library
+    lib = library.path(make=False).resolve()
+    e = Path(str(from_edit or "")).expanduser().resolve()
+    if not e.is_dir() or not (lib in e.parents or e in {Path(x).resolve() for x in library.edit_dirs()}):
+        raise ValueError("That video is not in your library.")
+    f = (e / str(src or "")).resolve()
+    if e not in f.parents or not f.is_file() or f.suffix.lower() not in (*SCENE_AUDIO_EXT, *sfx_mod().SOUND_EXT, ".png", ".jpg", ".jpeg", ".gif", ".webp"):
+        raise ValueError("That file cannot be pasted here.")
+    return {"src": scene.bring_in(folder, f)}
+
+
 _SHAPE = {}
 
 
@@ -1591,6 +1606,60 @@ def video_scene(folder, d):
     return scene.from_video(folder, base, gone=gone, texts=texts, sounds=sounds, library=sfx_mod().library_dir())
 
 
+def main_scene(folder, d):
+    """The main draft as a scene, not saved: its plan through scene.from_plan when it is a plan draft, else its MP4
+    (video_scene). Marked with the draft it was built for (built), so a newer draft is noticed."""
+    sc = None
+    if plan_draft(folder, d):
+        try:
+            lp = live_plan(folder, d, plan=True)
+            p = load(Path(d["plan"])) if lp.get("why") else lp
+            sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
+        except Exception as e:   # noqa: BLE001  any refusal (split, board, cover, cutouts) or failure: the draft's MP4
+            print(f"scene: from-plan: {e}; the draft as a video instead", file=sys.stderr)
+    sc = sc or video_scene(folder, d)
+    sc["built"] = {"video": str(d.get("video") or ""), "round": [d.get("stage"), d.get("round")]}
+    return sc
+
+
+def scene_base(folder, name):
+    """The scene as the draft was built, before any change on the page: what scene.carry compares the user's changes with."""
+    return folder / ".scene" / (name[:-len(".json")] + ".base.json")
+
+
+def scene_new_draft(folder, d, sc):
+    """A new draft came in on a scene made for an older one (a render, not round --scene, which answers in the scene
+    itself): the scene is built again from the new draft, so everything the draft has is on the timeline, and every change
+    the user made on the old one is carried over (scene.carry). A scene from before 2.7.50 has no base to compare with:
+    a flat one (only the old draft's MP4) is built again, any other is kept and marked as this draft's."""
+    built, video = sc.get("built"), str(d.get("video") or "")
+    if d.get("scene_from") or (built or {}).get("video") == video:
+        return sc
+    bp = scene_base(folder, scene.NAME)
+    if not built:
+        flat = all(i.get("type") == "video" and str((sc["assets"].get(i.get("asset")) or {}).get("src", "")).startswith("review/")
+                   for t in sc["tracks"] for i in t["items"])
+        old = {(sc["assets"].get(i.get("asset")) or {}).get("src") for t in sc["tracks"] for i in t["items"]}
+        if not (flat and old and not any(video.endswith(str(o)) for o in old)):
+            sc["built"] = {"video": video, "round": [d.get("stage"), d.get("round")]}
+            scene.jsave(bp, sc)
+            return scene.save(folder, sc)
+    new = main_scene(folder, d)
+    kept = 0
+    if built and bp.is_file():
+        try:
+            new_kept, kept = scene.carry(scene.jload(bp), sc, new)
+        except (OSError, ValueError, KeyError) as e:
+            print(f"scene: the changes on the old draft could not be carried over ({e}); the new draft as it is", file=sys.stderr)
+            new_kept = new
+    else:
+        new_kept = new
+    scene.jsave(bp, new)
+    new_kept["carried"] = {"n": kept, "round": [d.get("stage"), d.get("round")]}
+    print(f"scene: draft {d.get('round')} is on the timeline; {kept} of your changes on the old one kept", file=sys.stderr)
+    return scene.save(folder, new_kept)
+
+
 def scene_for(folder, d, alt=None):
     """scene.json for a draft on the edit (scene_mode), made on the first ask and never over one that is there: a plan
     draft (plan_draft) through scene.from_plan with this page's live plan (texts.json, overrides.json, placed sounds),
@@ -1607,6 +1676,8 @@ def scene_for(folder, d, alt=None):
                 sc = scene.save(folder, sc, name)
                 if grown:
                     print(f"scene: {name}: footage grown to cover the frame (no black edge): {', '.join(grown)}", file=sys.stderr)
+            if not alt:
+                sc = scene_new_draft(folder, d, sc)
             k = f"{folder}|{name}"
             if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()) and not PROXY_BUSY.get(k):
                 PROXY_BUSY[k] = threading.Thread(target=lambda: (scene.ensure_proxies(folder, sc), PROXY_BUSY.pop(k, None)), daemon=True)
@@ -1622,18 +1693,40 @@ def scene_for(folder, d, alt=None):
             except Exception as e:   # noqa: BLE001
                 print(f"scene: from-plan ({alt}): {e}; the version as a video instead", file=sys.stderr)
             sc = scene.save(folder, sc or scene.from_video(folder, Path(a["video"])), name)
-        elif plan_draft(folder, d):
-            try:
-                lp = live_plan(folder, d, plan=True)
-                p = load(Path(d["plan"])) if lp.get("why") else lp
-                sc = scene.from_plan(folder, p, sounds=placed_raw(folder), library=sfx_mod().library_dir())
-            except Exception as e:   # noqa: BLE001  any refusal (split, board, cover, cutouts) or failure: the draft's MP4
-                print(f"scene: from-plan: {e}; the draft as a video instead", file=sys.stderr)
         if not alt:
-            sc = scene.save(folder, sc or video_scene(folder, d))
+            sc = main_scene(folder, d)
+            scene.jsave(scene_base(folder, name), sc)
+            sc = scene.save(folder, sc)
     if any(a.get("proxy") for a in sc["assets"].values()):
         threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
     return sc
+
+
+def scene_duplicate(folder, alt=None):
+    """Copy a version's timeline (the main draft's when alt is None) into a new version beside it, named "<name> copy"
+    (then "copy 2", ...): the same video, transcript and plan, and the scene exactly as it is now, every hand edit kept.
+    Claude's change log stays with the original. Returns the new version's name."""
+    d = load(folder / "review.json")
+    sc = scene_for(folder, d, alt)
+    if sc is None:
+        raise ValueError("Only a draft on the edit has a timeline to copy.")
+    src = next((a for a in d.get("alts") or [] if a["name"] == alt), None) if alt else None
+    if alt and not src:
+        raise ValueError(f"no version {alt}")
+    base = f"{alt or d.get('label') or 'Main'} copy"
+    names = {a["name"] for a in d.get("alts") or []}
+    name = next(n for n in (base if i == 1 else f"{base} {i}" for i in range(1, 1000)) if n not in names)
+
+    def f(d):
+        e = {k: v for k, v in (src or {"video": d["video"], "transcript": d.get("transcript")}).items()
+             if k in ("video", "transcript", "plan", "trial", "aspect")}
+        d["alts"] = list(d.get("alts") or []) + [{**e, "name": name, "copy_of": alt or ""}]
+        log_round(d)
+        return d
+    with SCENE_LOCK:
+        scene.save(folder, json.loads(json.dumps(sc)), scene.name_of(name))
+    update(folder / "review.json", f)
+    return name
 
 
 def claude_changes(folder, d):
@@ -2980,6 +3073,14 @@ def make_handler(folder, token):
                     return self.send(404, {})
                 p = scene.path_of(folder, a)
                 return self.file(p, mimetypes.guess_type(p.name)[0] or "application/octet-stream") if p.is_file() else self.send(404, {})
+            if path.startswith("/scene/strip/"):   # a video asset's frames for its timeline clips (scene.strip, cached)
+                try:
+                    aid = unquote(path[len("/scene/strip/"):])
+                    jpg = aid.endswith(".jpg")
+                    d = scene.strip(folder, aid[:-4] if jpg else aid, scene.load(folder, scene.name_of(q.get("alt")))["assets"][aid[:-4] if jpg else aid])
+                    return self.file(d["file"], "image/jpeg") if jpg else self.send(200, {k: d[k] for k in ("step", "n", "w", "h")})
+                except (scene.SceneError, OSError, KeyError, ValueError):
+                    return self.send(404, {})
             if path.startswith("/scene/peaks/"):   # an asset's waveform for its timeline clips (scene.peaks, cached)
                 try:
                     aid = unquote(path[len("/scene/peaks/"):])
@@ -3679,10 +3780,20 @@ def make_handler(folder, token):
                 if any(a.get("proxy") and not (folder / a["proxy"]).is_file() for a in sc["assets"].values()):
                     threading.Thread(target=scene.ensure_proxies, args=(folder, sc), daemon=True).start()
                 return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt), **({"change": ch} if by else {})})
+            if path == "/scene/duplicate":   # the timeline on screen copied, hand edits and all, as a new version ({alt}): {name}
+                try:
+                    return self.send(200, {"ok": True, "name": scene_duplicate(folder, body.get("alt") or None)})
+                except (scene.SceneError, ValueError, OSError) as e:
+                    return self.send(400, {"error": str(e)})
             if path == "/scene/sound":   # the Sounds panel in the scene editor: a library sound copied into media/ ({name})
                 try:
                     return self.send(200, {"ok": True, **scene_library_sound(folder, str(body.get("name") or ""))})
                 except (ValueError, OSError, scene.SceneError) as e:
+                    return self.send(400, {"error": str(e)})
+            if path == "/scene/import-asset":   # a paste from another video: the file it plays copied in ({from_edit, src})
+                try:
+                    return self.send(200, {"ok": True, **scene_import_asset(folder, body.get("from_edit"), body.get("src"))})
+                except (ValueError, OSError) as e:
                     return self.send(400, {"error": str(e)})
             if path == "/scene/claude":   # Undo or Redo of one of Claude's changes, by its own ops: {"n", "undo": true | false, "alt"}
                 alt = body.get("alt") or None
@@ -4859,7 +4970,7 @@ def scene_handoff(folder, alts=()):
     sp, q = shlex.quote(str(Path(scene.__file__).resolve())), shlex.quote(str(folder))
     return (f"SCENE: this draft is a scene ({folder / scene.NAME}). Every element on it is an item the user drags, resizes and "
             f"undoes on the page. Answer the notes with scene changes, never a render: do not run edit.py render, plan.py or "
-            f"style-edit's render steps for this draft, and never burn anything into the footage.\n"
+            f"style-edit's render steps for this draft, and never burn anything into the footage. The scene holds the user's own edits (moves, resizes, trims, deletes): never delete or rebuild it, and change only what a note asks for.\n"
             f"  look:   python3 {sp} show {q} --at <t>   (the items on screen then: ids, times, boxes; and the words said)\n"
             f"  change: python3 {sp} add {q} text --text \"Link in bio\" --start <t> --end <t> [--x --y --w] "
             f"[--json '{{\"box\": {{\"color\": \"#FFFFFF\", \"pad\": [24, 12], \"radius\": 12, \"block\": true}}, \"color\": \"#000000\"}}'] --why \"<one line>\"\n"
@@ -6696,6 +6807,18 @@ def demo():
             except urllib.error.HTTPError as e:
                 assert e.code == 400
         assert not (folder / "media" / "quiet.wav").exists(), "a file with no sound is not kept"
+        # a paste from another video in the library: the file it plays copied in once; anything outside an edit refused
+        other = tmp / "soundlib" / "edits" / "other"
+        (other / "media").mkdir(parents=True, exist_ok=True)
+        (other / "media" / "pic.png").write_bytes(b"\x89PNG fake")
+        ia = post("/scene/import-asset", {"from_edit": str(other), "src": "media/pic.png"})
+        assert ia == {"ok": True, "src": "media/pic.png"} and (folder / "media" / "pic.png").read_bytes() == b"\x89PNG fake", ia
+        for bad in ({"from_edit": str(other), "src": "../../../review.json"}, {"from_edit": str(tmp), "src": "ding.wav"}, {"from_edit": str(other), "src": "nope.png"}):
+            try:
+                post("/scene/import-asset", bad)
+                raise AssertionError(bad)
+            except urllib.error.HTTPError as e:
+                assert e.code == 400, bad
         post("/sfx/move", {"placed": clip["id"], "t": 3, "in": 0.5, "dur": 1, "vol": 0.4})
         clip = next(x for x in load(folder / "sounds.json")["items"] if x["id"] == clip["id"])
         assert (clip["t"], clip["in"], clip["dur"], clip["vol"]) == (3.0, 0.5, 1.0, 0.4), clip

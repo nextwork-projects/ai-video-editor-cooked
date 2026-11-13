@@ -21,6 +21,7 @@ Skills write scenes with the helper: Scene(w, h, fps).video(src, start, end, ...
 import copy
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -59,7 +60,7 @@ def jload(p):
 def jsave(p, d):
     p = Path(p)
     p.parent.mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(f".{p.name}.{os.getpid()}.tmp")
+    tmp = p.with_name(f".{p.name}.{os.getpid()}.{threading.get_ident()}.tmp")   # per thread: two saves at once never share a temp file
     tmp.write_text(json.dumps(d, indent=1, ensure_ascii=False), encoding="utf-8")
     tmp.replace(p)
 
@@ -178,6 +179,16 @@ def validate(sc):
                 errs.append(f"{where}: speed must be above 0")
             if t == "captions" and not isinstance(it.get("words", []), list):
                 errs.append(f"{where}: words must be a list")
+            for k in ("box", "shadow"):   # a box's fill and a shadow's colour see-through, 0-1
+                o = it[k].get("opacity") if isinstance(it.get(k), dict) else None
+                if o is not None and not (num(o) and 0 <= o <= 1):
+                    errs.append(f"{where}: {k}.opacity must be 0 to 1 (got {o!r})")
+            sh = it.get("shadow") if isinstance(it.get("shadow"), dict) else {}
+            for sub in ("blur", "y", "distance", "angle"):
+                if sh.get(sub) is not None and not num(sh[sub]):
+                    errs.append(f"{where}: shadow.{sub} must be a number (got {sh[sub]!r})")
+            if sh.get("color") is not None and not (isinstance(sh["color"], str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", sh["color"])):
+                errs.append(f"{where}: shadow.color must be #RRGGBB (got {sh['color']!r})")
             a = it.get("anim")
             if a and (a.get("in", "none") not in ANIMS or a.get("out", "none") not in ANIMS):
                 errs.append(f"{where}: anim in and out must be one of {', '.join(sorted(ANIMS))}")
@@ -696,6 +707,15 @@ def text_items(x, W, H):
                  "y": x["y_pct"] / 100 * H + (j + 0.5) * 1.3 * fs, "w": 0.6 * W, "size": round(fs, 2), "align": "left", "line_height": 1.3,
                  "outline": {"color": "#000000", "width": round(fs * 0.06, 2)}, "anim": {"in": "fade", "out": "none", "dur": 0.18}}
                 for j, i in enumerate(x.get("items") or [])]
+    if k == "stamp":   # the red circled X over the card that is up (Texts.tsx): a ring and an X the user can move
+        bx, by, bw, bh = x["box"]
+        d = min(bw / 100 * W, bh / 100 * H) * 0.62
+        cx, cy, red = (bx + bw / 2) / 100 * W, (by + bh / 2) / 100 * H, "#E5322D"
+        pop = {"in": "pop", "out": "none", "dur": 0.29}
+        return [{"type": "shape", "name": "Stamp ring", "start": x["start"], "end": x["end"], "x": cx, "y": cy, "w": round(d * 0.88, 2), "h": round(d * 0.88, 2),
+                 "radius": round(d * 0.44, 2), "fill": "#00000000", "stroke": {"color": red, "width": round(d * 0.06, 2)}, "anim": pop},
+                {"type": "text", "name": "Stamp X", "text": "\u2715", "start": x["start"], "end": x["end"], "x": cx, "y": cy, "w": round(d, 2),
+                 "size": round(d * 0.5, 2), "color": red, "line_height": 1, "anim": pop}]
     print(f"scene: a {k} text is not a scene item yet; left out", file=sys.stderr)
     return []
 
@@ -818,8 +838,15 @@ def from_plan(edit, plan=None, sounds=None, library=None, proxies=True, frame_it
     if p.get("music"):
         S.audio(p["music"]["src"], 0, dur, track="Music")
     for c in p.get("sfx") or []:
-        if c.get("placed") or str(c["src"]).startswith("/"):
-            continue
+        if c.get("placed"):
+            continue   # a placed sound: placed() lays it on from sounds.json
+        src = c["src"]
+        if str(src).startswith("/"):   # a library sound by its full path: copied into media/ so it plays and exports anywhere
+            if not Path(src).is_file():
+                print(f"scene: sound {src} is gone; left out", file=sys.stderr)
+                continue
+            src = bring_in(e, src)
+        c = {**c, "src": src}
         aid_ = S.asset(c["src"])
         d = S.sc["assets"][aid_].get("duration") or 1
         S.audio(c["src"], c["t"], c["t"] + d, name=Path(c["src"]).stem)
@@ -1229,6 +1256,70 @@ def peaks(edit, aid, a):
     return d
 
 
+STRIP_H = 72         # a filmstrip frame's height in pixels (the timeline shows it at about half, sharp on a Retina screen)
+STRIP_MAX = 240      # frames at most in one strip: a long take samples further apart
+
+
+def strip(edit, aid, a):
+    """A video asset's frames for its timeline clips, CapCut's filmstrip: one JPEG of frames side by side, a frame every
+    "step" seconds of the source from 0. {"step", "n", "w", "h", "file"}; cached in .scene/<aid>.strip.jpg by the file it reads."""
+    f = path_of(edit, a, False)
+    st = f.stat()
+    sig = f"{a.get('src')}|{st.st_size}|{st.st_mtime_ns}"
+    meta, img = Path(edit) / ".scene" / f"{aid}.strip.json", Path(edit) / ".scene" / f"{aid}.strip.jpg"
+    try:
+        d = jload(meta)
+        if d.get("sig") == sig and img.is_file():
+            return {**d, "file": img}
+    except (OSError, ValueError):
+        pass
+    pr = probe(f)
+    if pr["kind"] != "video" or not pr.get("duration"):
+        raise SceneError(f"{aid} has no frames to show")
+    dur, step = pr["duration"], max(1.0, round(pr["duration"] / STRIP_MAX, 2))
+    n = max(1, min(STRIP_MAX, int(dur // step) + 1))
+    w = max(2, round(STRIP_H * pr["w"] / pr["h"] / 2) * 2)
+    img.parent.mkdir(parents=True, exist_ok=True)
+    tmp = img.with_suffix(".part.jpg")
+    r = subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(f), "-an", "-vf", f"fps=1/{step},scale={w}:{STRIP_H},tile={n}x1",
+                        "-frames:v", "1", "-q:v", "5", str(tmp)], capture_output=True, text=True)
+    if r.returncode or not tmp.is_file():
+        raise SceneError(f"could not draw the frames of {aid}: {r.stderr.strip()[-200:]}")
+    tmp.replace(img)
+    d = {"sig": sig, "step": step, "n": n, "w": w, "h": STRIP_H}
+    jsave(meta, d)
+    return {**d, "file": img}
+
+
+def lane_kind(typ):
+    """What shares a track: texts with texts, sounds with sounds, pictures and clips (and shapes, cards) with each other."""
+    return "text" if typ == "text" else "audio" if typ == "audio" else "captions" if typ == "captions" else "media"
+
+
+def lane(sc, typ, a, b, track=None):
+    """Where a new item goes (the page's scPlace): the named track when it holds this kind and is free from a to b, else the
+    first track of this kind that is unlocked, shown and free then (top first), else a new track of this kind just above the
+    others of its kind. Never the footage track (the magnet one), never over a clip. Returns (track id, ops making it)."""
+    k, kind = lane_kind(typ), TYPES[typ]
+    def fits(t):
+        return (t["kind"] == kind and not t.get("locked") and not t.get("muted" if kind == "audio" else "hidden")
+                and not (kind == "visual" and magnet(sc, t)) and all(lane_kind(i.get("type")) == k for i in t["items"])
+                and not any(i["start"] < b - 1e-3 and i["end"] > a + 1e-3 for i in t["items"]))
+    pool = [t for t in sc["tracks"] if track in (t["id"], t.get("name"))] if track else list(reversed(sc["tracks"]))
+    for t in pool:
+        if fits(t):
+            return t["id"], []
+    ids, kinds = {t["id"] for t in sc["tracks"]}, [t["kind"] for t in sc["tracks"]]
+    tid = next(f"{kind[0]}{n}" for n in range(1, 999) if f"{kind[0]}{n}" not in ids)
+    mine = [i for i, t in enumerate(sc["tracks"]) if t["kind"] == kind and t["items"] and all(lane_kind(x.get("type")) == k for x in t["items"])
+            and not (kind == "visual" and magnet(sc, t))]
+    idx = mine[-1] + 1 if mine else (len(kinds) - kinds[::-1].index("visual") if kind == "visual" and "visual" in kinds else len(kinds))
+    base = track or {"text": "Text", "audio": "Sounds", "media": "Images" if typ == "image" else "Motion" if typ == "video" else "Shapes"}[k]
+    names = {t.get("name") for t in sc["tracks"]}
+    name = base if base not in names else next(f"{base} {n}" for n in range(2, 999) if f"{base} {n}" not in names)
+    return tid, [{"op": "add_track", "track": {"id": tid, "kind": kind, "name": name}, "index": idx}]
+
+
 def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=None, extra=None):
     """scene.py add: the ops that put one item on the scene (its file copied into the edit's media/ when it is outside)."""
     e, W, H = Path(edit), sc["width"], sc["height"]
@@ -1263,23 +1354,100 @@ def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=
         it.setdefault("w", round(W * 0.3))
         it.setdefault("h", round(W * 0.3))
     it["end"] = round(float(end) if end is not None else float(start) + 3, 6)
-    kind = TYPES[typ]
-    name = track or {"video": "Motion", "image": "Images", "text": "Text", "shape": "Shapes", "audio": "Sounds"}[typ]
-    tr = next((t for t in sc["tracks"] if t["kind"] == kind and name in (t["id"], t["name"])), None)
-    if not tr or (kind == "visual" and magnet(sc, tr) and typ != "video"):
-        if tr:   # never onto the footage
-            name += " 2"
-        ids = {t["id"] for t in sc["tracks"]}
-        tid = next(f"{kind[0]}{n}" for n in range(1, 999) if f"{kind[0]}{n}" not in ids)
-        kinds = [t["kind"] for t in sc["tracks"]]
-        idx = len(kinds) - kinds[::-1].index("visual") if kind == "visual" and "visual" in kinds else len(kinds)   # on top of the pictures
-        ops.append({"op": "add_track", "track": {"id": tid, "kind": kind, "name": name}, "index": idx})
-        tr = {"id": tid}
+    tid, more = lane(sc, typ, it["start"], it["end"], track)
+    ops += more
+    tr = {"id": tid}
     ops.append({"op": "add", "track": tr["id"], "item": it})
     return ops
 
 
 # ---------------------------------------------------------------- self-check
+TRACK_KEEP = ("hidden", "muted", "locked", "magnet", "name")
+
+
+def _ident(sc, it):
+    """What an item is, whatever its id: its kind and the file it plays, or its words."""
+    a = (sc.get("assets") or {}).get(it.get("asset")) or {}
+    return it.get("type"), a.get("src") or it.get("text") or ("captions" if it.get("type") == "captions" else it.get("name") or "")
+
+
+def _pairs(a, b, near=1.0):
+    """Each item of scene a to the same item in scene b: the same kind and file or words, the nearest start within `near`
+    seconds, each used once. Ids are not trusted: a new plan numbers its items again."""
+    out, used = {}, set()
+    bs = [(i, _ident(b, i)) for t in b["tracks"] for i in t["items"]]
+    for t in a["tracks"]:
+        for i in t["items"]:
+            k = _ident(a, i)
+            c = [j for j, kj in bs if kj == k and id(j) not in used and abs(j.get("start", 0) - i.get("start", 0)) <= near]
+            if c:
+                j = min(c, key=lambda j: abs(j.get("start", 0) - i.get("start", 0)))
+                used.add(id(j))
+                out[id(i)] = j
+    return out
+
+
+def carry(base, cur, new):
+    """A new draft's scene with the user's own changes on the old one kept (Max: the AI never undoes what he did by hand
+    unless he asked). base: the scene as the old draft was built; cur: that scene now; new: the new draft's scene.
+    A field the user changed (cur differs from base) goes onto the new item unless the new draft changed that field too
+    (then Claude was asked); an item the user added goes in on its own track; one the user deleted stays out unless the
+    new draft changed it. Returns (scene, how many changes were kept)."""
+    out = copy.deepcopy(new)
+    b2c, b2n = _pairs(base, cur, 0.05), _pairs(base, out)
+    tr_of = {id(i): t for t in out["tracks"] for i in t["items"]}
+    in_base = {id(c) for c in b2c.values()}
+    n, ids = 0, {i["id"] for t in out["tracks"] for i in t["items"]}
+    for t in base["tracks"]:
+        for bi in t["items"]:
+            ci, ni = b2c.get(id(bi)), b2n.get(id(bi))
+            if ni is None:
+                continue   # the new draft took it out
+            if ci is None:   # deleted by hand
+                if all(ni.get(k) == bi.get(k) for k in set(ni) | set(bi) if k not in ("id", "asset")):
+                    tr_of[id(ni)]["items"].remove(ni)
+                    n += 1
+                continue
+            for k in (set(ci) | set(bi)) - {"id", "asset", "by"}:
+                if ci.get(k) != bi.get(k) and ni.get(k) == bi.get(k):
+                    if k in ci:
+                        ni[k] = copy.deepcopy(ci[k])
+                    else:
+                        ni.pop(k, None)
+                    n += 1
+    for t in cur["tracks"]:
+        for ci in t["items"]:
+            if id(ci) in in_base:
+                continue   # added by hand (or by Claude on the page): on its own track again
+            it = copy.deepcopy(ci)
+            if it["id"] in ids:
+                it["id"] = next(f"{it['id']}h{k}" for k in range(1, 999) if f"{it['id']}h{k}" not in ids)
+            ids.add(it["id"])
+            if it.get("asset") and it["asset"] not in out.setdefault("assets", {}):
+                out["assets"][it["asset"]] = copy.deepcopy(cur["assets"][it["asset"]])
+            dest = next((x for x in out["tracks"] if x["id"] == t["id"] and x["kind"] == t["kind"]
+                         and not any(o["start"] < it["end"] - 1e-3 and o["end"] > it["start"] + 1e-3 for o in x["items"])), None)
+            if dest is None:
+                dest = {**{k: v for k, v in t.items() if k != "items"}, "items": []}
+                if any(x["id"] == dest["id"] for x in out["tracks"]):
+                    dest["id"] = next(f"{t['id']}h{k}" for k in range(1, 999) if all(x["id"] != f"{t['id']}h{k}" for x in out["tracks"]))
+                at = [x["kind"] for x in out["tracks"]]
+                out["tracks"].insert(len(at) - at[::-1].index(t["kind"]) if t["kind"] in at else len(at), dest)
+            dest["items"].append(it)
+            n += 1
+    bt = {t["id"]: t for t in base["tracks"]}
+    for t in cur["tracks"]:
+        b, o = bt.get(t["id"]), next((x for x in out["tracks"] if x["id"] == t["id"] and x["kind"] == t["kind"]), None)
+        if b and o:
+            for k in TRACK_KEEP:
+                if t.get(k) != b.get(k) and o.get(k) == b.get(k):
+                    o[k] = t.get(k)
+                    n += 1
+    for t in out["tracks"]:
+        t["items"].sort(key=lambda i: i.get("start", 0))
+    return out, n
+
+
 def demo():
     with tempfile.TemporaryDirectory() as d:
         e = Path(d)
@@ -1287,6 +1455,23 @@ def demo():
                         "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(e / "take.mp4")], check=True)
         S = Scene(1080, 1920, 30, edit=e)
         S.video("take.mp4", 0, 2, **{"in": 1})
+        base = {"assets": {"a": {"src": "card.png"}}, "tracks": [
+            {"id": "v1", "kind": "visual", "items": [{"id": "i1", "type": "image", "asset": "a", "start": 1, "end": 2, "x": 100, "y": 100},
+                                                      {"id": "t1", "type": "text", "text": "Hi", "start": 3, "end": 4, "y": 50}]}]}
+        cur = copy.deepcopy(base)
+        cur["tracks"][0]["items"][0]["x"] = 300                     # moved by hand
+        cur["tracks"][0]["items"][1]["y"] = 80                      # moved by hand, and moved by Claude too
+        cur["tracks"].append({"id": "v9", "kind": "visual", "items": [{"id": "i1", "type": "text", "text": "Mine", "start": 0, "end": 1}]})
+        new = copy.deepcopy(base)
+        new["tracks"][0]["items"].insert(0, {"id": "i1", "type": "image", "asset": "a", "start": 0.2, "end": 0.6})   # the new plan numbers again
+        new["tracks"][0]["items"][1]["id"] = "i2"
+        new["tracks"][0]["items"][2]["y"] = 20                      # Claude was asked
+        got, kept = carry(base, cur, new)
+        its = {i.get("text") or (i["start"], i.get("x")): i for t in got["tracks"] for i in t["items"]}
+        assert its[(1, 300)]["id"] == "i2" and its["Hi"]["y"] == 20 and its["Mine"]["id"] != "i1" and kept == 2, (its, kept)
+        cur2 = copy.deepcopy(base)
+        cur2["tracks"][0]["items"].pop(1)                           # deleted by hand
+        assert [i.get("text") for t in carry(base, cur2, copy.deepcopy(base))[0]["tracks"] for i in t["items"]] == [None]
         S.video("take.mp4", 2, 4, **{"in": 4})
         S.text("Hi", 1, 3, y=400, box={"color": "#FFFFFF", "pad": 10, "radius": 8})
         S.captions([{"w": "one", "start": 1.2, "end": 1.6}], {"y_pct": 70}, asset="take")
@@ -1403,6 +1588,22 @@ def demo():
         assert all(key_at(a["keys"]["x"], t) - 540 * key_at(a["keys"]["scale"], t) <= 0 for t in (0, 0.5, 1, 1.5)), "the left edge is covered"
         plain = normalise({**sl, "covered": False, "tracks": [{"id": "v", "kind": "visual", "items": [{**sl["tracks"][0]["items"][1], "x": 600}]}]})
         assert cover(plain) == ["b"] and plain["tracks"][0]["items"][0]["w"] >= 1200, "no keys: the clip grows"
+        # a new item: a free track of its own kind, else a new one above its kind; never the footage, never over a clip
+        ln = normalise({"width": 1080, "height": 1920, "fps": 30, "assets": {"c": {"src": "take.mp4"}}, "tracks": [
+            {"id": "v", "kind": "visual", "items": [{"id": "a", "type": "video", "asset": "c", "start": 0, "end": 9}]},
+            {"id": "x", "kind": "visual", "name": "Text", "items": [{"id": "t", "type": "text", "text": "hi", "start": 1, "end": 3}]}]})
+        assert lane(ln, "text", 4, 5) == ("x", []), "a free text track"
+        tid, op = lane(ln, "text", 2, 4)
+        assert tid == "v1" and op[0]["index"] == 2 and op[0]["track"]["name"] == "Text 2", op   # busy: a new one above it
+        tid, op = lane(ln, "image", 1, 2)
+        assert tid == "v1" and op[0]["track"]["name"] == "Images", "a picture never goes on the text track or the footage"
+        assert validate(normalise({**ln, "tracks": [{"id": "x", "kind": "visual", "items": [{"type": "text", "start": 0, "end": 1,
+                        "box": {"color": "#FFFFFF", "opacity": 0.5}, "shadow": {"color": "#FF0000", "distance": 8, "angle": 45}}]}]}))
+        try:
+            validate(normalise({**ln, "tracks": [{"id": "x", "kind": "visual", "items": [{"type": "text", "start": 0, "end": 1, "box": {"color": "#FFFFFF", "opacity": 2}}]}]}))
+            raise AssertionError("box opacity 2 passed")
+        except SceneError as e:
+            assert "box.opacity" in str(e), e
     print("scene demo ok")
 
 

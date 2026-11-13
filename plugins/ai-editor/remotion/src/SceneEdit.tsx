@@ -2,7 +2,7 @@
 // player (preview/live.tsx mountScene) and for the export (scene.py render). Every element is an item with its own
 // transform, so the page moves, crops and trims each one and the export is what the page shows.
 // Track order is draw order (the first visual track is the bottom); inside a track a later item draws on top.
-import React, { useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AbsoluteFill, Audio, CalculateMetadataFunction, Img, OffthreadVideo, Sequence, Video, getRemotionEnvironment, staticFile,
   useCurrentFrame, useVideoConfig } from "remotion";
 import { Captions, CaptionStyle, Chunk, useFamily } from "./Captions";
@@ -12,13 +12,14 @@ import { resolveLook, useFonts } from "./look";
 
 type Key = [number, number, string?];
 export type Asset = { src: string; url?: string; proxy?: string; kind?: string; w?: number; h?: number; duration?: number; alpha?: boolean };
-type Box = { color: string; pad?: number | [number, number]; radius?: number; block?: boolean };
+type Box = { color: string; pad?: number | [number, number]; radius?: number; block?: boolean; opacity?: number };
+type Shadow = { blur?: number; y?: number; opacity?: number; color?: string; distance?: number; angle?: number };
 export type Item = {
   id: string; type: "video" | "image" | "text" | "shape" | "audio" | "captions" | "card"; start: number; end: number; name?: string;
   asset?: string; in?: number; speed?: number; volume?: number; fade_in?: number; fade_out?: number; locked?: boolean;
   x?: number; y?: number; w?: number; h?: number; rotation?: number; opacity?: number; fit?: "cover" | "contain";
   crop?: { l?: number; t?: number; r?: number; b?: number } | null; radius?: number;
-  shadow?: { blur?: number; y?: number; opacity?: number } | null; border?: { width: number; color: string } | null;
+  shadow?: Shadow | null; border?: { width: number; color: string } | null;
   anim?: { in?: string; out?: string; dur?: number } | null; keys?: Record<string, Key[]>; grade?: { brightness?: number; saturate?: number };
   text?: string; font?: string; weight?: number; size?: number; color?: string; align?: "left" | "center" | "right"; line_height?: number;
   box?: Box | null; outline?: { color: string; width: number } | null; fill?: string; stroke?: { color: string; width: number } | null;
@@ -63,6 +64,20 @@ const placed = (it: Item, lt: number, W: number, H: number) => {
   return { x: k("x", it.x ?? W / 2), y: k("y", it.y ?? H / 2), w: k("w", it.w ?? W), h: k("h", it.h ?? H), r: k("rotation", it.rotation ?? 0), s: s * sc, o, ty };
 };
 
+/** A colour (#RRGGBB) at an opacity, as CSS. */
+export const rgba = (c: string | undefined, o = 1) => {
+  const m = /^#([0-9a-f]{6})$/i.exec(c ?? "");
+  if (!m) return c ?? "#000000";
+  const n = parseInt(m[1], 16);
+  return o >= 1 ? c! : `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${o})`;
+};
+/** A shadow as CSS: offset by distance at angle (degrees, 90 straight down) when set, else straight down by y. */
+export const shadowCss = (sh: Shadow) => {
+  const a = ((sh.angle ?? 90) * Math.PI) / 180, d = sh.distance;
+  const [dx, dy] = d == null ? [0, sh.y ?? 12] : [d * Math.cos(a), d * Math.sin(a)];
+  return `${+dx.toFixed(2)}px ${+dy.toFixed(2)}px ${sh.blur ?? 30}px ${rgba(sh.color ?? "#000000", sh.opacity ?? 0.35)}`;
+};
+
 /** The box a picture or clip sits in: its crop shown, fitted (cover or contain), rounded, shadowed, bordered. */
 const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; children: (st: React.CSSProperties) => React.ReactNode }> = ({ it, a, lt, W, H, children }) => {
   const p = placed(it, lt, W, H);
@@ -76,7 +91,7 @@ const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; c
   return (
     <div data-sc={it.id} style={{ position: "absolute", left: p.x - p.w / 2, top: p.y - p.h / 2, width: p.w, height: p.h, opacity: p.o,
       transform: `translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`, borderRadius: it.radius ?? 0, overflow: "hidden",
-      boxShadow: sh_ ? `0 ${sh_.y ?? 12}px ${sh_.blur ?? 30}px rgba(0,0,0,${sh_.opacity ?? 0.35})` : undefined, background: it.type === "shape" ? it.fill : undefined }}>
+      boxShadow: sh_ ? shadowCss(sh_) : undefined, background: it.type === "shape" ? it.fill : undefined }}>
       {children(media)}
       {it.border || it.stroke ? <div style={{ position: "absolute", inset: 0, borderRadius: it.radius ?? 0,
         border: `${(it.border ?? it.stroke)!.width}px solid ${(it.border ?? it.stroke)!.color}` }} /> : null}
@@ -84,17 +99,21 @@ const Frame: React.FC<{ it: Item; a?: Asset; lt: number; W: number; H: number; c
   );
 };
 
+// volume is a gain: 1 is the file as it is, up to VMAX (+12 dB). The export's ffmpeg volume filter applies it as is; the
+// page's player needs the Web Audio API for a gain above 1 (an element's own volume stops at 1): useWebAudioApi
+export const VMAX = 3.981;
 const vol = (it: Item, fps: number, muted: boolean) => muted ? 0 : (f: number) => {
   const t = f / fps, len = it.end - it.start;
-  return Math.max(0, Math.min(1, (it.volume ?? 1) * Math.min(1, it.fade_in ? t / it.fade_in : 1, it.fade_out ? (len - t) / it.fade_out : 1)));
+  return Math.max(0, Math.min(VMAX, (it.volume ?? 1) * Math.min(1, it.fade_in ? t / it.fade_in : 1, it.fade_out ? (len - t) / it.fade_out : 1)));
 };
+const amp = () => live() ? { useWebAudioApi: true } : {};
 
 const VideoItem: React.FC<{ it: Item; a?: Asset; W: number; H: number; muted: boolean; hidden: boolean }> = ({ it, a, W, H, muted, hidden }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const V = live() ? Video : OffthreadVideo;
   const props = { src: urlOf(a), trimBefore: Math.round((it.in ?? 0) * fps), playbackRate: it.speed ?? 1,
-    volume: (it.volume ?? 1) <= 0 ? 0 : vol(it, fps, muted), muted: muted || (it.volume ?? 1) <= 0 };
+    volume: (it.volume ?? 1) <= 0 ? 0 : vol(it, fps, muted), muted: muted || (it.volume ?? 1) <= 0, ...amp() };
   if (hidden) return muted || (it.volume ?? 1) <= 0 ? null : <Audio {...props} />;
   // a clip with alpha (VP9 WebM): the page's <video> keeps it; the export extracts its frames as PNG to keep it
   const alpha = !live() && a?.alpha ? { transparent: true } : {};
@@ -113,22 +132,88 @@ const ShapeItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) =
   return <Frame it={{ ...it, crop: null }} lt={frame / fps} W={W} H={H}>{() => null}</Frame>;
 };
 
-/** Text: as wide as its words up to w, centred on x, y; a box behind each line (TikTok's look) or one block box. */
+/** The outline of a box behind each line (Instagram's text background): one rounded box per line, lines touching, the
+ *  steps where a wider line meets a narrower one turned with a small inside curve. ls: [left, right, top, bottom] per
+ *  line, top to bottom; a gap (an empty line) starts a new shape. */
+export function lineBoxPath(ls: number[][], R: number): string {
+  const groups: number[][][] = [];
+  ls.forEach((l, i) => (i && Math.abs(ls[i - 1][3] - l[2]) < 0.5 ? groups[groups.length - 1].push(l) : groups.push([l])));
+  const f = (n: number) => +n.toFixed(2);
+  return groups.map((g) => {
+    const pts: [number, number, number][] = [];   // the outline's corners, clockwise from the top left: x, y, radius
+    const rad = (...ds: number[]) => Math.max(0, Math.min(R, ...ds.map((d) => Math.abs(d) / 2)));
+    const h = (l: number[]) => l[3] - l[2];
+    pts.push([g[0][0], g[0][2], rad(g[0][1] - g[0][0], h(g[0]))], [g[0][1], g[0][2], rad(g[0][1] - g[0][0], h(g[0]))]);
+    for (let i = 0; i + 1 < g.length; i++) {   // the right side going down
+      const d = g[i + 1][1] - g[i][1], y = g[i][3], c = rad(d, h(g[i]), h(g[i + 1]));
+      if (Math.abs(d) >= 0.5) pts.push([g[i][1], y, c], [g[i + 1][1], y, c]);
+    }
+    const n = g[g.length - 1];
+    pts.push([n[1], n[3], rad(n[1] - n[0], h(n))], [n[0], n[3], rad(n[1] - n[0], h(n))]);
+    for (let i = g.length - 2; i >= 0; i--) {   // the left side going up
+      const d = g[i][0] - g[i + 1][0], y = g[i][3], c = rad(d, h(g[i]), h(g[i + 1]));
+      if (Math.abs(d) >= 0.5) pts.push([g[i + 1][0], y, c], [g[i][0], y, c]);
+    }
+    // each corner: in along the edge from the previous corner, a quarter curve round it, out towards the next
+    const K = 0.5523, out: string[] = [];
+    pts.forEach(([x, y, c], i) => {
+      const [px, py] = pts[(i + pts.length - 1) % pts.length], [nx, ny] = pts[(i + 1) % pts.length];
+      const u = (ax: number, ay: number) => { const L = Math.hypot(ax - x, ay - y) || 1; return [(ax - x) / L, (ay - y) / L]; };
+      const [ux, uy] = u(px, py), [vx, vy] = u(nx, ny);
+      const a = [x + ux * c, y + uy * c], b = [x + vx * c, y + vy * c];
+      out.push(`${i ? "L" : "M"}${f(a[0])} ${f(a[1])}`);
+      if (c > 0) out.push(`C${f(a[0] - ux * c * K)} ${f(a[1] - uy * c * K)} ${f(b[0] - vx * c * K)} ${f(b[1] - vy * c * K)} ${f(b[0])} ${f(b[1])}`);
+    });
+    return out.join("") + "Z";
+  }).join("");
+}
+
+/** Text: as wide as its words up to w, centred on x, y; a box behind each line (TikTok's and Instagram's look) or one
+ *  block box. Each line's box is measured from where the browser broke the lines and drawn as one outline behind
+ *  them: the lines touch, every line gets the same side padding, the first and last get the top and bottom padding. */
 const TextItem: React.FC<{ it: Item; W: number; H: number }> = ({ it, W, H }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const family = useFamily(it.font ?? "TikTok Sans", it.weight ?? 700);
-  if (!family) return null;
-  const p = placed(it, frame / fps, W, H), fs = it.size ?? Math.min(W, H) * 0.05, b = it.box;
+  const ref = useRef<HTMLDivElement>(null), span = useRef<HTMLSpanElement>(null);
+  const [shape, setShape] = useState<{ d: string; w: number; h: number } | null>(null);
+  const p = placed(it, frame / fps, W, H), fs = it.size ?? Math.min(W, H) * 0.05, b = it.box, lh = it.line_height ?? 1.2;
   const pad = Array.isArray(b?.pad) ? b!.pad : [b?.pad ?? fs * 0.25, b?.pad ?? fs * 0.1];
-  const line: React.CSSProperties = b && !b.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0,
-    WebkitBoxDecorationBreak: "clone", boxDecorationBreak: "clone" } as React.CSSProperties : {};
+  const lines = !!b && !b.block;
+  useLayoutEffect(() => {   // after every layout: where the lines broke, in the element's own px (its transform and the player's scale taken off)
+    const e = ref.current, sp = span.current;
+    if (!lines || !e || !sp) return void (shape && setShape(null));
+    const tf = e.style.transform;
+    e.style.transform = "none";
+    const cr = e.getBoundingClientRect(), k = cr.width ? e.offsetWidth / cr.width : 1, L = lh * fs, top = pad[1];
+    const rows: number[][] = [];
+    const tn = sp.firstChild, rg = document.createRange(), rs: DOMRect[] = [];
+    if (tn) for (const m of (tn.textContent ?? "").matchAll(/\S+/g)) {   // word by word: a space where a line broke gets no box
+      rg.setStart(tn, m.index!); rg.setEnd(tn, m.index! + m[0].length); rs.push(...Array.from(rg.getClientRects()));
+    }
+    for (const r of rs) {
+      if (r.width < 0.5) continue;
+      const i = Math.max(0, Math.floor((((r.top + r.bottom) / 2 - cr.top) * k - top) / L));
+      const x0 = (r.left - cr.left) * k - pad[0], x1 = (r.right - cr.left) * k + pad[0];
+      rows[i] = rows[i] ? [Math.min(rows[i][0], x0), Math.max(rows[i][1], x1)] : [x0, x1];
+    }
+    e.style.transform = tf;
+    const ls: number[][] = [];
+    rows.forEach((r, i) => r && ls.push([r[0], r[1], top + i * L - (i && rows[i - 1] ? 0 : pad[1]), top + (i + 1) * L + (rows[i + 1] ? 0 : pad[1])]));
+    const next = { d: lineBoxPath(ls, b!.radius ?? 0), w: e.offsetWidth, h: e.offsetHeight };
+    if (!shape || shape.d !== next.d || shape.w !== next.w || shape.h !== next.h) setShape(next);
+  });
+  if (!family) return null;
   return (
-    <div data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
+    <div ref={ref} data-sc={it.id} style={{ position: "absolute", left: p.x, top: p.y, transform: `translate(-50%, -50%) translateY(${p.ty}px) rotate(${p.r}deg) scale(${p.s})`,
       opacity: p.o, width: "max-content", maxWidth: p.w, textAlign: it.align ?? "center", whiteSpace: "pre-wrap", overflowWrap: "anywhere",
-      fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: it.line_height ?? 1.2,
-      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: b.color, padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}) }}>
-      <span style={{ ...line, ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}) } as React.CSSProperties}>
+      fontFamily: `${family}, "Apple Color Emoji", "Noto Color Emoji"`, fontWeight: it.weight ?? 700, fontSize: fs, lineHeight: lh,
+      color: it.color ?? "#FFFFFF", ...(b?.block ? { background: rgba(b.color, b.opacity ?? 1), padding: `${pad[1]}px ${pad[0]}px`, borderRadius: b.radius ?? 0 } : {}),
+      ...(lines ? { padding: `${pad[1]}px ${pad[0]}px`, boxSizing: "border-box" } : {}) }}>
+      {lines && shape ? <svg width={shape.w} height={shape.h} style={{ position: "absolute", left: 0, top: 0, overflow: "visible" }}>
+        <path d={shape.d} fill={rgba(b!.color, b!.opacity ?? 1)} /></svg> : null}
+      <span ref={span} style={{ position: "relative", ...(it.outline ? { WebkitTextStroke: `${it.outline.width}px ${it.outline.color}`, paintOrder: "stroke fill" } : {}),
+        ...(it.shadow ? { textShadow: shadowCss(it.shadow) } : {}) } as React.CSSProperties}>
         {it.text}</span>
     </div>
   );
@@ -204,7 +289,7 @@ export const SceneEdit: React.FC<SceneDoc> = ({ tracks, assets, background }) =>
             const a = it.asset ? assets[it.asset] : undefined;
             if (tr.kind === "audio")
               return tr.muted || !a ? null : seq(it, <Audio src={urlOf(a)} trimBefore={Math.round((it.in ?? 0) * fps)} playbackRate={it.speed ?? 1}
-                volume={vol(it, fps, false)} />);
+                volume={vol(it, fps, false)} {...amp()} />);
             if (it.type === "video") return seq(it, <VideoItem it={it} a={a} W={W} H={H} muted={!!tr.muted} hidden={!!tr.hidden} />, true);
             if (tr.hidden) return null;
             if (it.type === "card") return t >= it.start && t < it.end + 0.4 ? <CardItem key={it.id} it={it} t={t} W={W} H={H} /> : null;
