@@ -809,6 +809,7 @@ body.scene .etrack.vtall,body.scene .ehd.vtall{height:64px}body.scene .etrack.vt
 .scfs{position:absolute;left:0;right:0;top:0;bottom:0;overflow:hidden;border-radius:4px;background-repeat:repeat-x;background-size:auto 100%;background-position:0 0;pointer-events:none;display:flex;opacity:.9}
 .scfs.v{bottom:auto;height:36px;border-radius:4px 4px 0 0}.scfs.v i{flex-shrink:0;background-image:var(--fs);background-size:var(--bs);background-repeat:no-repeat}
 body.scene .eitem.sc.vid svg.wv{position:absolute;left:0;right:0;bottom:1px;top:auto;height:22px!important;width:100%;opacity:.85}
+body.scene .eitem.sc.vid:not(:has(.scfs)) svg.wv{top:20px;bottom:auto;height:calc(100% - 24px)!important}   /* no frames (still coming, or none): the wave fills the clip under its name, centred */
 body.scene .eitem.sc.vid>span,body.scene .eitem.sc.img>span{position:absolute;left:4px;top:3px;bottom:auto;right:auto;max-width:calc(100% - 8px);padding:1px 5px;border-radius:3px;background:rgba(0,0,0,.55);font-size:10px;line-height:13px;z-index:1}
 body.scene .eitem.sc.img{background:#22424D}
 body.scene .eitem.sc{border-radius:4px;border:0;box-shadow:inset 0 0 0 1px rgba(255,255,255,.14);color:#FFFFFF;padding:0 7px}
