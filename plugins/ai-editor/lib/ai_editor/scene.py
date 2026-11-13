@@ -707,6 +707,15 @@ def text_items(x, W, H):
                  "y": x["y_pct"] / 100 * H + (j + 0.5) * 1.3 * fs, "w": 0.6 * W, "size": round(fs, 2), "align": "left", "line_height": 1.3,
                  "outline": {"color": "#000000", "width": round(fs * 0.06, 2)}, "anim": {"in": "fade", "out": "none", "dur": 0.18}}
                 for j, i in enumerate(x.get("items") or [])]
+    if k == "stamp":   # the red circled X over the card that is up (Texts.tsx): a ring and an X the user can move
+        bx, by, bw, bh = x["box"]
+        d = min(bw / 100 * W, bh / 100 * H) * 0.62
+        cx, cy, red = (bx + bw / 2) / 100 * W, (by + bh / 2) / 100 * H, "#E5322D"
+        pop = {"in": "pop", "out": "none", "dur": 0.29}
+        return [{"type": "shape", "name": "Stamp ring", "start": x["start"], "end": x["end"], "x": cx, "y": cy, "w": round(d * 0.88, 2), "h": round(d * 0.88, 2),
+                 "radius": round(d * 0.44, 2), "fill": "#00000000", "stroke": {"color": red, "width": round(d * 0.06, 2)}, "anim": pop},
+                {"type": "text", "name": "Stamp X", "text": "\u2715", "start": x["start"], "end": x["end"], "x": cx, "y": cy, "w": round(d, 2),
+                 "size": round(d * 0.5, 2), "color": red, "line_height": 1, "anim": pop}]
     print(f"scene: a {k} text is not a scene item yet; left out", file=sys.stderr)
     return []
 
@@ -829,8 +838,15 @@ def from_plan(edit, plan=None, sounds=None, library=None, proxies=True, frame_it
     if p.get("music"):
         S.audio(p["music"]["src"], 0, dur, track="Music")
     for c in p.get("sfx") or []:
-        if c.get("placed") or str(c["src"]).startswith("/"):
-            continue
+        if c.get("placed"):
+            continue   # a placed sound: placed() lays it on from sounds.json
+        src = c["src"]
+        if str(src).startswith("/"):   # a library sound by its full path: copied into media/ so it plays and exports anywhere
+            if not Path(src).is_file():
+                print(f"scene: sound {src} is gone; left out", file=sys.stderr)
+                continue
+            src = bring_in(e, src)
+        c = {**c, "src": src}
         aid_ = S.asset(c["src"])
         d = S.sc["assets"][aid_].get("duration") or 1
         S.audio(c["src"], c["t"], c["t"] + d, name=Path(c["src"]).stem)
@@ -1346,6 +1362,92 @@ def add_op(edit, sc, typ, start, end=None, src=None, text=None, track=None, geo=
 
 
 # ---------------------------------------------------------------- self-check
+TRACK_KEEP = ("hidden", "muted", "locked", "magnet", "name")
+
+
+def _ident(sc, it):
+    """What an item is, whatever its id: its kind and the file it plays, or its words."""
+    a = (sc.get("assets") or {}).get(it.get("asset")) or {}
+    return it.get("type"), a.get("src") or it.get("text") or ("captions" if it.get("type") == "captions" else it.get("name") or "")
+
+
+def _pairs(a, b, near=1.0):
+    """Each item of scene a to the same item in scene b: the same kind and file or words, the nearest start within `near`
+    seconds, each used once. Ids are not trusted: a new plan numbers its items again."""
+    out, used = {}, set()
+    bs = [(i, _ident(b, i)) for t in b["tracks"] for i in t["items"]]
+    for t in a["tracks"]:
+        for i in t["items"]:
+            k = _ident(a, i)
+            c = [j for j, kj in bs if kj == k and id(j) not in used and abs(j.get("start", 0) - i.get("start", 0)) <= near]
+            if c:
+                j = min(c, key=lambda j: abs(j.get("start", 0) - i.get("start", 0)))
+                used.add(id(j))
+                out[id(i)] = j
+    return out
+
+
+def carry(base, cur, new):
+    """A new draft's scene with the user's own changes on the old one kept (Max: the AI never undoes what he did by hand
+    unless he asked). base: the scene as the old draft was built; cur: that scene now; new: the new draft's scene.
+    A field the user changed (cur differs from base) goes onto the new item unless the new draft changed that field too
+    (then Claude was asked); an item the user added goes in on its own track; one the user deleted stays out unless the
+    new draft changed it. Returns (scene, how many changes were kept)."""
+    out = copy.deepcopy(new)
+    b2c, b2n = _pairs(base, cur, 0.05), _pairs(base, out)
+    tr_of = {id(i): t for t in out["tracks"] for i in t["items"]}
+    in_base = {id(c) for c in b2c.values()}
+    n, ids = 0, {i["id"] for t in out["tracks"] for i in t["items"]}
+    for t in base["tracks"]:
+        for bi in t["items"]:
+            ci, ni = b2c.get(id(bi)), b2n.get(id(bi))
+            if ni is None:
+                continue   # the new draft took it out
+            if ci is None:   # deleted by hand
+                if all(ni.get(k) == bi.get(k) for k in set(ni) | set(bi) if k not in ("id", "asset")):
+                    tr_of[id(ni)]["items"].remove(ni)
+                    n += 1
+                continue
+            for k in (set(ci) | set(bi)) - {"id", "asset", "by"}:
+                if ci.get(k) != bi.get(k) and ni.get(k) == bi.get(k):
+                    if k in ci:
+                        ni[k] = copy.deepcopy(ci[k])
+                    else:
+                        ni.pop(k, None)
+                    n += 1
+    for t in cur["tracks"]:
+        for ci in t["items"]:
+            if id(ci) in in_base:
+                continue   # added by hand (or by Claude on the page): on its own track again
+            it = copy.deepcopy(ci)
+            if it["id"] in ids:
+                it["id"] = next(f"{it['id']}h{k}" for k in range(1, 999) if f"{it['id']}h{k}" not in ids)
+            ids.add(it["id"])
+            if it.get("asset") and it["asset"] not in out.setdefault("assets", {}):
+                out["assets"][it["asset"]] = copy.deepcopy(cur["assets"][it["asset"]])
+            dest = next((x for x in out["tracks"] if x["id"] == t["id"] and x["kind"] == t["kind"]
+                         and not any(o["start"] < it["end"] - 1e-3 and o["end"] > it["start"] + 1e-3 for o in x["items"])), None)
+            if dest is None:
+                dest = {**{k: v for k, v in t.items() if k != "items"}, "items": []}
+                if any(x["id"] == dest["id"] for x in out["tracks"]):
+                    dest["id"] = next(f"{t['id']}h{k}" for k in range(1, 999) if all(x["id"] != f"{t['id']}h{k}" for x in out["tracks"]))
+                at = [x["kind"] for x in out["tracks"]]
+                out["tracks"].insert(len(at) - at[::-1].index(t["kind"]) if t["kind"] in at else len(at), dest)
+            dest["items"].append(it)
+            n += 1
+    bt = {t["id"]: t for t in base["tracks"]}
+    for t in cur["tracks"]:
+        b, o = bt.get(t["id"]), next((x for x in out["tracks"] if x["id"] == t["id"] and x["kind"] == t["kind"]), None)
+        if b and o:
+            for k in TRACK_KEEP:
+                if t.get(k) != b.get(k) and o.get(k) == b.get(k):
+                    o[k] = t.get(k)
+                    n += 1
+    for t in out["tracks"]:
+        t["items"].sort(key=lambda i: i.get("start", 0))
+    return out, n
+
+
 def demo():
     with tempfile.TemporaryDirectory() as d:
         e = Path(d)
@@ -1353,6 +1455,23 @@ def demo():
                         "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(e / "take.mp4")], check=True)
         S = Scene(1080, 1920, 30, edit=e)
         S.video("take.mp4", 0, 2, **{"in": 1})
+        base = {"assets": {"a": {"src": "card.png"}}, "tracks": [
+            {"id": "v1", "kind": "visual", "items": [{"id": "i1", "type": "image", "asset": "a", "start": 1, "end": 2, "x": 100, "y": 100},
+                                                      {"id": "t1", "type": "text", "text": "Hi", "start": 3, "end": 4, "y": 50}]}]}
+        cur = copy.deepcopy(base)
+        cur["tracks"][0]["items"][0]["x"] = 300                     # moved by hand
+        cur["tracks"][0]["items"][1]["y"] = 80                      # moved by hand, and moved by Claude too
+        cur["tracks"].append({"id": "v9", "kind": "visual", "items": [{"id": "i1", "type": "text", "text": "Mine", "start": 0, "end": 1}]})
+        new = copy.deepcopy(base)
+        new["tracks"][0]["items"].insert(0, {"id": "i1", "type": "image", "asset": "a", "start": 0.2, "end": 0.6})   # the new plan numbers again
+        new["tracks"][0]["items"][1]["id"] = "i2"
+        new["tracks"][0]["items"][2]["y"] = 20                      # Claude was asked
+        got, kept = carry(base, cur, new)
+        its = {i.get("text") or (i["start"], i.get("x")): i for t in got["tracks"] for i in t["items"]}
+        assert its[(1, 300)]["id"] == "i2" and its["Hi"]["y"] == 20 and its["Mine"]["id"] != "i1" and kept == 2, (its, kept)
+        cur2 = copy.deepcopy(base)
+        cur2["tracks"][0]["items"].pop(1)                           # deleted by hand
+        assert [i.get("text") for t in carry(base, cur2, copy.deepcopy(base))[0]["tracks"] for i in t["items"]] == [None]
         S.video("take.mp4", 2, 4, **{"in": 4})
         S.text("Hi", 1, 3, y=400, box={"color": "#FFFFFF", "pad": 10, "radius": 8})
         S.captions([{"w": "one", "start": 1.2, "end": 1.6}], {"y_pct": 70}, asset="take")

@@ -446,6 +446,18 @@ function scFields(it){const V=scVis(it),F=[],a=p=>F.push(p);
   if(/^(video|audio)$/.test(it.type)){a('volume_db');a('speed');a('fade_in');a('fade_out');a('in')}
   a('start');a('end');return F}
 const scPath=(it,p)=>{const x=p.split('.').reduce((o,k)=>o==null?o:o[k],it);return p==='box.pad'&&Array.isArray(x)?x[0]:x};
+// a speed change keeps the clip's footage, as CapCut does: the clip gets shorter (faster) or longer (slower) and its keyframes
+// with it. On the main footage (a magnet track) everything after it moves by the same amount, and the captions over the clip
+// are retimed to the new speed, so the words stay on his mouth
+function scSpeed(s,id,x){const o=scAll(s).find(o=>o.it.id===id);if(!o)return;const it=o.it,sp0=it.speed||1;x=Math.max(.1,+x||1);
+  if(!/^(video|audio)$/.test(it.type)){it.speed=x;return}
+  const a=it.start,b0=it.end,r=sp0/x,b=+(a+(b0-a)*r).toFixed(3),d=+(b-b0).toFixed(3),main=scMag(o.tr)&&it.type==='video',at=t=>+(a+(t-a)*r).toFixed(3);
+  it.speed=x;if(it.keys)for(const k of Object.values(it.keys))k.forEach(q=>{q[0]=+(q[0]*r).toFixed(3)});
+  if(main&&d){const caps=scAll(s).filter(q=>q.it.type==='captions').map(q=>q.it),inside=c=>(c.words||[]).concat(c.pages||[]).filter(w=>w.start>=a-1e-3&&w.start<b0-1e-3);
+    const keep=caps.map(inside);scRipple(s,it,b0,d);
+    caps.forEach((c,i)=>{(c.pages||[]).forEach(g=>{if(g.start>=b0-1e-3&&!keep[i].includes(g)){g.start=+(g.start+d).toFixed(3);g.end=+(g.end+d).toFixed(3)}});   // scRipple moves the words, not the pages
+      keep[i].forEach(w=>{w.start=at(w.start);w.end=Math.min(at(w.end),b)})})}
+  it.end=b}
 function scPut(it,p,x,t){if(p==='volume_db'){it.volume=scGain(x);return}
   if(p==='box.pad'&&it.box){const o=it.box.pad,r=Array.isArray(o)&&o[0]>0?o[1]/o[0]:Array.isArray(o)?.25:1;it.box={...it.box,pad:Array.isArray(o)||r!==1?[x,+(x*r).toFixed(2)]:x};return}   // the side padding; the top keeps its share
   if((p==='shadow.distance'||p==='shadow.angle')&&it.shadow){const sh={...it.shadow};if(sh.distance==null)sh.distance=sh.y??12;if(sh.angle==null)sh.angle=90;sh[p.slice(7)]=x;it.shadow=sh;return}const ps=p.split('.');if(ps.length===1){if(KEYP.includes(p))scSet(it,p,x,t);else it[p]=x;return}it[ps[0]]={...(it[ps[0]]||(ps[0]==='crop'?{l:0,t:0,r:0,b:0}:ps[0]==='anim'?{in:'none',out:'none',dur:.3}:{})),[ps[1]]:x}}
@@ -545,6 +557,7 @@ $('ibody').addEventListener('input',e=>{const el=e.target;if(!SC.on||!el.dataset
   const x=/^(number|range)$/.test(el.type)?(raw===''?null:+raw/k):p==='weight'?+raw:raw;if(x==null&&el.type==='number')return;
   if(el.type==='color'){const l=el.closest('.scown');if(l)l.style.setProperty('--c',raw)}
   $('ibody').querySelectorAll(`[data-p="${p}"]`).forEach(o=>{if(o===el)return;if(o.type==='range')o.value=x;else if(o.type==='number'){const ok=+o.dataset.k||1,st=+o.step||1;o.value=String(+(x*ok).toFixed(st<1?2:0))}});
+  if(p==='speed'){SC.s=scCopy(SC.ib);SC.sel.forEach(id=>scSpeed(SC.s,id,x));SC.show(true);SC.tl();return}
   SC.sel.forEach(q=>{q=scGet(q);if(q)scPut(q.it,p,x,t)});SC.show(true)},true);
 // drag a number field left or right (or its short label: X, Y, W, H) to change it, as Figma and CapCut do: a step per 2 px,
 // shift for 10. A click without a drag types in it
@@ -562,7 +575,7 @@ $('ibody').addEventListener('change',e=>{if(!SC.on||!e.target.dataset.p)return;c
 $('ibody').addEventListener('click',e=>{if(!SC.on)return;const B=$('ibody'),k=e.target.closest('[data-kp]'),t=scNow(),c=e.target.closest('[data-pp],[data-look],[data-tab],[data-atab]');
   if(c&&c.dataset.tab){scTabs[B.dataset.kind]=c.dataset.tab;scSave('review-sctab',scTabs);B._h=null;return SC.insp()}
   if(c&&c.dataset.atab){SC.atab=c.dataset.atab;B._h=null;return SC.insp()}
-  if(c){const b=scCopy(SC.s);SC.sel.forEach(id=>{const q=scGet(id);if(!q)return;if(c.dataset.look){if(q.it.type==='text')Object.assign(q.it,SCLOOK[c.dataset.look][1](q.it))}else scPut(q.it,c.dataset.pp,JSON.parse(c.dataset.pv),t)});
+  if(c){const b=scCopy(SC.s);SC.sel.forEach(id=>{const q=scGet(id);if(!q)return;if(c.dataset.look){if(q.it.type==='text')Object.assign(q.it,SCLOOK[c.dataset.look][1](q.it))}else if(c.dataset.pp==='speed')scSpeed(SC.s,id,JSON.parse(c.dataset.pv));else scPut(q.it,c.dataset.pp,JSON.parse(c.dataset.pv),t)});
     B._h=null;SC.show();return SC.commit(b,c.dataset.look?'text look':'change '+c.dataset.pp.replace('.',' ').replace('_',' '))}
   // a row's diamond keys every property on it (Position: x and y, Size: w and h, as the lanes group them): a key here on any of
   // them takes them all off, else each gets one at the value now
@@ -862,3 +875,6 @@ body.scene #tside #ibody{display:none}body.scene.tside:not(.scnoside) #tside{dis
   // the settings move into the column while it is in use, and back into the left panel after
   const place=()=>{const B=$('ibody'),want=scPcol()?ps:$('tside');if(B.parentElement!==want){want.appendChild(B);B._h=null;if(scPcol()){B.hidden=false;$('railinsp').classList.toggle('on',!SC.noprops);if(tool==='insp')scOT(null)}SC.on&&SC.insp()}};
   new MutationObserver(place).observe(document.body,{attributes:true,attributeFilter:['class']});SC.pmq.addEventListener('change',place)}
+
+// the more menu's Duplicate this timeline shows while a scene is on
+new MutationObserver(()=>{$('scdup').hidden=!document.body.classList.contains('scene')}).observe(document.body,{attributes:true,attributeFilter:['class']});

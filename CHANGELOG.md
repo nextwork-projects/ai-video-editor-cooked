@@ -2,6 +2,13 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.50, creator-teardown 2.7.50 (2026-11-13)
+- Claude keeps your edits. When a new draft comes in, the timeline is built again from it, so everything in the draft is on the timeline, and every change you made on the last one (a move, a resize, a trim, a delete, something you added) is put back on top. Claude's change wins only on something it was asked to change. Claude is also told never to delete or rebuild the timeline.
+- Before, a new rendered draft could leave the timeline on the old draft's video, so the new draft's texts, cards and sounds were missing from it.
+- Sound effects that came from a full file path, and the red X stamp, are now items on the timeline. They used to be left out.
+- Duplicate this timeline (in the ⋯ menu) copies the timeline on screen, with all your edits, into a new version and opens it. Changing the copy leaves the original as it was.
+- Changing the speed of a clip keeps its footage: 2x makes it half as long. On the main video, everything after it moves up and the captions are retimed to match.
+
 ## ai-editor 2.7.49, creator-teardown 2.7.49 (2026-11-13)
 - The timeline works like CapCut's. It runs the whole width of the window under the panels, the video and the notes, and a bar above it drags to make it taller or shorter.
 - One toolbar on top of the timeline: undo, redo, split, delete to the playhead (Q), delete from the playhead (W), delete, add Text, add Audio, add a Track, and the zoom on the right.

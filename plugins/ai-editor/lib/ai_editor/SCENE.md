@@ -70,7 +70,17 @@ is behind the letters (CSS text-shadow); on a picture, clip or shape it is behin
 
 - Every draft on the edit opens in the scene editor, by itself. There is no other editor and no switch. The cut stage
   and the stills sheet keep their own pages: they are not the edit. `/state`'s `scene` is true on the edit.
-- scene.json is made on the first ask and never over one that is there.
+- scene.json is made on the first ask. When a new rendered draft comes in (not `round --scene`), it is made again from
+  that draft, so everything the draft has is on the timeline, and the user's changes on the old one are carried over
+  (`review.py scene_new_draft`, `scene.carry`): `.scene/scene.base.json` is the scene as the old draft was built, and
+  every field the user changed, item they added or item they deleted goes onto the new one, unless the new draft changed
+  that same field (then Claude was asked). Items are matched by kind, file or words and the nearest start, not by id.
+  `built` names the draft a scene was made for; `carried` says how many changes came over. A scene from before 2.7.50
+  is kept as it is, unless it is only the old draft's MP4.
+- More menu, Duplicate this timeline: `POST /scene/duplicate {alt}` copies the scene on screen, hand edits and all, into
+  a new version "<name> copy" with the same video, transcript and plan (`review.py scene_duplicate`).
+- A speed change on a video or audio clip keeps its footage: the clip gets shorter or longer (and its keyframes); on the
+  main footage everything after it moves and the captions over it are retimed (review-scene.js `scSpeed`).
 - A cooked. plan draft goes through `scene.from_plan` (with texts.json, overrides.json and sounds.json laid on) when its
   video is that plan's render (`review.py plan_draft`): render.stamp.json matches, or render.plan.json is plan.json, and
   the draft is that render (or render.cut.mp4); or the round came from render.mp4 (review.json `src`). A render that
