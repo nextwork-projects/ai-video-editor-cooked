@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.52, creator-teardown 2.7.52 (2026-11-13)
+- A new video no longer lands on a Claude that is still working on another one. Before, a Claude in the middle of a render or a long round looked free after 15 minutes, so it took the next new video too and both projects clogged one session. Now anything written in an edit in the last hour counts as busy, and the new video gets a Claude of its own.
+
 ## ai-editor 2.7.51, creator-teardown 2.7.51 (2026-11-13)
 - A video clip's sound wave fills the clip, centred, until its frames are ready (or when there are none). Before, it sat in a thin strip at the bottom under an empty band.
 - Sound waves draw on a loudness scale like CapCut's, so speech fills the clip instead of a thin line.

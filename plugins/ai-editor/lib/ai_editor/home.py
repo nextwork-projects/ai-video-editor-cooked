@@ -1828,9 +1828,31 @@ def claude_unless_idle(jid):
         return claude_for(jid)
 
 
+WORK_S = 3600   # any file in an edit written this recently: its Claude is still on it (a render, a plan, a round)
+
+
+def edit_touched(e):
+    """Seconds since anything in an edit was last written: its own files, review/ and the render folders. A render or a
+    long round writes files for many minutes without touching review/.claude."""
+    newest = 0.0
+    for d in (e, e / "review", e / ".render", e / "stills"):
+        try:
+            with os.scandir(d) as it:
+                for x in it:
+                    try:
+                        newest = max(newest, x.stat().st_mtime)
+                    except OSError:
+                        pass
+        except OSError:
+            pass
+    return time.time() - newest if newest else float("inf")
+
+
 def editing(j):
     """A video whose cut is done but whose edit is not finished, with its Claude still on it: the editor's `wait`
-    listening (review/.listening) or Claude working there (review/.claude) in the last STALE_S."""
+    listening (review/.listening) in the last 30 s, Claude working there (review/.claude) in the last STALE_S, or any
+    file of the edit written in the last WORK_S. Before 2.7.52 a render or a long round (no .claude touch for 15 min)
+    looked idle, so the session's home `wait` took the next new video too and two projects clogged one Claude."""
     try:
         e = Path(j["args"]["edit"])
         if library.status(library._review(e)) == "done":
@@ -1842,6 +1864,7 @@ def editing(j):
                     return True
             except OSError:
                 pass
+        return edit_touched(e) < WORK_S
     except (KeyError, TypeError, OSError, ValueError):
         pass
     return False
@@ -3191,6 +3214,20 @@ def demo():
     import atexit
     atexit.register(lambda: [p.terminate() for p in _spawned])   # a failed check leaves no review server behind
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")
+    # a Claude mid-render is still busy: an old review/.claude but a render file written a minute ago (two projects
+    # used to land in one Claude); nothing written for 2 hours, it is free for the next video
+    ed = tmp / "render-busy-check"
+    (ed / "review").mkdir(parents=True)
+    (ed / "review" / ".claude").touch()
+    os.utime(ed / "review" / ".claude", (time.time() - 1800,) * 2)
+    (ed / "render.mp4").write_bytes(b"x")
+    real_status, library.status = library.status, lambda *a, **k: "editing"
+    jb = {"args": {"edit": str(ed)}}
+    assert editing(jb), "a render written a minute ago keeps its Claude busy"
+    for f in (ed / "render.mp4", ed / "review" / ".claude", ed / "review", ed):
+        os.utime(f, (time.time() - 7200,) * 2)
+    assert not editing(jb), "two hours of nothing: free for the next video"
+    library.status = real_status
     # head_start (the early transcription when a clip is added) runs to the end: transcribe --pre, no NameError
     import run as _run
     ran, real_run, real_vp = [], subprocess.run, _run.venv_python
@@ -3611,7 +3648,13 @@ def demo():
     assert busy_with(read(), "sess-A")["args"]["edit"] == str(be)
     assert takeable(dict(jxj, reserved=0, args=dict(jxj["args"], sample=1)), "sess-A", read()), "the sample: the first Claude's"
     (be / "review" / ".listening").unlink()
-    assert busy_with(read(), "sess-A") is None, "its edit left: free again"
+    assert busy_with(read(), "sess-A"), "its edit written a moment ago (a render, a round): still busy"
+    for j in read()["jobs"]:   # an hour later: nothing in A's edits written since
+        if j.get("owner") == "sess-A" and j["type"] == "video":
+            e = Path(j["args"]["edit"])
+            for f in [e, *(x for d in (e, e / "review", e / ".render", e / "stills") if d.is_dir() for x in d.iterdir())]:
+                os.utime(f, (time.time() - WORK_S - 60,) * 2)
+    assert busy_with(read(), "sess-A") is None, "its edit left an hour ago: free again"
     update(lambda d: next(j for j in d["jobs"] if j["id"] == ja["id"]).update(state="taken"))
     update(lambda d: next(j for j in d["jobs"] if j["id"] == jx).update(state="done"))
     opened.clear()
