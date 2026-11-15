@@ -888,6 +888,23 @@ video.ex{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opaci
 .clipsum>.ul{white-space:nowrap;flex-shrink:0;margin-left:auto}.clipsum>div{flex:1}
 .clipsum .th{width:38px;height:68px;border-radius:6px;background:#45403C center/cover;flex-shrink:0}
 .pfoot{position:sticky;bottom:0;margin:auto -40px 0;padding:18px 40px 24px;border-top:1px solid var(--line);background:var(--page);display:flex;align-items:center;justify-content:space-between;gap:16px;z-index:3}
+/* Pick a style with a skill tree (skilltree.py): Format, Cut, Look, Visuals, each a row of real stills */
+.tsteps{display:flex;gap:8px;padding:8px;border-radius:12px;background:var(--card)}
+.tst{flex:1;min-width:0;display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:8px;border:0;background:none;text-align:left;color:var(--t3);cursor:pointer}
+.tst:disabled{cursor:default}
+.tst i{font-style:normal;width:24px;height:24px;border-radius:12px;display:grid;place-items:center;border:1.5px solid var(--ring);font-size:12px;flex-shrink:0}
+.tst span{display:flex;flex-direction:column;min-width:0}.tst b{font-size:14px;font-weight:600;color:var(--t2)}.tst em{font-style:normal;font-size:12px;line-height:16px}
+.tst.cur{background:var(--panel)}.tst.cur i{background:var(--ink);color:var(--onink);border-color:var(--ink)}.tst.cur b{color:var(--ink)}
+.trows{display:flex;flex-direction:column;gap:10px}
+.trow{position:relative;display:flex;gap:20px;align-items:center;padding:12px 56px 12px 16px;border-radius:12px;background:var(--card);border:2px solid transparent;text-align:left;color:var(--ink);cursor:pointer;min-height:64px}
+.trow:hover{border-color:var(--ring)}.trow.on{border-color:var(--ink)}
+.trow .rd{top:50%;margin-top:-12px}
+.trow .tm{width:260px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;min-width:0}
+.trow .tm b{font-size:15px;line-height:20px;font-weight:600}.trow .tm span{font-size:13px;line-height:18px;color:var(--t2)}.trow .tm em{font-style:normal;font-size:12px;color:var(--t3);margin-top:2px}
+.tshots{display:flex;gap:10px;min-width:0;overflow:hidden}
+.tshots img{height:200px;width:auto;border-radius:8px;background:#2A2726;display:block;flex:none}
+.tshots img.w{height:150px}
+@media (max-width:760px){.trow{flex-direction:column;align-items:stretch}.trow .tm{width:auto}.tshots img{height:150px}.tsteps{flex-wrap:wrap}.tst{flex-basis:45%}}
 /* a style's page */
 .spg{display:flex;gap:40px;align-items:flex-start;min-width:0}
 .spl{width:250px;flex-shrink:0;display:flex;flex-direction:column;gap:16px;position:sticky;top:0}
@@ -2001,7 +2018,47 @@ function pickCard(c,i){
   return `<button class="pc ${on?'on':''}" id="sc-${esc(c.id)}" role="radio" aria-checked="${on}" ${vhovAttrs(c)} onclick="nv.style=${J(c.id)};nv.picked=1;render()"><span class="pic" style="${bgPic(pic)}">${exVid(c,pic)}</span>
     <span class="tx"><span class="ttl"><span class="nm1">${esc(dname(c))}</span>${chip?`<span class="tagc">${chip}</span>`:''}</span><span class="t2">${esc(c.studying?'Being analysed now. The cut starts first.':origin(c))}</span>${f?`<span class="pf">${ic(f[0])}${esc(f[2])}</span>`:''}</span><span class="rd ${on?'on':''}"></span></button>`;
 }
+// Pick a style with a skill tree in the library (skilltree.py): Format, Cut, Look, Visuals, each already set
+const TS=['Format','Cut','Look','Visuals'];
+function tf(){const T=L.tree,a=aspectOf();let f=T.formats.find(x=>x.id===nv.tf);
+  if(!f){f=T.formats.find(x=>x.aspect===a&&x.kind!=='recipe')||T.formats[0];nv.tf=f.id;nv.tcut=null;nv.tlook=null;nv.tvis=null}
+  return f}
+const tdef=f=>{const x=L.tree.auto[aspectOf()];return f.look_auto&&f.looks.includes(x)?x:f.look};   // auto-by-aspect: the clip's shape
+const tlookOf=f=>nv.tlook&&f.looks.includes(nv.tlook)?nv.tlook:tdef(f);
+const tpick=f=>f.kind==='recipe'?{format:f.id}:{format:f.id,cut:nv.tcut||f.cut,look:tlookOf(f),visuals:nv.tvis||f.visual};
+const tname=(k,v)=>{const T=L.tree;return k==='cut'?(v[0].toUpperCase()+v.slice(1)).replace(/-/g,' '):((k==='look'?T.looks:T.visuals)[v]||{}).label||v};
+const up1=t=>t?t[0].toUpperCase()+t.slice(1):'';
+function trow(on,name,what,note,shots,click,wide){
+  return `<button class="trow ${on?'on':''}" aria-pressed="${on}" onclick="${click}"><span class="rd ${on?'on':''}"></span><div class="tm"><b>${esc(name)}</b>${what?`<span>${esc(up1(what))}</span>`:''}${note?`<em>${esc(note)}</em>`:''}</div>${shots&&shots.length?`<div class="tshots">${shots.slice(0,3).map(u=>`<img class="${wide?'w':''}" src="${esc(u)}" alt="" loading="lazy">`).join('')}</div>`:''}</button>`}
+function vSteps(){
+  const T=L.tree,f=tf(),P=tpick(f),rec=f.kind==='recipe',a=aspectOf(),st=rec?0:(nv.tstep||0);
+  const val=[f.label,rec?'Set by the format':tname('cut',P.cut),rec?'Set by the format':tname('look',P.look),rec?'Set by the format':tname('visuals',P.visuals)];
+  const steps=`<div class="tsteps">${TS.map((n,i)=>`<button class="tst ${i===st?'cur':''}" ${rec&&i?'disabled':''} onclick="nv.tstep=${i};render()"><i>${i+1}</i><span><b>${n}</b><em>${esc(val[i])}</em></span></button>`).join('')}</div>`;
+  let head,rows;
+  if(st===0){const mine=T.formats.filter(x=>x.aspect===a),other=T.formats.filter(x=>x.aspect!==a),all=nv.tall||!mine.length;
+    head=['What are you making?',`Formats for ${a==='9:16'?'tall':'wide'} clips`];
+    rows=(all?[...mine,...other]:mine).map(x=>trow(x.id===f.id,x.label,x.kind==='recipe'?'One pick. It sets the cut, look and visuals.':'Then pick the cut, look and visuals.',x.aspect!==a?x.aspect:'',x.examples,`nv.tf=${J(x.id)};nv.tcut=null;nv.tlook=null;nv.tvis=null;render()`,x.aspect==='16:9')).join('')
+      +(other.length&&!all?`<button class="ul" style="align-self:flex-start" onclick="nv.tall=1;render()">Show ${other.length} ${a==='9:16'?'wide':'tall'} formats</button>`:'')}
+  else if(st===1){head=['Pick a cut','Already set to the default. Skip to keep it.'];
+    rows=Object.keys(T.cuts).filter(c=>!['skit','long-form-repair'].includes(c)||c===f.cut).map(c=>trow(c===P.cut,tname('cut',c),T.cuts[c],c===f.cut?'Default for this format':'',null,`nv.tcut=${J(c)};render()`)).join('')}
+  else if(st===2){head=['Pick a look','Already set to the default. Skip to keep it.'];
+    rows=f.looks.map(k=>{const l=T.looks[k];return trow(k===P.look,l.label,l.what,k===tdef(f)?(f.look_auto?`Default for ${a==='9:16'?'tall':'wide'} clips`:'Default for this format'):'',l.examples,`nv.tlook=${J(k)};render()`)}).join('')}
+  else{head=['Pick the visuals','Already set to the default. Skip to keep it.'];
+    rows=f.visuals.map(k=>{const v=T.visuals[k];return trow(k===P.visuals,v.label,v.what,k===f.visual?'Default for this format':'',v.examples,`nv.tvis=${J(k)};render()`,true)}).join('')}
+  const n=nv.sel.length,c0=clipOf(nv.sel[0]);
+  const next=rec||st===3?'':`<button class="b2" onclick="nv.tstep=${st+1};render()">Next: ${TS[st+1].toLowerCase()}</button>`;
+  return `<div class="pgc" style="min-height:100%"><div class="row" style="justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div class="ph"><button class="back" style="text-decoration:none" onclick="rgo('new')">${ic('back',14,2)}New video · step 2 of 2</button><h1>Pick a style</h1></div>
+      <div class="clipsum"><span class="th" style="background-image:url('${esc(c0.thumb||'')}')"></span><div style="min-width:0"><div class="t1" style="font-weight:600">${n>1?`${n} clips, ${nv.join?'joined':'separate'}`:esc(c0.name)}</div><div class="t2">${n} clip${n>1?'s':''}${total()?' · '+fmtT(Math.round(total())):''} · ${a==='9:16'?'Tall':'Wide'} ${a}</div></div><button class="ul" onclick="rgo('new')">Change</button></div></div>
+    ${steps}
+    <div class="sec2"><div class="sh"><b>${head[0]}</b><span class="t2" style="font-size:13px">${head[1]}</span></div><div class="trows">${rows}</div></div>
+    <div class="pfoot"><div style="min-width:0"><div class="t1" style="font-weight:600">${esc(rec?f.label:[f.label,tname('cut',P.cut)+' cut',tname('look',P.look),tname('visuals',P.visuals)].join(' · '))}</div>
+      <div class="t2 calls" style="margin:4px 0 6px">Runs <span>Cut</span> → <span>/${esc(rec?f.skill:P.look)}</span>${rec?'':` → <span>${esc(tname('visuals',P.visuals))}</span>`}</div>
+      <div class="t2" style="white-space:normal">First the cut. The style starts after you approve it.${S.new_claude?` ${n>1&&!nv.join?'Each video gets':'It gets'} its own Claude in a new Terminal window.`:''}</div>${S.listening||S.new_claude?'':`<div class="t2" style="white-space:normal;margin-top:10px">${connectHTML('Claude is not listening.')}</div>`}</div>
+      <div class="row" style="gap:10px;flex-shrink:0">${next}<button class="b1" id="make" onclick="makeVideo()">Make my video</button></div></div></div>`;
+}
 function vStyle(){
+  if(nv.sel.length&&L&&L.tree&&L.tree.formats.length)return vSteps();
   if(!nv.sel.length)return `<div class="col grow"><div class="empty">Pick your clips first.</div><button class="b1" style="align-self:flex-start" onclick="rgo('new')">Pick clips</button></div>`;
   const cards=(L?L.styles:[]),k=latest('skill'),idx=c=>cards.indexOf(c);
   if(!nv.picked&&k&&k.state==='done'&&Date.now()/1000-(k.finished||0)<86400&&cards.some(c=>c.id==='@'+k.args.handle))nv.style='@'+k.args.handle;   // the style just built
@@ -2020,7 +2077,7 @@ async function makeVideo(){
   if(busyUp()){toast('Adding your files first...');const b=$('#make');if(b)b.disabled=true;await stageQ;if(b)b.disabled=false}
   const assets=nv.assets.filter(a=>a.kind==='link'||a.path).map(a=>a.kind==='link'?{url:a.url,say:a.say}:{file:a.path,name:a.name,say:a.say});
   const r=await queue({type:'video',paths:nv.sel,join:nv.join,as:nv.style,aspect:aspectOf(),script:nv.script,assets,
-    broll:nv.brollAuto?[]:nv.broll,broll_auto:nv.brollAuto&&!!(BR.libraries||[]).length,broll_clips:nv.bclips.filter(c=>c.path).map(c=>c.path),note:nv.note,...(nv.reel?{mode:'broll-reel'}:{})});
+    broll:nv.brollAuto?[]:nv.broll,broll_auto:nv.brollAuto&&!!(BR.libraries||[]).length,broll_clips:nv.bclips.filter(c=>c.path).map(c=>c.path),note:nv.note,...(L&&L.tree&&L.tree.formats.length&&!nv.reel?{tree:tpick(tf())}:{}),...(nv.reel?{mode:'broll-reel'}:{})});
   if(!r._ok)return;nv.sel=[];nv.script='';nv.scriptName='';nv.assets=[];nv.assetMsg='';nv.bclips=[];nv.bmsg='';nv.bpick=null;nv.note='';nv.brollAll=false;nv.brollQ='';nv.reel=null;
   toEditor(r);
 }

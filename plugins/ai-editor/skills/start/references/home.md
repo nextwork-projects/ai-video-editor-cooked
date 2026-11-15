@@ -167,7 +167,7 @@ Five prompts, each one the user can paste into Claude Code as it is. Every numbe
 
 ### `JOB video <path> as=<mine|@handle|defaults> aspect=<9:16|16:9> edit=<dir> root=<dir>`
 ### `JOB video takes=<dir>/takes.txt as=... aspect=... edit=<dir> root=<dir>`
-### either one with ` script=<edit>/script.md`, ` skill=<skill>`, ` chain=<steps>`, ` sample=1`, ` assets=<edit>/assets.json`, ` broll=<edit>/broll.json`, ` instructions=<edit>/instructions.md` and/or ` mode=broll-reel` before `root=`
+### either one with ` script=<edit>/script.md`, ` skill=<skill>`, ` format=<id> cut=<preset> look=<skill> visuals=<id>`, ` chain=<steps>`, ` sample=1`, ` assets=<edit>/assets.json`, ` broll=<edit>/broll.json`, ` instructions=<edit>/instructions.md` and/or ` mode=broll-reel` before `root=`
 
 The user picked clips and a style and pressed "Make my video" (or "Start the cut" on a first run).
 `edit=` is the edit folder the page already made and listed in the library: use it, never make
@@ -187,6 +187,7 @@ The clip's transcription started when the user added it on New video (before Mak
 there if the path is elsewhere). Pass `--script <edit>/script.md` to `transcribe.py`; the cut then runs
 `script_match.py` before deciding spans (cut skill step 2).
 `skill=`: a skill style (its `style.json` has `"skill"`), see Skill style below.
+`format=`: the user picked from the library's skill tree (`skill-tree.json`, Pick a style's four steps), see Skill tree below.
 `chain=`: the style page's "What runs" when it is not the default. With no `chain=`, run logo-pack as usual (after
 the cut's approve, before the edit, when the video names two or more products). `chain=none`: never run
 logo-pack on this video. `chain=logo-pack,motion` or `chain=motion` (a skill style only): see Skill style below.
@@ -264,6 +265,19 @@ python3 "$SE/plan.py" <edit>/style.json <edit>/captions.json --aspect 9:16 && py
 4. Then `python3 "$SE/edit.py" render <edit>` on the laptop, then
    `python3 "$R" <edit> round --stage edit --video <edit>/render.mp4` and `wait`. Say in one line that the
    sample is done and they can drop their own clip on Home next.
+
+#### Skill tree
+
+The library has a `skill-tree.json` (the user's own edit skills: formats, cuts, looks, visuals; `lib/ai_editor/skilltree.py`)
+and the user picked from it. `skill=` is the skill that makes the edit; run it as a Skill style (below). Read the format in
+the tree for its rules (`rules`, `example`). A recipe format (`format=` with no `cut=`) is that one skill end to end: it
+sets its own cut, look and visuals. An open format names the rest:
+- `cut=`: the tree's `cuts.presets` entry, run by the tree's cut skill (`cuts.skill`) on the raw take before the look skill;
+  the cut page's approve as usual. `none` keeps the take whole apart from its start and end.
+- `look=`: the skill that makes the edit (the same as `skill=`).
+- `visuals=`: tell the look skill which visuals to use on its beats. `real-captures` is real screenshots and clips; any other
+  value is a skill (run it for the visuals and hand its clips to the look skill, as the chain's motion step does).
+Never ask the user to pick again: the page asked.
 
 #### Skill style
 
