@@ -140,7 +140,7 @@ main{flex:1;min-height:0;display:flex}
 body.canCompare #cmprow{display:flex}
 #cmprow .hint{display:flex;align-items:center;gap:12px;color:var(--muted)}
 #cmprow .lead{display:flex;align-items:center;gap:12px;min-width:0}
-body.hasVer #cmprow{display:flex}body:not(.canCompare) #wc,body:not(.canCompare) #cmprow .hint{display:none}
+body:not(.canCompare) #wc,body:not(.canCompare) #cmprow .hint{display:none}
 #ver2{border:1px solid var(--line2);background:var(--panel);border-radius:8px;height:32px;padding:0 8px;font-size:13px}
 .stagewrap{flex:1;min-height:0;display:flex;flex-direction:column;gap:16px}
 #stage{flex:1;min-height:0;display:flex;gap:20px;container-type:size}
@@ -275,15 +275,16 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 #time{display:flex;align-items:baseline;gap:4px;padding-left:8px;font-size:14px;line-height:18px;white-space:nowrap}
 #time b{font-weight:600;color:var(--strong)}#time span{color:var(--muted)}
 .grow{flex:1;display:flex;justify-content:center;min-width:0}
-/* the versions of this draft: one dropdown, so long names never squeeze the player bar */
 #safebtn{display:none}body.vertical #safebtn{display:inline-flex}
-.vsel{min-width:0;max-width:100%}.vsel[hidden]{display:none}
-#vbtn{display:inline-flex;align-items:center;gap:8px;height:32px;max-width:280px;padding:0 10px 0 12px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--strong);font-size:13px;line-height:16px}#vbtn:hover,#vbtn[aria-expanded=true]{border-color:var(--ink)}
-#vbtn span{color:var(--muted);font-size:12px;flex-shrink:0}#vbtn b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#vbtn svg{flex-shrink:0;color:var(--muted)}
-#vmenu{position:fixed;z-index:60;width:340px;max-width:calc(100vw - 32px);overflow-y:auto;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);box-shadow:var(--pop)}#vmenu[hidden]{display:none}
-#vmenu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:40px;padding:8px 12px;border-radius:8px;font-size:14px;line-height:18px;text-align:left;color:var(--ink)}#vmenu button:hover,#vmenu button:focus-visible{background:var(--hover);outline:none}
-#vmenu button.on{background:var(--railon);font-weight:600}#vmenu button:disabled{color:var(--quiet);background:none;cursor:default}#vmenu button svg{flex-shrink:0}
-#vmenu .vgrp{padding:12px 12px 6px;font-size:12px;line-height:16px;color:var(--muted)}
+/* the versions of this draft (main, each trial reel): a tab each above the timeline, every one its own scene and timeline.
+   The row scrolls sideways, so no name is ever cut short */
+.vsel[hidden],#vtabbar[hidden]{display:none}
+#vtabbar{display:flex;align-items:flex-end;gap:4px;height:40px;flex-shrink:0;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line);margin:0 -12px;padding:0 12px}#vtabbar::-webkit-scrollbar{display:none}
+#vtabbar button{height:40px;padding:0 12px;border-bottom:2px solid transparent;font-size:13px;line-height:16px;font-weight:500;color:var(--muted);white-space:nowrap;flex-shrink:0}
+#vtabbar button:hover{color:var(--ink)}#vtabbar button:focus-visible{outline:none;color:var(--ink);background:var(--hover);border-radius:6px 6px 0 0}
+#vtabbar button[aria-selected=true]{color:var(--strong);font-weight:600;border-bottom-color:var(--strong)}
+#vtabbar button:disabled{color:var(--quiet);cursor:default}
+#vtabbar i{align-self:center;width:1px;height:16px;margin:0 6px;background:var(--line2);flex-shrink:0}
 
 body.asidex #rszside{display:none}
 body.edro .eitem{pointer-events:none}body.edro .ehd button{display:none}
@@ -930,7 +931,7 @@ body.making #making{display:flex}
  <div class="stagewrap">
  <div id="stagebar" role="status"><svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="4" cy="4.5" r="2.2"/><circle cx="4" cy="11.5" r="2.2"/><path d="M5.8 5.6L14 11.5M5.8 10.4L14 4.5"/></svg><span id="stagetext"></span></div>
  <div id="intro" role="note"><span>Your first videos teach it your style. Leave notes on anything that is off. Each video comes out closer.</span><button id="introx">Got it</button></div>
- <div id="cmprow"><div class="lead"><div class="seg" id="wc"><button data-m="watch">Watch</button><button data-m="compare">Compare</button></div><div class="vsel" id="vtabs" hidden><button id="vbtn" type="button" aria-haspopup="listbox" aria-expanded="false"><span>Version</span><b id="vcur"></b><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button><select id="vsel" hidden aria-label="which version plays"></select></div></div>
+ <div id="cmprow"><div class="lead"><div class="seg" id="wc"><button data-m="watch">Watch</button><button data-m="compare">Compare</button></div><div class="vsel" id="vtabs" hidden><select id="vsel" hidden aria-label="which version plays"></select></div></div>
   <div class="hint"><select id="ver2" aria-label="compare with"></select></div></div>
  <div id="stage">
   <div id="pair">
@@ -955,6 +956,7 @@ body.making #making{display:flex}
   <button class="tbtn" id="full" title="f">Full screen</button>
  </div>
  <div class="timeline" id="timeline">
+  <div id="vtabbar" role="tablist" aria-label="versions" hidden></div>
   <div class="tzoom" role="group" aria-label="timeline zoom"><button data-tz="-" title="Zoom out (⌘-)" aria-label="zoom out">−</button><input type="range" id="tzr" min="0" max="100" step="any" value="0" aria-label="timeline zoom"><button data-tz="+" title="Zoom in (⌘=)" aria-label="zoom in">+</button><button data-tz="fit" class="tfit" title="Show the whole video (shift z)">Fit</button></div>
   <div id="tscroll"><div id="tinner">
   <div class="trow"><span class="tl"></span><div id="pins"></div></div>
@@ -1244,10 +1246,15 @@ function renderCaps(){
 function renderVer(){
   const r=viewRound(),alts=r.alts||[];
   const tr=alts.filter(a=>a.trial),todo=isCur()?trMaking().filter(n=>!tr.some(a=>a.name===n)):[];
-  $('vtabs').hidden=!alts.length&&!todo.length;document.body.classList.toggle('hasVer',!$('vtabs').hidden);
-  if(!$('vtabs').hidden){const o=x=>`<option value="${esc(x)}"${x===alt?' selected':''}>${esc(trLab(x))}</option>`;
-    const h=['',...alts.filter(a=>!a.trial).map(a=>a.name)].map(o).join('')+(tr.length||todo.length?`<optgroup label="Trial reels">${tr.map(a=>o(a.name)).join('')}${todo.map(n=>`<option disabled>${esc(trLab(n))} (making)</option>`).join('')}</optgroup>`:'');
-    const sel=$('vsel');if(sel._h!==h){sel._h=h;sel.innerHTML=h}sel.value=alt;$('vcur').textContent=sel.selectedOptions[0]?sel.selectedOptions[0].textContent:''}
+  $('vtabs').hidden=$('vtabbar').hidden=!alts.length&&!todo.length;
+  if(!$('vtabs').hidden){const o=x=>`<option value="${esc(x)}"${x===alt?' selected':''}>${esc(trLab(x))}</option>`,mains=['',...alts.filter(a=>!a.trial).map(a=>a.name)];
+    const h=mains.map(o).join('')+(tr.length||todo.length?`<optgroup label="Trial reels">${tr.map(a=>o(a.name)).join('')}${todo.map(n=>`<option disabled>${esc(trLab(n))} (making)</option>`).join('')}</optgroup>`:'');
+    const sel=$('vsel');if(sel._h!==h){sel._h=h;sel.innerHTML=h}sel.value=alt;
+    // the same list as tabs: main and its copies, a divider, then the trial reels (one being made shows, greyed)
+    const t=x=>`<button type="button" role="tab" data-v="${esc(x)}" aria-selected="${x===alt}" tabindex="${x===alt?0:-1}">${esc(trLab(x))}</button>`;
+    const th=mains.map(t).join('')+(tr.length||todo.length?'<i></i>'+tr.map(a=>t(a.name)).join('')+todo.map(n=>`<button type="button" role="tab" disabled>${esc(trLab(n))} (making)</button>`).join(''):'');
+    const bar=$('vtabbar');if(bar._h!==th){const f=bar.contains(document.activeElement),on=()=>bar.querySelector('[aria-selected=true]');bar._h=th;bar.innerHTML=th;on()?.scrollIntoView({block:'nearest',inline:'nearest'});if(f)on()?.focus()}
+    if(bar.parentElement.firstElementChild!==bar)bar.parentElement.prepend(bar)}   // above the timeline's tools
   const opts=cmpOptions();
   $('ver2').innerHTML=opts.map((o,i)=>`<option value="${i}"${cmp&&o.k===cmp.k&&o.alt===cmp.alt?' selected':''}>${esc(o.label)}</option>`).join('');
   $('ver2').style.display=cmp&&opts.length>1?'':'none';
@@ -2054,7 +2061,7 @@ function trialsHtml(){
     const have=new Set((S.alts||[]).filter(a=>a.trial).map(a=>a.name)),vs=t.picks.versions;
     return h+`<div class="tr"><div class="trh">${vs.every((v,i)=>have.has('t'+(i+1)))?'Your '+plural(vs.length,'trial reel'):'Making '+plural(vs.length,'trial reel')}</div><div class="trrows">${vs.map((v,i)=>{const n='t'+(i+1),ok=have.has(n);
       return `<div class="trr"><b>${n}</b><div>${esc(kindLab(v.kinds))}${v.line?`<small>${esc(v.line)}</small>`:''}</div><em class="${ok?'ok':''}">${ok?'Ready':'Making'}</em></div>`}).join('')}</div>
-      <p class="empty2">Each one lands in the Version menu above the video as it renders.</p></div>`
+      <p class="empty2">Each one gets its own tab above the timeline as it renders.</p></div>`
       +trNotesHtml(vs.length);
   }
   const off=!isCur()||t.handled===false;
@@ -2532,19 +2539,11 @@ $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscru
 $('scdup').onclick=async()=>{$('moremenu').hidePopover?.();const r=await post('/scene/duplicate',{alt:alt||''});if(!r.ok)return toast(r.error||'That did not copy.');
   await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}toast(`Copied to "${r.name}". Your changes here leave the original as it was.`)};
 $('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
-// the version menu: the app's own list, built from the select (renderMeta fills that), roomy rows, opens up when it has no room below
-{const M=document.createElement('div'),B=$('vbtn');M.id='vmenu';M.hidden=true;M.setAttribute('role','listbox');document.body.append(M);
-  const TK='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>';
-  const row=o=>`<button type="button" role="option" data-v="${esc(o.value)}"${o.disabled?' disabled':''}${o.selected?' class="on" aria-selected="true"':''}>${esc(o.textContent)}${o.selected?TK:''}</button>`;
-  const close=()=>{M.hidden=true;B.setAttribute('aria-expanded','false')};
-  B.onclick=()=>{if(!M.hidden)return close();
-    M.innerHTML=[...$('vsel').children].map(x=>x.tagName==='OPTGROUP'?`<div class="vgrp">${esc(x.label)}</div>${[...x.children].map(row).join('')}`:row(x)).join('');
-    M.hidden=false;B.setAttribute('aria-expanded','true');const r=B.getBoundingClientRect(),up=innerHeight-r.bottom<Math.min(M.scrollHeight,320)&&r.top>innerHeight-r.bottom;
-    M.style.maxHeight=(up?r.top:innerHeight-r.bottom)-16+'px';M.style.left=Math.max(16,Math.min(r.left,innerWidth-M.offsetWidth-16))+'px';M.style.top=(up?r.top-M.offsetHeight-6:r.bottom+6)+'px';(M.querySelector('.on')||M.querySelector('button:not(:disabled)'))?.focus()};
-  M.onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;close();const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'));B.focus()};
-  M.onkeydown=e=>{e.stopPropagation();const bs=[...M.querySelectorAll('button:not(:disabled)')],i=bs.indexOf(document.activeElement);
-    if(e.key==='Escape'){close();B.focus()}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();bs[(i+(e.key==='ArrowDown'?1:-1)+bs.length)%bs.length]?.focus()}};
-  document.addEventListener('pointerdown',e=>{if(!M.hidden&&!M.contains(e.target)&&!B.contains(e.target))close()},true)}
+// a version tab: that version's player and its own timeline (its scene), no reload. Arrow keys move along the tabs
+$('vtabbar').onclick=e=>{const b=e.target.closest('button[data-v]');if(!b||b.disabled||b.dataset.v===alt)return;const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'))};
+addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'||e.altKey||e.metaKey||e.ctrlKey||e.shiftKey||!$('vtabbar').contains(e.target))return;e.preventDefault();e.stopImmediatePropagation();   // window, capture: before the frame-step keys
+  const bs=[...$('vtabbar').querySelectorAll('button[data-v]')],i=bs.indexOf(document.activeElement),n=bs[(i+(e.key==='ArrowRight'?1:-1)+bs.length)%bs.length];
+  if(n){n.focus();n.click()}},true);
 $('safebtn').onclick=()=>{const on=!document.querySelector('.player').classList.contains('safe');
   document.querySelectorAll('.player').forEach(p=>p.classList.toggle('safe',on));$('safebtn').textContent=on?'Hide safe zone':'Safe zone';placeSafe()};
 // the box sits on the picture, not the element: in full screen the picture is letterboxed inside the screen
