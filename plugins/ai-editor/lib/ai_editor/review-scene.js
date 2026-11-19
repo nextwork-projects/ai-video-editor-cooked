@@ -310,7 +310,7 @@ SC.tl=function(){const E=$('edtracks');if(!SC.on||!SC.s)return;const T=TO()||scD
   L.push('<div class="ehd newl" data-row="sca"></div>');R.push('<div class="etrack newl" data-row="sca" data-new="audio">Drop here for a new track</div>');
   L.push('<div class="scadd"><button data-addtk="visual" title="Add a video track on top">+ Track</button><button data-addau="1" title="Add a song, a voice-over or any sound file at the playhead">+ Audio</button><button data-addit="text" title="Add a text at the playhead">+ Text</button><button data-addit="shape" title="Add a shape at the playhead">+ Shape</button></div>');
   const h=`<div class="edwrap"><div class="edleft">${L.join('')}</div><div class="edright"><div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(x=>`<span style="left:${x/T*100}%">${st<1?fmtx(x):fmt(x)}</span>`).join('')}${mainT?joins(mainT):''}</div>${R.join('')}<b class="eph" id="eph"></b><b class="esnap" id="esnap" hidden><i></i></b></div></div></div></div>`;
-  if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
+  if(E._h!==h){E._h=h;const sy=(E.querySelector('.edwrap')||{}).scrollTop||0;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);{const w=E.querySelector('.edwrap');if(w)w.scrollTop=sy}   /* a redraw keeps the rows where they were scrolled (waves arriving, playback, an edit) */
     // the keyframe lane never grows the timeline (the video would jump on a pick): the rows keep their height without it and scroll
     const wr=E.querySelector('.edwrap'),lh=[...E.querySelectorAll('.edleft .sckh')].reduce((a,x)=>a+x.offsetHeight+2,0);wr.style.height=lh?`calc(${Math.min(wr.scrollHeight-lh,innerHeight*.42)}px + var(--nl,0px))`:''}edPh()};
 // a track's buttons, Bring back on a join, + Track
