@@ -1,0 +1,14 @@
+{
+  "name": "cooked-desktop",
+  "productName": "cooked.",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Experimental desktop shell for cooked.: the home page and each video page in their own windows.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^39.0.0"
+  }
+}
