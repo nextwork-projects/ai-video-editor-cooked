@@ -283,7 +283,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 #vmenu{position:fixed;z-index:60;width:340px;max-width:calc(100vw - 32px);overflow-y:auto;padding:6px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);box-shadow:var(--pop)}#vmenu[hidden]{display:none}
 #vmenu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:40px;padding:8px 12px;border-radius:8px;font-size:14px;line-height:18px;text-align:left;color:var(--ink)}#vmenu button:hover,#vmenu button:focus-visible{background:var(--hover);outline:none}
 #vmenu button.on{background:var(--railon);font-weight:600}#vmenu button:disabled{color:var(--quiet);background:none;cursor:default}#vmenu button svg{flex-shrink:0}
-#vmenu .vgrp{padding:12px 12px 6px;font-size:12px;line-height:16px;color:var(--muted)}
+#vmenu .vsep{height:1px;margin:6px 4px;background:var(--line)}#vmenu button[data-act]{flex-direction:column;align-items:flex-start;gap:2px}#vmenu button[data-act] span{font-size:12px;color:var(--muted)}#vmenu .vgrp{padding:12px 12px 6px;font-size:12px;line-height:16px;color:var(--muted)}
 
 body.asidex #rszside{display:none}
 body.edro .eitem{pointer-events:none}body.edro .ehd button{display:none}
@@ -1244,7 +1244,8 @@ function renderCaps(){
 function renderVer(){
   const r=viewRound(),alts=r.alts||[];
   const tr=alts.filter(a=>a.trial),todo=isCur()?trMaking().filter(n=>!tr.some(a=>a.name===n)):[];
-  $('vtabs').hidden=!alts.length&&!todo.length;document.body.classList.toggle('hasVer',!$('vtabs').hidden);
+  $('vtabs').hidden=!alts.length&&!todo.length&&!(window.SC&&SC.on);   // on a timeline the menu is always there: it duplicates and makes trial reels
+ document.body.classList.toggle('hasVer',!$('vtabs').hidden);
   if(!$('vtabs').hidden){const o=x=>`<option value="${esc(x)}"${x===alt?' selected':''}>${esc(trLab(x))}</option>`;
     const h=['',...alts.filter(a=>!a.trial).map(a=>a.name)].map(o).join('')+(tr.length||todo.length?`<optgroup label="Trial reels">${tr.map(a=>o(a.name)).join('')}${todo.map(n=>`<option disabled>${esc(trLab(n))} (making)</option>`).join('')}</optgroup>`:'');
     const sel=$('vsel');if(sel._h!==h){sel._h=h;sel.innerHTML=h}sel.value=alt;$('vcur').textContent=sel.selectedOptions[0]?sel.selectedOptions[0].textContent:''}
@@ -2529,8 +2530,13 @@ $('fsscrub').addEventListener('pointerdown',e=>{fsDrag=true;$('fsscrub').setPoin
 $('fsscrub').addEventListener('pointermove',e=>{const h=$('fshover'),f=fsAt(e);h.style.display='block';h.style.left=f*100+'%';h.textContent=fmtx(f*D());if(fsDrag)v.currentTime=f*D()});
 $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscrub').addEventListener('pointerleave',()=>{if(!fsDrag)$('fshover').style.display='none'});
 // Duplicate this timeline (the more menu, on a scene): the version on screen copied with every hand edit, then opened
-$('scdup').onclick=async()=>{$('moremenu').hidePopover?.();const r=await post('/scene/duplicate',{alt:alt||''});if(!r.ok)return toast(r.error||'That did not copy.');
-  await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}toast(`Copied to "${r.name}". Your changes here leave the original as it was.`)};
+async function dupTimeline(trial){const r=await post('/scene/duplicate',{alt:alt||'',trial:!!trial});if(!r.ok)return toast(r.error||'That did not copy.');
+  await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}
+  if(!trial)return toast(`Copied to "${r.name}". Your changes here leave the original as it was.`);
+  // a trial reel: the copy is open; the note for Claude is written and waits for Send (edit it, or recut it by hand)
+  ta.value='Make this a trial reel: a new opening line, a new look and a new CTA. Keep the middle.';ta.dispatchEvent(new Event('input'));ta.focus();
+  toast(`"${r.name}" is a copy of this timeline. Recut it here, or send the note and Claude does it.`,6000)}
+$('scdup').onclick=()=>{$('moremenu').hidePopover?.();dupTimeline(false)};
 $('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
 // the version menu: the app's own list, built from the select (renderMeta fills that), roomy rows, opens up when it has no room below
 {const M=document.createElement('div'),B=$('vbtn');M.id='vmenu';M.hidden=true;M.setAttribute('role','listbox');document.body.append(M);
@@ -2538,10 +2544,11 @@ $('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.c
   const row=o=>`<button type="button" role="option" data-v="${esc(o.value)}"${o.disabled?' disabled':''}${o.selected?' class="on" aria-selected="true"':''}>${esc(o.textContent)}${o.selected?TK:''}</button>`;
   const close=()=>{M.hidden=true;B.setAttribute('aria-expanded','false')};
   B.onclick=()=>{if(!M.hidden)return close();
-    M.innerHTML=[...$('vsel').children].map(x=>x.tagName==='OPTGROUP'?`<div class="vgrp">${esc(x.label)}</div>${[...x.children].map(row).join('')}`:row(x)).join('');
+    M.innerHTML=[...$('vsel').children].map(x=>x.tagName==='OPTGROUP'?`<div class="vgrp">${esc(x.label)}</div>${[...x.children].map(row).join('')}`:row(x)).join('')
+      +(window.SC&&SC.on?`<div class="vsep"></div><button type="button" data-act="dup">Duplicate this timeline<span>Copy with your edits</span></button><button type="button" data-act="trial">New trial reel<span>A copy to recut for Trial Reels</span></button>`:'');
     M.hidden=false;B.setAttribute('aria-expanded','true');const r=B.getBoundingClientRect(),up=innerHeight-r.bottom<Math.min(M.scrollHeight,320)&&r.top>innerHeight-r.bottom;
     M.style.maxHeight=(up?r.top:innerHeight-r.bottom)-16+'px';M.style.left=Math.max(16,Math.min(r.left,innerWidth-M.offsetWidth-16))+'px';M.style.top=(up?r.top-M.offsetHeight-6:r.bottom+6)+'px';(M.querySelector('.on')||M.querySelector('button:not(:disabled)'))?.focus()};
-  M.onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;close();const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'));B.focus()};
+  M.onclick=e=>{const b=e.target.closest('button');if(!b||b.disabled)return;close();if(b.dataset.act)return dupTimeline(b.dataset.act==='trial');const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'));B.focus()};
   M.onkeydown=e=>{e.stopPropagation();const bs=[...M.querySelectorAll('button:not(:disabled)')],i=bs.indexOf(document.activeElement);
     if(e.key==='Escape'){close();B.focus()}else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();bs[(i+(e.key==='ArrowDown'?1:-1)+bs.length)%bs.length]?.focus()}};
   document.addEventListener('pointerdown',e=>{if(!M.hidden&&!M.contains(e.target)&&!B.contains(e.target))close()},true)}
