@@ -202,9 +202,9 @@ SC.draw=function(guides){if(!SC.on)return;guides=guides||SC.drag&&SC.gd;const t=
   const ed=o.querySelector('.sced');o.innerHTML=h;if(ed)o.appendChild(ed)};
 v.addEventListener('timeupdate',()=>{if(SC.on&&!SC.drag)SC.draw()});v.addEventListener('seeked',()=>{if(SC.on&&!SC.drag){SC.draw();SC.insp();SC.cutsCur()}});
 // ---- one change: made on a copy (fn), shown at once, sent as the ops between the two
-SC.commit=async function(before,what){const after=scCopy(SC.s),ops=scDiff(before,after);if(!ops.length)return;SC.busy++;
+SC.commit=async function(before,what){const after=scCopy(SC.s),ops=scDiff(before,after);if(!ops.length)return;SC.busy++;let ok=false;
   try{const r=await post('/scene/ops',{ops,alt});if(!r.ok)throw new Error(r.error||'That did not save.');
-    edPush(what,()=>SC.send(scDiff(after,before)),()=>SC.send(scDiff(before,after)));if(r.scene&&!SC.drag)SC.s=r.scene}catch(e){toast(e.message);SC.s=before}finally{SC.busy--}SC.show()};
+    edPush(what,()=>SC.send(scDiff(after,before)),()=>SC.send(scDiff(before,after)));if(r.scene&&!SC.drag)SC.s=r.scene;ok=true}catch(e){toast(e.message);SC.s=before}finally{SC.busy--}SC.show();return ok};
 SC.send=async ops=>{const r=await post('/scene/ops',{ops,alt});JQ.length=0;if(r.scene)SC.s=r.scene;SC.show()};
 SC.change=function(what,fn){const b=scCopy(SC.s);fn(SC.s);SC.show();return SC.commit(b,what)};
 const scId=p=>p+Math.random().toString(36).slice(2,8);
@@ -713,7 +713,7 @@ $('railinsp').onclick=()=>{if(scPcol())return scProps(SC.noprops);if(SC.noside||
 .scaddt{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:44px;border-radius:10px;border:0;background:var(--strong);color:var(--panel);font-size:14px;font-weight:600;cursor:pointer}.scaddt:hover{opacity:.88}.scaddt svg{width:16px;height:16px}
 .sctl{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .sctlk{display:grid;grid-template-rows:1fr auto;place-items:center;gap:4px;height:100px;padding:10px 6px 7px;border:0;border-radius:10px;background:#2C2C2E;cursor:grab;outline:1.5px solid transparent;outline-offset:-1.5px;min-width:0}
-.sctlk:hover{outline-color:var(--line2)}.sctlk:active{cursor:grabbing}.sctlk em{font-style:normal;font-size:12px;line-height:16px;color:rgba(255,255,255,.75)}
+.sctlk:hover{outline-color:var(--line2)}.sctlk.on{outline-color:#FFFFFF}.sctlk:active{cursor:grabbing}.sctlk em{font-style:normal;font-size:12px;line-height:16px;color:rgba(255,255,255,.75)}
 .sctlw{max-width:100%;overflow:hidden;text-align:center;line-height:1.25}.sctlw span{white-space:pre}
 .sced .scedtip{position:absolute;left:50%;top:100%;margin-top:calc(10px / var(--k));transform:translateX(-50%);padding:calc(4px / var(--k)) calc(8px / var(--k));border-radius:calc(6px / var(--k));background:rgba(0,0,0,.8);color:#FFFFFF;
   font:500 calc(12px / var(--k)) system-ui,sans-serif;white-space:nowrap;pointer-events:none;-webkit-text-stroke:0!important;text-shadow:none!important;-webkit-user-select:none;user-select:none}
@@ -725,9 +725,35 @@ SC.textPanel=function(){const B=$('xbody');if(B._done)return;B._done=1;const W=S
   const tile=k=>{const[n,f,o]=SCLOOK[k],ex=o&&o.add,add=typeof ex==='function'?ex(W,H):ex||{},it={size:72,weight:700,...add},st=f(it),z=it.size,L=Math.max(...String(add.text||'Your text').split('\n').map(l=>l.length)),px=Math.max(11,Math.min(30,z*.25,150/L));
     return `<button class="sctlk" draggable="true" data-addlook="${k}" title="Add ${esc((o&&o.name||n).toLowerCase())}" aria-label="Add ${esc((o&&o.name||n).toLowerCase())}"><span class="sctlw"><span style="font-family:'TikTok Sans',system-ui,sans-serif;font-weight:${it.weight};font-size:${px.toFixed(1)}px;line-height:${it.line_height||1.2};${scLookCss(st,px,z)}">${esc(add.text||'Your text')}</span></span><em>${esc(o&&o.name||n)}</em></button>`};
   B.innerHTML=`<button class="scaddt" id="scaddt" title="Add a text at the playhead and type"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg>Add text</button>
-    <p class="tsub">Click a look to add it at the playhead. Drag one onto the video or the timeline to put it there.</p>
-    <div class="sctl" role="group" aria-label="Text looks">${Object.keys(SCLOOK).map(tile).join('')}</div>`};
-$('xbody').addEventListener('click',e=>{if(!SC.on)return;if(e.target.closest('#scaddt'))return SC.addText(scNow());const b=e.target.closest('[data-addlook]');if(b)SC.addLook(b.dataset.addlook,scNow())});
+    <p class="tsub" id="sctsub">Click a look to add it at the playhead. Drag one onto the video or the timeline to put it there.</p>
+    <div class="sctl" role="group" aria-label="Text looks">${Object.keys(SCLOOK).map(tile).join('')}</div>`;scMarkLooks()};
+$('xbody').addEventListener('click',e=>{if(!SC.on)return;if(e.target.closest('#scaddt'))return SC.addText(scNow());const b=e.target.closest('[data-addlook]');if(!b)return;
+  const ids=scRestylable();if(ids.length)return SC.restyle(ids,b.dataset.addlook);SC.addLook(b.dataset.addlook,scNow())});
+// a look clicked while a text is picked restyles it (and every other picked text): its words, size and place stay, one undo.
+// A picked picture of words (a title or caption baked to a PNG, named with its words) becomes a real text in that look, in
+// the same place and time, so it can be retyped and restyled from then on. Add text and a drag still add a new one
+// ponytail: "a picture of words" = an image with a text field, or a name that is not a card or a file name; a photo named
+// like a sentence would be taken for words (one undo puts it back)
+const scWords=it=>it.type==='text'?it.text:it.type==='image'?(it.text||(/^card\b|\.[a-z0-9]{2,4}$/i.test(it.name||'')?'':it.name||'')):'';
+const scRestylable=()=>[...SC.sel].filter(id=>{const q=scGet(id);return q&&!q.tr.locked&&scWords(q.it)});
+function scToText(it){const words=String(it.text||it.name),W=it.w||600,H=it.h||100,n=words.length;let z=120;
+  while(z>20&&Math.ceil(n*z*.52/W)*z*1.25>H)z-=2;   // the biggest size whose wrapped lines fit the picture's box
+  const keep=Object.fromEntries(['start','end','x','y','rotation','opacity','anim','keys'].filter(k=>it[k]!=null).map(k=>[k,it[k]]));
+  return {id:scId('i'),type:'text',name:'Text',text:words,font:'TikTok Sans',weight:700,size:z,color:'#FFFFFF',align:'center',line_height:1.15,box:null,outline:null,shadow:null,
+    w:Math.round(W+z*.6),rotation:0,opacity:1,...keep}}
+SC.restyle=function(ids,k){SC.edit&&SC.edDone();const L=SCLOOK[k]||SCLOOK.box,ex=L[2]&&L[2].add,add=typeof ex==='function'?ex(SC.s.width,SC.s.height):ex||{},made=[];
+  const pick=[];
+  return SC.change(ids.length>1?'text looks':'text look',s=>ids.forEach(id=>{const o=scAll(s).find(o=>o.it.id===id);if(!o)return;let it=o.it;
+    if(it.type!=='text'){it=scToText(it);o.tr.items.splice(o.ii,1,it);made.push(it.id)}
+    pick.push(it.id);if(add.weight)it.weight=add.weight;Object.assign(it,L[1](it))})).then(ok=>{if(!ok)return;SC.sel=new Set(pick);SC.show();$('ibody')._h=null;SC.insp();scMarkLooks();
+    toast(made.length?`Now ${made.length>1?made.length+' texts':'a text'} in ${L[2]&&L[2].name||L[0]}. Double-click it to change the words.`:`${L[2]&&L[2].name||L[0]}. Undo (⌘Z) puts the old look back.`)})};
+// the panel says what a click does, and marks the picked text's look (every style field matches, so White box and Pill differ)
+function scMarkLooks(){const B=$('xbody');if(!B||!B._done)return;const ids=SC.on?scRestylable():[],its=ids.map(id=>scGet(id).it),one=its.length===1?its[0]:null;
+  const p=$('sctsub');if(p)p.textContent=!its.length?'Click a look to add it at the playhead. Drag one onto the video or the timeline to put it there.'
+    :its.every(i=>i.type==='text')?`Click a look to restyle ${one?'"'+String(one.text).replace(/\s+/g,' ').slice(0,60)+'"':'the '+its.length+' picked texts'}. Add text adds a new one.`
+    :`Click a look to turn ${one?'"'+String(one.name).slice(0,60)+'"':'the picked pictures of words'} into text you can retype and restyle.`;
+  B.querySelectorAll('[data-addlook]').forEach(b=>{const on=!!its.length&&its.every(i=>{const st=i.type==='text'&&SCLOOK[b.dataset.addlook][1](i);return st&&Object.keys(st).every(p=>JSON.stringify(st[p]??null)===JSON.stringify(i[p]??null))});b.classList.toggle('on',on);b.setAttribute('aria-pressed',on)})}
+{const f=SC.insp;SC.insp=function(){const r=f.apply(this,arguments);scMarkLooks();return r}}
 $('xbody').addEventListener('dragstart',e=>{const b=e.target.closest('[data-addlook]');if(!b)return;e.dataTransfer.setData('application/x-cooked-look',b.dataset.addlook);e.dataTransfer.effectAllowed='copy'});
 // a look dropped on the video lands where it was let go; on the timeline at that time, on that row when it is free (else a free
 // text track, else a new one); on "Drop here for a new track" on a new one. A Media drop on a row goes there too (SC.dropPref)
