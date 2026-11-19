@@ -2,6 +2,10 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.55, creator-teardown 2.7.55 (2026-11-19)
+- Duplicating a timeline and starting a trial reel take one click. The Version menu now sits beside Watch/Compare on every video, even before there are versions. At its bottom are Duplicate this timeline (a copy with your edits) and New trial reel.
+- New trial reel makes a copy named Trial 1, Trial 2 and so on, listed under Trial reels, and opens it. A note for Claude is written and waiting ("a new opening line, a new look and a new CTA"): send it, change it, or recut the copy by hand.
+
 ## ai-editor 2.7.54, creator-teardown 2.7.54 (2026-11-18)
 - The timeline stays where you scroll it. Before, with more rows than fit (an audio track added, say), every redraw (sound waves arriving, playback, picking or changing something) jumped the rows back to the top.
 
