@@ -1463,7 +1463,7 @@ function renderEdTracks(){const E=$('edtracks'),T=D();
     <div class="edright">
     <div class="escroll" id="escroll"><div class="einner"><div class="eruler">${ticks.map(t=>`<span style="left:${t/TT*100}%">${step<1?fmtx(t):fmt(t)}</span>`).join('')}</div>
     ${R.join('')}<b class="eph" id="eph"></b><b class="esnap" id="esnap" hidden><i></i></b></div></div></div></div>`;
-  if(E._h!==h&&edHold){edSkip=1}else if(E._h!==h){E._h=h;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);
+  if(E._h!==h&&edHold){edSkip=1}else if(E._h!==h){E._h=h;const sy=(E.querySelector('.edwrap')||{}).scrollTop||0;E.innerHTML=h;tscrollTo($('tscroll').scrollLeft);{const w=E.querySelector('.edwrap');if(w)w.scrollTop=sy}   /* a redraw keeps the rows where they were scrolled (waves arriving, playback, an edit) */
     E.querySelectorAll('.eitem.snd,.eitem.img').forEach(c=>c.classList.toggle('narrow',c.offsetWidth<48))}
   E.querySelectorAll('[data-lkey]').forEach(el=>el.classList.toggle('msel',msel.has(mkey(el))));edPh()}
 // a pointer down on the rows: nothing redraws them under it (a bake or a poll landing mid-drag lost the drag) until it lets go

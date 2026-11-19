@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.54, creator-teardown 2.7.54 (2026-11-18)
+- The timeline stays where you scroll it. Before, with more rows than fit (an audio track added, say), every redraw (sound waves arriving, playback, picking or changing something) jumped the rows back to the top.
+
 ## ai-editor 2.7.53, creator-teardown 2.7.53 (2026-11-17)
 - Sound plays in sync with the picture on the edit page again. Since 2.7.45 every clip's sound went through the browser's Web Audio engine (for the volume boost), which in Chrome plays late by the speakers' delay, most with Bluetooth headphones. Now only a clip you boosted above 100% goes that way.
 
