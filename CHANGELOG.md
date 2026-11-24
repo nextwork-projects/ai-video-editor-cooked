@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.56, creator-teardown 2.7.56 (2026-11-19)
+- Pick a text and click a look in the Text panel: the text changes to that look, keeping its words, size, place and time. Before, the click added a second text at the playhead. One undo puts the old look back. With nothing picked, a click still adds a new text, and Add text always does.
+- Pick a picture of words (a title or caption line made as an image) and click a look: it becomes a real text in that look, in the same place and time, so you can retype and restyle it.
+- The Text panel says what a click will do, and marks the picked text's look.
+
 ## ai-editor 2.7.55, creator-teardown 2.7.55 (2026-11-19)
 - Every version of a video has its own tab above the timeline: main, then each trial reel (t1, t2, ...). Click a tab (or use the left and right arrow keys on the tabs) to see that version's video and its own timeline. Edits stay on that version. Before, one Version menu in the player bar swapped them.
 - A new draft no longer shows two identical Video tracks. When the timeline already played the new draft's video as the draft came in, it was kept as if you had added it by hand, on a second Video track.
