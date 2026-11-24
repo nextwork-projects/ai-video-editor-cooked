@@ -1420,6 +1420,8 @@ def carry(base, cur, new):
         for ci in t["items"]:
             if id(ci) in in_base:
                 continue   # added by hand (or by Claude on the page): on its own track again
+            if any(_ident(out, o) == _ident(cur, ci) and abs(o.get("start", 0) - ci.get("start", 0)) <= 0.05 for x in out["tracks"] for o in x["items"]):
+                continue   # the new draft has it already (the scene was pointed at the new render first): never a second copy
             it = copy.deepcopy(ci)
             if it["id"] in ids:
                 it["id"] = next(f"{it['id']}h{k}" for k in range(1, 999) if f"{it['id']}h{k}" not in ids)
@@ -1473,6 +1475,10 @@ def demo():
         cur2 = copy.deepcopy(base)
         cur2["tracks"][0]["items"].pop(1)                           # deleted by hand
         assert [i.get("text") for t in carry(base, cur2, copy.deepcopy(base))[0]["tracks"] for i in t["items"]] == [None]
+        # the scene already plays the new draft's video when the new draft comes in: one Video track, not two (no v1h1 copy)
+        drafted = lambda v: {"assets": {"d": {"src": v}}, "tracks": [{"id": "v1", "kind": "visual", "items": [{"id": "v0", "type": "video", "asset": "d", "start": 0, "end": 34}]}]}
+        got, kept = carry(drafted("review/v-edit4.mp4"), drafted("review/v-edit5.mp4"), drafted("review/v-edit5.mp4"))
+        assert [t["id"] for t in got["tracks"]] == ["v1"] and kept == 0, got
         S.video("take.mp4", 2, 4, **{"in": 4})
         S.text("Hi", 1, 3, y=400, box={"color": "#FFFFFF", "pad": 10, "radius": 8})
         S.captions([{"w": "one", "start": 1.2, "end": 1.6}], {"y_pct": 70}, asset="take")
