@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.57, creator-teardown 2.7.57 (2026-11-23)
+- Approve on the cut asks which style to make the edit in. Every style on your home page is in the list, with this video's style picked. Before, Approve made the edit in the default style with no choice.
+
 ## ai-editor 2.7.54, creator-teardown 2.7.54 (2026-11-18)
 - The timeline stays where you scroll it. Before, with more rows than fit (an audio track added, say), every redraw (sound waves arriving, playback, picking or changing something) jumped the rows back to the top.
 

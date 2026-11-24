@@ -2973,6 +2973,11 @@ def make_handler(folder, token):
                 return
             if path == "/":
                 return self.send(200, themed(HTML.read_bytes()), "text/html; charset=utf-8", cookie=True)
+            if path == "/styles":   # the cut's Approve menu
+                try:
+                    return self.send(200, edit_style_picks(folder))
+                except Exception as e:   # noqa: BLE001  no library or home page: Approve without a pick
+                    return self.send(200, {"styles": [], "here": None, "error": str(e)})
             if path == "/state":
                 d = load(rj)
                 d["theme"] = theme()
@@ -3970,6 +3975,13 @@ def make_handler(folder, token):
                 if body["type"] == "stop":   # the round's notes open again; `status` tells Claude to stop
                     err = stop_round(folder)
                     return self.send(409, {"error": err}) if err else self.send(200, {})
+                pick = body.get("style") if body["type"] == "approve" and isinstance(body.get("style"), str) else None
+                if pick:   # the cut's Approve menu: the edit is made in this style
+                    d0 = load(rj)
+                    if d0["stage"] != "cut" or d0.get("final"):
+                        return self.send(409, {"error": "A style is picked on the cut only."})
+                    if not set_edit_style(folder, pick):
+                        return self.send(409, {"error": "That style could not be used. Pick another, or try again once it is ready."})
                 style = style_label(folder) if body["type"] == "approve" else None
                 choices = style_choices(folder) if body["type"] == "approve" else None
                 skills = skill_choices() if body["type"] == "approve" else None
@@ -3980,7 +3992,8 @@ def make_handler(folder, token):
                     if d.get("sent") and d["events"] and d["events"][-1]["type"] == "edits":
                         return False   # Claude is applying transcript changes: Stop first
                     d["events"].append({"type": body["type"], "stage": d["stage"], "round": d["round"],
-                                        "at": now(), "handled": False, **({"stills": True} if d.get("stills") else {})})
+                                        "at": now(), "handled": False, **({"stills": True} if d.get("stills") else {}),
+                                        **({"style": pick} if pick else {})})
                     d["sent"] = True
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
@@ -4924,6 +4937,9 @@ def cmd_wait(folder, poll=1.0):
           f"{len(cs)} note{'' if len(cs) == 1 else 's'}. video {r['video']}")
     for x in r.get("alts") or []:
         print(f"  also {x['name']}: {x['video']}")
+    if e["type"] == "approve" and e.get("style"):
+        print(f"  style: the user picked {style_label(folder)} for the edit on Approve; {folder / 'style.json'} is written as it. "
+              "Make the edit in that style: keep style.json, never run profile.py style over it, ask nothing about the style.")
     if r.get("back_to"):
         print(f"  this round is round {r['back_to']} again: the user pressed Go back, which put that round's files "
               f"(plan.json, spans.json, visuals.json, ...) and its render back. Fix from these files.")
@@ -5023,6 +5039,31 @@ def shown_style(sp):
     from ai_editor import styleskill
     n = styleskill.display(sp)
     return "New format" if n.startswith("@links-") else n
+
+
+def edit_style_picks(folder):
+    """The cut's Approve menu: every style on the home page (home.style_cards, by its shown name), and the one this
+    edit's style.json holds (else the home page's default). A style picked there is written with set_edit_style."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+    import library
+    from home import style_cards, default_style
+    from ai_editor import profile as pf
+    cards = style_cards(library.path(make=False))
+    try:
+        had = json.loads((folder / "style.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        had = None
+    here = next((c["id"] for c in cards if had is not None and pf.picked(had, c["id"]) is None), None) or default_style(cards)
+    line = lambda c: re.sub(r"^Copied by the editor\.\s*", "", c.get("line") or "")   # says nothing about the look: dropped
+    return {"styles": [{"id": c["id"], "name": c["name"], "line": line(c)} for c in cards], "here": here}
+
+
+def set_edit_style(folder, sid):
+    """The style picked on the cut's Approve: <edit>/style.json written as it (home.seed_style, as New video does).
+    False when it could not be written (an unknown id, a creator still being analysed)."""
+    import library
+    from home import seed_style
+    return seed_style({"edit": str(folder), "as": sid}, library.path(make=False)) in ("written", "kept")
 
 
 def style_choices(folder):
