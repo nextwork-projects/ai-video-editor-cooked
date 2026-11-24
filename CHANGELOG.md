@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.57, creator-teardown 2.7.57 (2026-11-23)
+- Approve on the cut asks which style to make the edit in. Every style on your home page is in the list, with this video's style picked. Before, Approve made the edit in the default style with no choice.
+
 ## ai-editor 2.7.56, creator-teardown 2.7.56 (2026-11-19)
 - Pick a text and click a look in the Text panel: the text changes to that look, keeping its words, size, place and time. Before, the click added a second text at the playhead. One undo puts the old look back. With nothing picked, a click still adds a new text, and Add text always does.
 - Pick a picture of words (a title or caption line made as an image) and click a look: it becomes a real text in that look, in the same place and time, so you can retype and restyle it.
