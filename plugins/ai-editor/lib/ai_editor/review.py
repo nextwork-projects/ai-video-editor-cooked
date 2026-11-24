@@ -7757,7 +7757,7 @@ def main():
     s.add_argument("name")
     s.add_argument("--video", required=True)
     s.add_argument("--transcript")
-    s.add_argument("--trial", action="store_true", help="a trial reel: listed under Trial reels in the Version menu")
+    s.add_argument("--trial", action="store_true", help="a trial reel: its own tab after the trial-reels divider above the timeline")
     s = sp.add_parser("resolve")
     s.add_argument("id", type=int)
     s.add_argument("status", choices=["fixed", "wontfix", "open"])
