@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.61, creator-teardown 2.7.61 (2026-11-25)
+- Approve the cut opens a panel to start the edit: the style for the edit, and a box for anything Claude should know for it ("no zooms in the first 5 seconds"). Start the edit approves the cut and hands Claude both. Before, the button read "Approve the cut and add captions" and the panel had only the style.
+
 ## ai-editor 2.7.59, creator-teardown 2.7.59 (2026-11-25)
 - Answer Claude's multiple-choice questions in the editor window or in the Claude chat, whichever you reach first. While the question is up in the window, type your answer in the chat: a word, your own answer, or the option's number ("2", or "1, 3" when it takes several). The window's card then says "Answered in the Claude chat." and closes. Before, the chat only showed "Asking in the editor window" and you had to answer there, or press "Answer in Claude Code instead" first.
 
