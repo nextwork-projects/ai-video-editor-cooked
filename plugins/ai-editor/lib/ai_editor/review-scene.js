@@ -906,4 +906,4 @@ body.scene #tside #ibody{display:none}body.scene.tside:not(.scnoside) #tside{dis
   new MutationObserver(place).observe(document.body,{attributes:true,attributeFilter:['class']});SC.pmq.addEventListener('change',place)}
 
 // the more menu's Duplicate this timeline shows while a scene is on
-new MutationObserver(()=>{$('scdup').hidden=!document.body.classList.contains('scene')}).observe(document.body,{attributes:true,attributeFilter:['class']});
+{let was=null;new MutationObserver(()=>{const on=document.body.classList.contains('scene');$('scdup').hidden=!on;if(on!==was){was=on;if(typeof renderVer==='function'&&typeof S!=='undefined'&&S)renderVer()}}).observe(document.body,{attributes:true,attributeFilter:['class']})}   // and the version menu (Duplicate, New trial reel) shows once the timeline is on

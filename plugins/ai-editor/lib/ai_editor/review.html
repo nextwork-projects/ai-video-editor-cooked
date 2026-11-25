@@ -284,6 +284,7 @@ body.preview #pins,body.preview #cmprow{visibility:hidden}
 #vtabbar button:hover{color:var(--ink)}#vtabbar button:focus-visible{outline:none;color:var(--ink);background:var(--hover);border-radius:6px 6px 0 0}
 #vtabbar button[aria-selected=true]{color:var(--strong);font-weight:600;border-bottom-color:var(--strong)}
 #vtabbar button:disabled{color:var(--quiet);cursor:default}
+#vtabbar .vgrow{flex:1;min-width:12px}#vtabbar button.vact{align-self:center;height:28px;padding:0 10px;border:1px solid var(--line2);border-radius:7px;font-size:12px;font-weight:600;color:var(--ink);margin-left:4px}#vtabbar button.vact:hover{border-color:var(--ink)}
 #vtabbar i{align-self:center;width:1px;height:16px;margin:0 6px;background:var(--line2);flex-shrink:0}
 
 body.asidex #rszside{display:none}
@@ -1253,13 +1254,14 @@ function renderCaps(){
 function renderVer(){
   const r=viewRound(),alts=r.alts||[];
   const tr=alts.filter(a=>a.trial),todo=isCur()?trMaking().filter(n=>!tr.some(a=>a.name===n)):[];
-  $('vtabs').hidden=$('vtabbar').hidden=!alts.length&&!todo.length;
+  $('vtabs').hidden=$('vtabbar').hidden=!alts.length&&!todo.length&&!(window.SC&&SC.on);   // on a timeline the tabs are always there: Duplicate and Trial reel sit at their end
   if(!$('vtabs').hidden){const o=x=>`<option value="${esc(x)}"${x===alt?' selected':''}>${esc(trLab(x))}</option>`,mains=['',...alts.filter(a=>!a.trial).map(a=>a.name)];
     const h=mains.map(o).join('')+(tr.length||todo.length?`<optgroup label="Trial reels">${tr.map(a=>o(a.name)).join('')}${todo.map(n=>`<option disabled>${esc(trLab(n))} (making)</option>`).join('')}</optgroup>`:'');
     const sel=$('vsel');if(sel._h!==h){sel._h=h;sel.innerHTML=h}sel.value=alt;
     // the same list as tabs: main and its copies, a divider, then the trial reels (one being made shows, greyed)
     const t=x=>`<button type="button" role="tab" data-v="${esc(x)}" aria-selected="${x===alt}" tabindex="${x===alt?0:-1}">${esc(trLab(x))}</button>`;
-    const th=mains.map(t).join('')+(tr.length||todo.length?'<i></i>'+tr.map(a=>t(a.name)).join('')+todo.map(n=>`<button type="button" role="tab" disabled>${esc(trLab(n))} (making)</button>`).join(''):'');
+    const th=mains.map(t).join('')+(tr.length||todo.length?'<i></i>'+tr.map(a=>t(a.name)).join('')+todo.map(n=>`<button type="button" role="tab" disabled>${esc(trLab(n))} (making)</button>`).join(''):'')
+      +(window.SC&&SC.on?'<span class="vgrow"></span><button type="button" class="vact" data-act="dup" title="Copy this timeline with your edits">+ Duplicate</button><button type="button" class="vact" data-act="trial" title="A copy to recut for Instagram Trial Reels">+ Trial reel</button>':'');
     const bar=$('vtabbar');if(bar._h!==th){const f=bar.contains(document.activeElement),on=()=>bar.querySelector('[aria-selected=true]');bar._h=th;bar.innerHTML=th;on()?.scrollIntoView({block:'nearest',inline:'nearest'});if(f)on()?.focus()}
     if(bar.parentElement.firstElementChild!==bar)bar.parentElement.prepend(bar)}   // above the timeline's tools
   const opts=cmpOptions();
@@ -2543,11 +2545,17 @@ $('fsscrub').addEventListener('pointerdown',e=>{fsDrag=true;$('fsscrub').setPoin
 $('fsscrub').addEventListener('pointermove',e=>{const h=$('fshover'),f=fsAt(e);h.style.display='block';h.style.left=f*100+'%';h.textContent=fmtx(f*D());if(fsDrag)v.currentTime=f*D()});
 $('fsscrub').addEventListener('pointerup',()=>{fsDrag=false;fsWake()});$('fsscrub').addEventListener('pointerleave',()=>{if(!fsDrag)$('fshover').style.display='none'});
 // Duplicate this timeline (the more menu, on a scene): the version on screen copied with every hand edit, then opened
-$('scdup').onclick=async()=>{$('moremenu').hidePopover?.();const r=await post('/scene/duplicate',{alt:alt||''});if(!r.ok)return toast(r.error||'That did not copy.');
-  await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}toast(`Copied to "${r.name}". Your changes here leave the original as it was.`)};
+// Duplicate (a copy with every hand edit) or a new trial reel (a copy named Trial N, under Trial reels), opened at once.
+// A trial reel gets its note for Claude written and waiting: send it, change it, or recut the copy by hand
+async function dupTimeline(trial){const r=await post('/scene/duplicate',{alt:alt||'',trial:!!trial});if(!r.ok)return toast(r.error||'That did not copy.');
+  await load(true);const s=$('vsel');if([...s.options].some(o=>o.value===r.name)){s.value=r.name;s.dispatchEvent(new Event('change'))}
+  if(!trial)return toast(`Copied to "${r.name}". Your changes here leave the original as it was.`);
+  ta.value='Make this a trial reel: a new opening line, a new look and a new CTA. Keep the middle.';ta.dispatchEvent(new Event('input'));ta.focus();
+  toast(`"${r.name}" is a copy of this timeline. Recut it here, or send the note and Claude does it.`,6000)}
+$('scdup').onclick=()=>{$('moremenu').hidePopover?.();dupTimeline(false)};
 $('vsel').onchange=e=>{alt=e.target.value;inT=outT=null;setVideo();render();SC.check()};   // a version swaps in its own scene, no reload
 // a version tab: that version's player and its own timeline (its scene), no reload. Arrow keys move along the tabs
-$('vtabbar').onclick=e=>{const b=e.target.closest('button[data-v]');if(!b||b.disabled||b.dataset.v===alt)return;const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'))};
+$('vtabbar').onclick=e=>{const a=e.target.closest('button[data-act]');if(a)return dupTimeline(a.dataset.act==='trial');const b=e.target.closest('button[data-v]');if(!b||b.disabled||b.dataset.v===alt)return;const s=$('vsel');s.value=b.dataset.v;s.dispatchEvent(new Event('change'))};
 addEventListener('keydown',e=>{if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight'||e.altKey||e.metaKey||e.ctrlKey||e.shiftKey||!$('vtabbar').contains(e.target))return;e.preventDefault();e.stopImmediatePropagation();   // window, capture: before the frame-step keys
   const bs=[...$('vtabbar').querySelectorAll('button[data-v]')],i=bs.indexOf(document.activeElement),n=bs[(i+(e.key==='ArrowRight'?1:-1)+bs.length)%bs.length];
   if(n){n.focus();n.click()}},true);
