@@ -2025,6 +2025,18 @@ def last_export(folder):
     return max(fs, key=lambda f: f.stat().st_mtime) if fs else None
 
 
+def export_file(folder, d, alt=None):
+    """A scene's export with every change on its timeline in: <exports>/<name>.mp4 started after the version's scene
+    last changed, and no export running. None when there is none, so Download makes one first (the draft MP4 has none
+    of the hand edits: Max, "when I download stuff it doesnt always have all media I put on")."""
+    name = download_name(folder, d)
+    p = exports_dir(folder) / (f"{name[:-4]} - {alt}.mp4" if alt else name)
+    sf = folder / scene.name_of(alt)
+    if (EXPORT.get(str(folder)) or {}).get("state") == "working" or not p.is_file() or not sf.is_file():
+        return None
+    return p if p.stat().st_mtime >= sf.stat().st_mtime else None
+
+
 def export_state(folder, d):
     """/state's export: the running or last export and what it would leave out."""
     ex = dict(EXPORT.get(str(folder)) or {})
@@ -2038,7 +2050,8 @@ def export_state(folder, d):
         ex["name"] = Path(ex["file"]).name
     return {k: ex.get(k) for k in ("state", "pct", "elapsed", "why", "note", "name", "done_at", "alt")} | {
         "left_out": None if scene_mode(folder, d) else export_left_out(folder, d),   # a scene has every edit in it
-        "url": "/export/file" if ex.get("state") == "done" and ex.get("file") else None}
+        "url": "/export/file" if ex.get("state") == "done" and ex.get("file") else None,
+        "fresh": {a: bool(export_file(folder, d, a)) for a in scene_vs(folder, d)} if scene_mode(folder, d) else None}
 
 
 def start_export(folder, alt=None):
@@ -2072,7 +2085,8 @@ def export_job(folder, run=subprocess.run):
         if src.name == ".export.mp4":
             src.unlink()
             src = out
-        os.utime(out)   # a clone keeps the draft's time: the export's own is when it was made (home's Exported)
+        os.utime(out, (ex["since"], ex["since"]))   # when it was made (home's Exported); its start, so a change made
+        # while it rendered still counts as newer than the export (export_file)
         try:   # the library's exports folder, beside edits/
             import library
             lib = library.path() / "exports"
@@ -3107,6 +3121,9 @@ def make_handler(folder, token):
                 return self.file(p, "video/mp4") if p.exists() else self.send(404, {})
             if path == "/download":   # the finished video, named "<video name> - <style name>.mp4"
                 d = load(rj)
+                if scene_mode(folder, d):   # the timeline as the page shows it: an export newer than every change, else make one
+                    p = export_file(folder, d, q.get("alt") or None)
+                    return self.file(p, "video/mp4", p.name) if p else self.send(409, {"export": True})
                 p = Path(alt_of(d, q.get("alt", ""), d)["video"])
                 return self.file(p, "video/mp4", download_name(folder, d)) if p.exists() else self.send(404, {})
             if path == "/export/file":   # the last export, saved as "<video name> - <style name>.mp4"

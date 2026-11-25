@@ -1171,7 +1171,8 @@ function plainState(d){
 // for it and then saves, instead of a silent failed download. The first click always counts.
 $('dl').addEventListener('click',async e=>{
   e.preventDefault();const a=$('dl'),href=a.href;if(a.dataset.busy)return;a.dataset.busy='1';
-  try{for(let i=0;i<30;i++){try{const r=await fetch(href,{headers:{Range:'bytes=0-0'}});if(r.ok){location.href=href;return}}catch(x){}   // an attachment: the page stays
+  try{for(let i=0;i<30;i++){try{const r=await fetch(href,{headers:{Range:'bytes=0-0'}});if(r.ok){location.href=href;return}   // an attachment: the page stays
+        if(r.status===409&&(await r.json().catch(()=>({}))).export){dlWant=alt||'';toast('Making the video with everything on the timeline. It downloads when it is ready.',6000);return exportNow()}}catch(x){}
       if(i===1)toast('Saving the video. It downloads in a moment.');await new Promise(r=>setTimeout(r,1000))}
     toast('The video did not download. Try again.')}finally{delete a.dataset.busy}
 });
@@ -3208,13 +3209,17 @@ $('approve').onclick=()=>apPick($('approve'));$('mapprove').onclick=()=>apPick($
 // ---- Export (review.py export_job): the page as one MP4, hand edits and all, with no Claude and no note
 let exOpen=false,exAsk=false;
 const exOn=()=>!!(S&&S.export&&view&&view.stage==='edit'&&isCur()&&!S.stills&&!S.raw);
+let dlWant=null;   // Download pressed with no export of the timeline as it is: one is made, then it downloads
 function renderExport(){const on=exOn(),x=on?S.export:{},w=x.state==='working',b=$('mexport'),box=$('exbox');
+  const fresh=!x.fresh||!!x.fresh[alt||''];   // the last export has every change on this version's timeline
+  if(dlWant!==null&&!w&&x.state==='done'&&x.fresh&&x.fresh[dlWant]){dlWant=null;location.href='/export/file'}else if(dlWant!==null&&x.state==='failed')dlWant=null;
   $('exwrap').hidden=!on;if(!on)return;
   if(!$('mapprove').classList.contains('approved'))$('mapprove').classList.remove('primary');   // Export is the one primary
   b.classList.toggle('busy',w);b.disabled=w;b.querySelector('span').textContent=w?'Exporting... '+(x.pct!=null?x.pct+'%':fmt(x.elapsed||0)):'Export';
   let h='';
   if(exAsk&&!w)h=`<b>Export what you see?</b><p>${esc(x.left_out||'')}</p><div class="exb"><button data-exno>Cancel</button><button class="go" data-exgo>Export anyway</button></div>`;
   else if(w)h=`<b>Exporting... ${x.pct!=null?x.pct+'%':fmt(x.elapsed||0)}</b><p>${esc(x.note||'Your changes go in as the page shows them.')}</p>`;
+  else if(x.state==='done'&&!fresh)h=`<b>Your newest changes are not in the last export.</b><p>Export again to get them.</p><div class="exb"><button class="go" data-exgo>Export again</button></div>`;
   else if(x.state==='done')h=`<b>Exported.</b><p>${esc(x.name||'')}${x.note?'<br>'+esc(x.note):''}</p><div class="exb"><button data-exfind>Show in Finder</button><a class="go" href="/export/file" download hidden></a><button class="go" data-exdl>Download</button></div>`;
   else if(x.state==='failed')h=`<b>The export stopped.</b><p>${esc(x.why||'')}</p><div class="exb"><button class="go" data-exgo>Try again</button></div>`;
   box.hidden=!exOpen||!h;h=h&&h+'<button class="exx" data-exclose aria-label="close" title="Close">×</button>';
