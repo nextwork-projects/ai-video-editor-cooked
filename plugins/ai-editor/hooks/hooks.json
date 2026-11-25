@@ -1,5 +1,5 @@
 {
-  "description": "Checks the editor's tools at session start (silent when everything is installed; on a first run it tells Claude to open the editor's window before installing). Shows Claude's questions in the editor's window when it is open. Stops a Claude when Stop is pressed in the window, and records which skills each video ran. Tells the window when Claude waits for you in the Terminal.",
+  "description": "Checks the editor's tools at session start (silent when everything is installed; on a first run it tells Claude to open the editor's window before installing). Shows Claude's questions in the editor's window when it is open; a reply typed in the Claude chat answers them too. Stops a Claude when Stop is pressed in the window, and records which skills each video ran. Tells the window when Claude waits for you in the Terminal.",
   "hooks": {
     "SessionStart": [
       {
@@ -21,7 +21,7 @@
             "type": "command",
             "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/askhook.py\" 2>/dev/null || py \"${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/askhook.py\" 2>/dev/null || true",
             "timeout": 86400,
-            "statusMessage": "Asking in the editor window"
+            "statusMessage": "Asking in the cooked. window. You can also type your answer here"
           }
         ]
       },
