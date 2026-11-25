@@ -855,8 +855,8 @@ body.scene .eitem.sc:not(.sel):hover::before{left:0;border-radius:4px 0 0 4px}bo
   const sep=()=>{const i=document.createElement('i');i.className='sep';return i};
   tb.append(
     bt('tlsplit','Split at the playhead (S)',ic('<path d="M12 3v18"/><path d="M8 7H4v10h4M16 7h4v10h-4"/>'),()=>SC.split()),
-    bt('tltrl','Delete from the clip start to the playhead',ic('<path d="M15 3v18"/><path d="M11 7H5v10h6"/><path d="m6 9 4 6M10 9l-4 6"/>'),()=>SC.trimTo('l')),
-    bt('tltrr','Delete from the playhead to the clip end',ic('<path d="M9 3v18"/><path d="M13 7h6v10h-6"/><path d="m14 9 4 6M18 9l-4 6"/>'),()=>SC.trimTo('r')),
+    bt('tltrl','Cut left: delete from the clip start to the playhead',ic('<path d="M15 3v18"/><path d="M11 7H5v10h6"/><path d="m6 9 4 6M10 9l-4 6"/>'),()=>SC.trimTo('l')),
+    bt('tltrr','Cut right: delete from the playhead to the clip end',ic('<path d="M9 3v18"/><path d="M13 7h6v10h-6"/><path d="m14 9 4 6M18 9l-4 6"/>'),()=>SC.trimTo('r')),
     bt('tldel','Delete the picked clip (Delete)',ic('<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>'),()=>$('scdelb').click()),
     sep(),
     bt('tladdt','Add text at the playhead',ic('<path d="M5 6V4h14v2M12 4v16M9 20h6"/>')+'Text',()=>SC.addText(scNow()),'tbt'),

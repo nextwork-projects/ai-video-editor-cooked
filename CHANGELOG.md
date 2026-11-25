@@ -5,6 +5,12 @@ What changed for every user, newest first.
 ## ai-editor 2.7.59, creator-teardown 2.7.59 (2026-11-25)
 - Answer Claude's multiple-choice questions in the editor window or in the Claude chat, whichever you reach first. While the question is up in the window, type your answer in the chat: a word, your own answer, or the option's number ("2", or "1, 3" when it takes several). The window's card then says "Answered in the Claude chat." and closes. Before, the chat only showed "Asking in the editor window" and you had to answer there, or press "Answer in Claude Code instead" first.
 
+## ai-editor 2.7.58, creator-teardown 2.7.58 (2026-11-24)
+- Playback stops lagging once the light copy of your footage is ready. A new video plays its original file (a 4K take is heavy) for the minute or two that copy takes to make. Before, the page kept playing the original until you reloaded it, so a 4K take lagged the whole session. Now it switches to the light copy by itself.
+- Download gives you the timeline as the page shows it, with every image, video, text and sound you added. Before, it handed over Claude's last draft, which has none of your own additions. When the last export is older than your changes, Download makes a new one first and downloads it when it is done.
+- The Export box says when your newest changes are not in the last export, with Export again, instead of offering that older file.
+- The keyboard shortcuts Q and W are called Cut left and Cut right (in the help panel, the shortcut editor and the timeline buttons' tips).
+
 ## ai-editor 2.7.57, creator-teardown 2.7.57 (2026-11-23)
 - Approve on the cut asks which style to make the edit in. Every style on your home page is in the list, with this video's style picked. Before, Approve made the edit in the default style with no choice.
 
