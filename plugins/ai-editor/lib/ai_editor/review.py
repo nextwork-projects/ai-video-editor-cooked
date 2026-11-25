@@ -4005,12 +4005,18 @@ def make_handler(folder, token):
                     err = stop_round(folder)
                     return self.send(409, {"error": err}) if err else self.send(200, {})
                 pick = body.get("style") if body["type"] == "approve" and isinstance(body.get("style"), str) else None
-                if pick:   # the cut's Approve menu: the edit is made in this style
+                said = body.get("instructions") if body["type"] == "approve" and isinstance(body.get("instructions"), str) else ""
+                said = said.strip()[:4000]   # broll.NOTE_MAX, as New video's "Additional instructions for Claude"
+                if pick or said:   # the cut's Approve panel: the edit is made in this style, with these instructions
                     d0 = load(rj)
                     if d0["stage"] != "cut" or d0.get("final"):
-                        return self.send(409, {"error": "A style is picked on the cut only."})
-                    if not set_edit_style(folder, pick):
+                        return self.send(409, {"error": "A style and instructions are picked on the cut only."})
+                    if pick and not set_edit_style(folder, pick):
                         return self.send(409, {"error": "That style could not be used. Pick another, or try again once it is ready."})
+                    if said:   # added to New video's instructions.md, which style-edit and visual-prep read
+                        f = folder / "instructions.md"
+                        had = f.read_text(encoding="utf-8").rstrip() if f.is_file() else ""
+                        f.write_text((had + "\n\n" if had else "") + said + "\n", encoding="utf-8")
                 style = style_label(folder) if body["type"] == "approve" else None
                 choices = style_choices(folder) if body["type"] == "approve" else None
                 skills = skill_choices() if body["type"] == "approve" else None
@@ -4022,7 +4028,7 @@ def make_handler(folder, token):
                         return False   # Claude is applying transcript changes: Stop first
                     d["events"].append({"type": body["type"], "stage": d["stage"], "round": d["round"],
                                         "at": now(), "handled": False, **({"stills": True} if d.get("stills") else {}),
-                                        **({"style": pick} if pick else {})})
+                                        **({"style": pick} if pick else {}), **({"instructions": said} if said else {})})
                     d["sent"] = True
                     d.pop("stopped", None)
                     if body["type"] == "approve" and (d["stage"] == "edit" and not d.get("stills") or d.get("final")):   # the finished video
@@ -4967,8 +4973,12 @@ def cmd_wait(folder, poll=1.0):
     for x in r.get("alts") or []:
         print(f"  also {x['name']}: {x['video']}")
     if e["type"] == "approve" and e.get("style"):
-        print(f"  style: the user picked {style_label(folder)} for the edit on Approve; {folder / 'style.json'} is written as it. "
+        print(f"STYLE: {e['style']} ({style_label(folder)}), picked on Approve. {folder / 'style.json'} is written as it. "
               "Make the edit in that style: keep style.json, never run profile.py style over it, ask nothing about the style.")
+    if e["type"] == "approve" and e.get("instructions"):
+        print("INSTRUCTIONS: " + e["instructions"].replace("\n", "\n    "))
+        print(f"  typed on Approve for the edit, also in {folder / 'instructions.md'}. Follow them through the edit (captions, cards, "
+              "zooms, sound); they beat the style where the two differ. Anything already prepared that goes against them: redo it.")
     if r.get("back_to"):
         print(f"  this round is round {r['back_to']} again: the user pressed Go back, which put that round's files "
               f"(plan.json, spans.json, visuals.json, ...) and its render back. Fix from these files.")
@@ -7532,8 +7542,18 @@ def demo():
     c = next(c for c in d1["comments"] if c["id"] == n0["id"])
     assert (d1["round"], d1["sent"], "raw" in d1) == (1, False, False) and [r["round"] for r in d1["rounds"]] == [0, 1], d1
     assert (c["round"], c["t"], c["moved"], "queued" in c) == (1, 2.0, "words", False), c
-    p2("/event", {"type": "approve"})
+    # the cut's Approve panel: the instructions the user typed go to instructions.md and `wait` prints them, with the style picked
+    (rf / "instructions.md").write_text("Desk for the intro.\n", encoding="utf-8")   # New video's, kept
+    p2("/event", {"type": "approve", "instructions": "  no zooms in the first 5 seconds\nkeep it calm  "})
     assert "learn" not in load(rf / "review.json"), "the cut's approve is not the end: nothing to learn yet"
+    assert (rf / "instructions.md").read_text(encoding="utf-8") == "Desk for the intro.\n\nno zooms in the first 5 seconds\nkeep it calm\n"
+    update(rf / "review.json", lambda d: d["events"][-1].update(style="@sample-card-edit"))   # the pick, without a library here
+    o = io.StringIO()
+    with contextlib.redirect_stdout(o):
+        cmd_wait(rf, poll=0.01)
+    assert "\nSTYLE: @sample-card-edit (" in o.getvalue() and "keep style.json" in o.getvalue(), o.getvalue()
+    assert "\nINSTRUCTIONS: no zooms in the first 5 seconds\n    keep it calm\n" in o.getvalue(), o.getvalue()
+    assert f"also in {rf / 'instructions.md'}" in o.getvalue(), o.getvalue()
     # the final approve with no notes all session: the panel says so, LEARN asks nothing
     update(rf / "review.json", lambda d: d.update(final=True, sent=False, comments=[]))
     p2("/event", {"type": "approve"})

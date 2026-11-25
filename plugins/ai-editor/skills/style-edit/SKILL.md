@@ -48,11 +48,11 @@ Follow every taste rule; the scripts read the settings themselves. When the user
 
 - **No cut.mp4?** Run the cut skill first, never style a raw take. **`prep-decisions.json`?** The
   `visual-prep` agent did steps 1-3 and the sheet: `references/plan.md` "Prepared while the cut was reviewed".
+- **The cut's Approve** (`wait`): `STYLE:` is the style picked there (style.json is written: keep it). `INSTRUCTIONS:` is what the user typed for the edit, also in `EDIT/instructions.md`: follow it in every step, over the style; redo anything prepared against it.
 - **No style.json?** `python3 "${CLAUDE_PLUGIN_ROOT}/lib/ai_editor/profile.py" style edits/<name>`.
   With no creators in the profile (or no profile) it writes the default style: a smooth zoom move
   at least every 5 s, 3-word captions (`references/plan.md` "No creator"). If it stops with
-  `no creator style.json found`, run creator-teardown quick mode for the profile's creators, then
-  again. plan.py also plans with the default style when style.json is missing, and says so.
+  `no creator style.json found`, run creator-teardown quick mode for the profile's creators, then again. plan.py also plans with the default style when style.json is missing, and says so.
 - **The user's images:** everything in the profile's `assets_dir` that fits a line, plus anything
   they hand over, goes in `edits/<name>/images/` and `images.json`:
   `[{"src": "images/dashboard.png", "word": "dashboard", "nth": 1}]` (optional `layout`, `hold_s`,

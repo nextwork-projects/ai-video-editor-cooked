@@ -680,9 +680,10 @@ body.tside #tside{display:flex}
 .actions button:disabled:not(.primary):not(.approved){color:var(--quiet);border-color:var(--line)}
 .actions button.primary:disabled{opacity:.5}
 /* the cut's Approve menu: the style the edit is made in, then one full-width button */
-#apmenu{position:fixed;z-index:60;width:320px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);box-shadow:var(--pop)}#apmenu[hidden]{display:none}
+#apmenu{position:fixed;z-index:60;width:360px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--line2);border-radius:12px;background:var(--raise);box-shadow:var(--pop)}#apmenu[hidden]{display:none}
 #apmenu b{font-size:14px;line-height:18px;font-weight:600;color:var(--strong)}
 #apsel{width:100%;height:40px;padding:0 10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px}#apsel:focus-visible{outline:none;border-color:var(--ink)}
+#apnote{width:100%;box-sizing:border-box;min-height:76px;padding:10px;border:1px solid var(--line2);border-radius:8px;background:var(--panel);color:var(--ink);font:inherit;font-size:14px;line-height:20px;resize:vertical}#apnote:focus-visible{outline:none;border-color:var(--ink)}#apnote::placeholder{color:var(--quiet)}
 #apmenu .apl{margin:0;font-size:13px;line-height:18px;color:var(--muted)}#apmenu .apl:empty{display:none}
 #apgo{width:100%;height:40px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:var(--onink);font-size:14px;font-weight:600}#apgo:hover{background:var(--ink-hover)}
 .actions button svg,.actions a svg{width:14px;height:14px}
@@ -1321,7 +1322,7 @@ function render(){
   sb.disabled=undoAp?false:working?!isCur()||!!S.raw:(!live||!mine);
   sb.title=undoAp?'Go back: this draft opens for notes again.':working?(S.raw?'the first cut is on its way':makingEdit()?'Stop making the edit. The cut opens again.':'Stop Claude working on this draft. Your notes open again.'):'';
   const mk=approving||makingEdit();
-  ap.textContent=S.stage==='cut'?(S.final?'Approve the cut':'Approve the cut and add captions'):S.stills?'Approve and make the video':(S.alts||[]).length?'Approve all':'Approve the edit';
+  ap.textContent=S.stage==='cut'?'Approve the cut':S.stills?'Approve and make the video':(S.alts||[]).length?'Approve all':'Approve the edit';
   ap.className=!working&&live&&!mine?'primary':'';ap.disabled=!!p||!isCur()||mine>0;
   if(PEND.length&&isCur()){ap.disabled=true;ap.className=''}
   if(isCur()&&S.stage==='edit'&&S.bake&&/waiting|working/.test(S.bake.state||'')){ap.textContent='Updating the video...';ap.disabled=true;ap.className='';ap.title='Your changes are going into the video. Approve opens when it is done.'}   // approve what you see
@@ -3194,23 +3195,28 @@ $('savebtn').onclick=save;
 ta.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();save()}if(e.key==='Escape'){ta.blur();inT=outT=null;noteOn=null;renderBar();boxTime()}});
 const sendOrStop=async()=>{const e=S.events[S.events.length-1];await post('/event',{type:pending()==='send'||makingEdit()||e&&e.type==='approve'?'stop':'send'});load()};
 $('send').onclick=sendOrStop;$('msend').onclick=sendOrStop;
-const approve=async style=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;render()}   // instant: the button and the steps turn before the server answers
-  try{const r=await fetch('/event',{method:'POST',body:JSON.stringify({type:'approve',...(style?{style}:{})})});
+const approve=async(style,instructions)=>{if(S.stage==='cut'&&!S.final||S.stills){approving=true;render()}   // instant: the button and the steps turn before the server answers
+  try{const r=await fetch('/event',{method:'POST',body:JSON.stringify({type:'approve',...(style?{style}:{}),...(instructions?{instructions}:{})})});
     if(!r.ok){const j=await r.json().catch(()=>({}));if(j.error)toast(j.error)}await load(true)}catch(e){}finally{approving=false;render()}};
-// the cut's Approve: pick the style the edit is made in first (every style on the home page, this edit's picked), then
-// one button approves. The finished cut, the stills and the edit approve at once, as before
-{const M=document.createElement('div');M.id='apmenu';M.hidden=true;M.setAttribute('role','dialog');M.setAttribute('aria-label','Style for the edit');document.body.append(M);
-  let from=null;const close=()=>{M.hidden=true;from&&from.focus()};
+// the cut's Approve: a panel with the style the edit is made in (every style on the home page, this edit's picked) and
+// what Claude should know for the edit, then one button approves. The finished cut, the stills and the edit approve at once
+{const M=document.createElement('div');M.id='apmenu';M.hidden=true;M.setAttribute('role','dialog');M.setAttribute('aria-label','Start the edit');document.body.append(M);
+  let from=null,note='';const close=()=>{M.hidden=true;from&&from.focus()};   // note: the typed text, kept if the panel closes
   const place=()=>{const r=from.getBoundingClientRect(),w=M.offsetWidth,h=M.offsetHeight,up=r.top-h-8>8;
     M.style.left=Math.max(16,Math.min(r.right-w,innerWidth-w-16))+'px';M.style.top=(up?r.top-h-8:Math.min(r.bottom+8,innerHeight-h-16))+'px'};
   window.apPick=async b=>{if(!(S.stage==='cut'&&!S.final))return approve();if(!M.hidden)return close();from=b;
     M.innerHTML='<p class="apl">Loading your styles...</p>';M.hidden=false;place();
     let j={styles:[]};try{j=await (await fetch('/styles')).json()}catch(e){}
-    if(M.hidden)return;if(!(j.styles||[]).length){M.hidden=true;return approve()}   // no style list (no library): approve as before
-    M.innerHTML=`<label for="apsel"><b>Style for the edit</b></label><select id="apsel">${j.styles.map(x=>`<option value="${esc(x.id)}"${x.id===j.here?' selected':''}>${esc(x.name)}${x.id===j.here?' (this video)':''}</option>`).join('')}</select>
-      <p class="apl" id="apline"></p><button type="button" id="apgo">${esc($('approve').textContent)}</button>`;
-    const line=()=>{$('apline').textContent=(j.styles.find(x=>x.id===$('apsel').value)||{}).line||''};line();$('apsel').onchange=line;
-    $('apgo').onclick=()=>{const v=$('apsel').value;M.hidden=true;approve(v)};place();$('apsel').focus()};
+    if(M.hidden)return;const st=j.styles||[];   // no style list (no library): the instructions only
+    M.innerHTML=(st.length?`<label for="apsel"><b>Style for the edit</b></label><select id="apsel">${st.map(x=>`<option value="${esc(x.id)}"${x.id===j.here?' selected':''}>${esc(x.name)}${x.id===j.here?' (this video)':''}</option>`).join('')}</select>
+      <p class="apl" id="apline"></p>`:'')+`<label for="apnote"><b>Anything Claude should know for the edit?</b></label>
+      <textarea id="apnote" rows="3" maxlength="4000" placeholder="Optional. Say what to add, skip or keep in mind."></textarea>
+      <button type="button" id="apgo">Start the edit</button>`;
+    const line=()=>{$('apline').textContent=(st.find(x=>x.id===$('apsel').value)||{}).line||''};if(st.length){line();$('apsel').onchange=line}
+    const ta=$('apnote');ta.value=note;ta.oninput=()=>{note=ta.value};
+    const go=()=>{M.hidden=true;approve(st.length?$('apsel').value:null,ta.value.trim());note=''};
+    $('apgo').onclick=go;ta.onkeydown=e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();go()}};
+    place();(st.length?$('apsel'):ta).focus()};
   M.addEventListener('keydown',e=>{e.stopPropagation();if(e.key==='Escape')close()});
   document.addEventListener('pointerdown',e=>{if(!M.hidden&&!M.contains(e.target)&&e.target!==from&&!from.contains(e.target))M.hidden=true},true)}
 $('approve').onclick=()=>apPick($('approve'));$('mapprove').onclick=()=>apPick($('mapprove'));

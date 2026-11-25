@@ -44,6 +44,10 @@ An edit-stage note started with `--plan plan.json` also names the card on screen
 (`[card 3 image 'notion']`: the index in `plan.json` `cards`). Look at the frame still and any
 `image:` line before deciding the fix. `wait` ends with a `LEARN:` line and the `learn` command.
 
+The cut's Approve opens a panel: the style for the edit and "Anything Claude should know for the edit?". Its
+`APPROVE` adds `STYLE: <id> (<name>)` (`style.json` is already written as it) and `INSTRUCTIONS: <text>` (also
+added to `edits/<name>/instructions.md`). Make the edit in that style and follow the instructions; ask about neither.
+
 ## Transcript edits (the cut): `EDITS`
 
 The **transcript beside the player** (cut stage) shows the whole take: kept words, cut words struck,
