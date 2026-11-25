@@ -1747,7 +1747,10 @@ def scene_vs(folder, d):
     """/state.scene_v: each version's scene file's stamp ("" the main draft), so the page fetches the one it shows when
     Claude changed it."""
     alts = ["", *(a["name"] for a in d.get("alts") or [] if a.get("name"))]
-    return {a: (folder / scene.name_of(a)).stat().st_mtime_ns if (folder / scene.name_of(a)).exists() else None for a in alts}
+    # .scene's own stamp too: a proxy landing there is a new file, so the page fetches the scene again and plays the light
+    # copy at once. Before, it kept the source (a 4K take) until a reload, and playback lagged the whole session
+    px = (folder / ".scene").stat().st_mtime_ns if (folder / ".scene").is_dir() else 0
+    return {a: f"{(folder / scene.name_of(a)).stat().st_mtime_ns}:{px}" if (folder / scene.name_of(a)).exists() else None for a in alts}
 
 
 def scene_out(folder, sc, alt=None):

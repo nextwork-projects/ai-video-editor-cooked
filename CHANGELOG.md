@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.58, creator-teardown 2.7.58 (2026-11-24)
+- Playback stops lagging once the light copy of your footage is ready. A new video plays its original file (a 4K take is heavy) for the minute or two that copy takes to make. Before, the page kept playing the original until you reloaded it, so a 4K take lagged the whole session. Now it switches to the light copy by itself.
+
 ## ai-editor 2.7.57, creator-teardown 2.7.57 (2026-11-23)
 - Approve on the cut asks which style to make the edit in. Every style on your home page is in the list, with this video's style picked. Before, Approve made the edit in the default style with no choice.
 
