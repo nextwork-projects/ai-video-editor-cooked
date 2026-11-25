@@ -2,6 +2,10 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.60, creator-teardown 2.7.60 (2026-11-25)
+- Duplicating a timeline and starting a trial reel take one click. The version tabs above the timeline now show on every video, with + Duplicate (a copy with your edits) and + Trial reel at their right end.
+- + Trial reel makes a copy named Trial 1, Trial 2 and so on, after the trial reels divider, and opens it. A note for Claude is written and waiting ("a new opening line, a new look and a new CTA"): send it, change it, or recut the copy by hand.
+
 ## ai-editor 2.7.59, creator-teardown 2.7.59 (2026-11-25)
 - Answer Claude's multiple-choice questions in the editor window or in the Claude chat, whichever you reach first. While the question is up in the window, type your answer in the chat: a word, your own answer, or the option's number ("2", or "1, 3" when it takes several). The window's card then says "Answered in the Claude chat." and closes. Before, the chat only showed "Asking in the editor window" and you had to answer there, or press "Answer in Claude Code instead" first.
 

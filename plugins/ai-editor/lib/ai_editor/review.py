@@ -1702,10 +1702,11 @@ def scene_for(folder, d, alt=None):
     return sc
 
 
-def scene_duplicate(folder, alt=None):
+def scene_duplicate(folder, alt=None, trial=False):
     """Copy a version's timeline (the main draft's when alt is None) into a new version beside it, named "<name> copy"
     (then "copy 2", ...): the same video, transcript and plan, and the scene exactly as it is now, every hand edit kept.
-    Claude's change log stays with the original. Returns the new version's name."""
+    Claude's change log stays with the original. trial: a new trial reel instead, "Trial 1", "Trial 2", ..., listed under
+    Trial reels in the version menu. Returns the new version's name."""
     d = load(folder / "review.json")
     sc = scene_for(folder, d, alt)
     if sc is None:
@@ -1715,12 +1716,13 @@ def scene_duplicate(folder, alt=None):
         raise ValueError(f"no version {alt}")
     base = f"{alt or d.get('label') or 'Main'} copy"
     names = {a["name"] for a in d.get("alts") or []}
-    name = next(n for n in (base if i == 1 else f"{base} {i}" for i in range(1, 1000)) if n not in names)
+    name = next(f"Trial {i}" for i in range(1, 1000) if f"Trial {i}" not in names) if trial else \
+        next(n for n in (base if i == 1 else f"{base} {i}" for i in range(1, 1000)) if n not in names)
 
     def f(d):
         e = {k: v for k, v in (src or {"video": d["video"], "transcript": d.get("transcript")}).items()
              if k in ("video", "transcript", "plan", "trial", "aspect")}
-        d["alts"] = list(d.get("alts") or []) + [{**e, "name": name, "copy_of": alt or ""}]
+        d["alts"] = list(d.get("alts") or []) + [{**e, "name": name, "copy_of": alt or "", **({"trial": True} if trial else {})}]
         log_round(d)
         return d
     with SCENE_LOCK:
@@ -3807,7 +3809,7 @@ def make_handler(folder, token):
                 return self.send(200, {"ok": True, "scene": scene_out(folder, sc, alt), **({"change": ch} if by else {})})
             if path == "/scene/duplicate":   # the timeline on screen copied, hand edits and all, as a new version ({alt}): {name}
                 try:
-                    return self.send(200, {"ok": True, "name": scene_duplicate(folder, body.get("alt") or None)})
+                    return self.send(200, {"ok": True, "name": scene_duplicate(folder, body.get("alt") or None, bool(body.get("trial")))})
                 except (scene.SceneError, ValueError, OSError) as e:
                     return self.send(400, {"error": str(e)})
             if path == "/scene/sound":   # the Sounds panel in the scene editor: a library sound copied into media/ ({name})
