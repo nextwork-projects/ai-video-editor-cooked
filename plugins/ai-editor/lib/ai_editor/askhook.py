@@ -5,9 +5,14 @@ A PreToolUse hook on AskUserQuestion (hooks/hooks.json) runs this with the hook 
 home page or a review page is open and showing right now, the question appears there and the user answers
 in the page: the hook returns the answers as the tool's input (permissionDecision "allow" + updatedInput
 with "answers", the documented way to answer AskUserQuestion from a hook), so the terminal box never shows.
+The user can answer in the Claude chat instead: a message typed there while the hook waits is queued by Claude Code,
+which writes it to the session's transcript at once ("queue-operation" "enqueue"). The hook reads it there and answers
+with it (a lone option number, "2" or "1, 3", picks that option), and every page drops the card, saying it was
+answered in the chat. Claude Code still hands Claude that message after the tool result, so Claude reads it twice.
+Whichever comes first wins: the page or the chat.
 
     python3 askhook.py           the hook (stdin: hook JSON). Prints nothing and exits 0 when no page is
-                                 showing, on "Answer in Claude Code instead", once every page that had the
+                                 showing, on "Show it in Claude Code instead", once every page that had the
                                  question closed (never on time alone while one is open) and on any error:
                                  Claude Code then shows its own question box
     python3 askhook.py demo      self-check against a throwaway server
@@ -47,7 +52,8 @@ The servers (route() below, called from both):
     POST /ask {id, questions, elsewhere?}   the hook asks (elsewhere: the video's editor page has it too)
     POST /ask/answer {id, answers | terminal, images?}   the page answers (one string per question; images: one
                                  list of image data urls per question, saved where the server keeps them, see below)
-    POST /ask/clear {id}         the hook is done: every page drops it
+    POST /ask/clear {id, by?}    the hook is done: every page drops it (by "chat": the page says it was answered there,
+                                 GET /ask lists it under "closed" for CLOSED_S)
     POST /ask/gone               the tab closed (pagehide beacon): not showing any more, so no question waits on it
 
 Images on an answer (the paperclip, a paste or a drop on the card): png, jpeg, gif or webp, under 15 MB each, at most 6
@@ -75,6 +81,7 @@ KEEP_S = 120         # a question whose hook stopped polling (Esc in Claude Code
 CHECK_S = 20         # how often the waiting hook looks for an open page
 TERM_S = 1800       # a Terminal notice older than this: Claude gave up waiting, or the user answered elsewhere
 MARK_S = 120         # <edit>/review/asking older than this: its hook stopped (the hook touches it while it waits)
+CLOSED_S = 15        # a question answered in the chat: the page says so for this long
 MAX_IMAGE = 15 << 20      # an attached image (review notes and answers)
 MAX_IMAGES = 6
 MAX_BODY = MAX_IMAGES * MAX_IMAGE * 4 // 3 + (1 << 20)   # a POST carrying that many, base64
@@ -199,7 +206,8 @@ def route(h, method, path, query, body=None):
                 _seen(srv)
             every = [dict(id=k, questions=a["questions"], about=a.get("about") or "", **({"elsewhere": True} if a.get("elsewhere") else {}))
                      for k, a in sorted(asks.items(), key=lambda x: x[1]["at"]) if not a.get("result")]
-            h.send(200, {"ask": every[0] if every else None, "all": every, "terminal": terminal()})   # all: Home shows one row per open question
+            closed = {k: by for k, (by, t) in getattr(srv, "ask_closed", {}).items() if time.time() - t < CLOSED_S}
+            h.send(200, {"ask": every[0] if every else None, "all": every, "terminal": terminal(), "closed": closed})   # all: Home shows one row per open question
     elif method == "POST" and path == "/ask":
         qs = body.get("questions")
         if not (isinstance(body.get("id"), str) and isinstance(qs, list) and 0 < len(qs) <= 10):
@@ -247,7 +255,9 @@ def route(h, method, path, query, body=None):
             pass
         h.send(200, {})
     elif method == "POST" and path == "/ask/clear":
-        asks.pop(body.get("id"), None)
+        if asks.pop(body.get("id"), None) and body.get("by") == "chat":
+            srv.ask_closed = {k: v for k, v in getattr(srv, "ask_closed", {}).items() if time.time() - v[1] < CLOSED_S}
+            srv.ask_closed[body["id"]] = ("chat", time.time())
         h.send(200, {})
     else:
         h.send(404, {})
@@ -393,6 +403,50 @@ def mark(edit, start, end=None):
         pass
 
 
+def transcript_end(transcript):
+    try:
+        return os.path.getsize(transcript)
+    except (OSError, TypeError, ValueError):
+        return None
+
+
+def chat_reply(transcript, offset, sid=""):
+    """A message the user typed in the Claude chat since offset (Claude Code queues it while the hook runs and writes
+    it to the transcript at once), as text, or None. Slash commands are not answers."""
+    if offset is None:
+        return None
+    try:
+        with open(transcript, "rb") as f:
+            f.seek(offset)
+            lines = f.read().decode("utf-8", "replace").splitlines()
+    except (OSError, TypeError, ValueError):
+        return None
+    for ln in lines:
+        if '"queue-operation"' not in ln or '"enqueue"' not in ln:
+            continue
+        try:
+            d = json.loads(ln)
+        except ValueError:
+            continue
+        if d.get("operation") != "enqueue" or sid and d.get("sessionId") not in (None, sid):
+            continue
+        c = d.get("content")
+        text = c if isinstance(c, str) else " ".join(x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else ""
+        if text.strip() and not text.lstrip().startswith("/"):
+            return text.strip()
+    return None
+
+
+def pick(q, text, only):
+    """The answer to question q from a chat reply: an option's label for its number ("2"; "1, 3" when it takes several),
+    when it is the only question, else the reply as typed."""
+    opts = [o.get("label", "") for o in q.get("options") or [] if isinstance(o, dict)]
+    nums = re.fullmatch(r"\s*(\d+)(?:\s*[,\s]\s*\d+)*\s*\.?\s*", text) and [int(x) for x in re.findall(r"\d+", text)]
+    if only and nums and all(0 < n <= len(opts) for n in nums) and (q.get("multiSelect") or len(nums) == 1):
+        return ", ".join(opts[n - 1] for n in dict.fromkeys(nums))
+    return text
+
+
 def _call(url, path, body=None, timeout=3):
     base, tok = url.split("/?t=", 1)
     sep = "&" if "?" in path else "?"
@@ -411,6 +465,8 @@ def relay(payload, timeout=None, poll=0.5):
         return None
     sid = payload.get("session_id")
     sid = sid if isinstance(sid, str) else ""
+    tpath = payload.get("transcript_path")
+    since = transcript_end(tpath)   # a chat reply is one queued after this
     qid = secrets.token_urlsafe(12)
     sent = []
     about = asking_edit(payload, sid)
@@ -442,6 +498,10 @@ def relay(payload, timeout=None, poll=0.5):
                         os.utime(Path(about) / "review" / "asking")
                     except OSError:
                         pass
+            said = chat_reply(tpath, since, sid)
+            if said:
+                result = {"answers": [pick(q, said, len(qs) == 1) for q in qs], "chat": True}
+                break
             for u in list(sent):
                 try:
                     result = _call(u, "/ask?id=" + qid).get("result")
@@ -458,7 +518,7 @@ def relay(payload, timeout=None, poll=0.5):
             mark(about, t0, time.time())
         for u in sent:
             try:
-                _call(u, "/ask/clear", {"id": qid})
+                _call(u, "/ask/clear", {"id": qid, **({"by": "chat"} if result and result.get("chat") else {})})
             except Exception:
                 pass
     if not result or not result.get("answers"):
@@ -466,7 +526,7 @@ def relay(payload, timeout=None, poll=0.5):
     answers = {q.get("question", f"Question {i + 1}"): a for i, (q, a) in enumerate(zip(qs, result["answers"]))}
     return json.dumps({"hookSpecificOutput": {
         "hookEventName": "PreToolUse", "permissionDecision": "allow",
-        "permissionDecisionReason": "The user answered in the editor window.",
+        "permissionDecisionReason": "The user answered in the Claude chat." if result.get("chat") else "The user answered in the editor window.",
         "updatedInput": dict(ti, answers=answers)}})
 
 
@@ -599,7 +659,27 @@ def demo():
                    "Which parts?": f"Attached images: {saved[1]} (Read each one to see it)"}, got
     assert saved[0].read_bytes()[:4] == b"\x89PNG" and saved[0].is_absolute()
     srv.ask_where = None
-    # "Answer in Claude Code instead": silent, cleared
+    # answered in the Claude chat first: a message queued after the question (written to the transcript) is the answer,
+    # every page drops the card and GET /ask lists it as closed by the chat; one queued before the question is not
+    trc = tmp / "chat.jsonl"
+    qline = lambda text, sid="sess-A": json.dumps({"type": "queue-operation", "operation": "enqueue", "sessionId": sid,
+                                                   "content": text}) + "\n"
+    trc.write_text(qline("an older message") + qline("/compact"), encoding="utf-8")
+    th, box = run_hook(dict(payload, transcript_path=str(trc)))
+    a = page()
+    with open(trc, "a", encoding="utf-8") as f:
+        f.write(qline("/model") + qline("from another session", "sess-Z") + qline("Loose, and only captions"))
+    th.join()
+    o = json.loads(box["r"].stdout)["hookSpecificOutput"]
+    assert o["permissionDecisionReason"] == "The user answered in the Claude chat.", o
+    assert o["updatedInput"]["answers"] == {"Which cut?": "Loose, and only captions", "Which parts?": "Loose, and only captions"}, o
+    assert not srv.asks and _call(url, "/ask")["closed"] == {a["id"]: "chat"}, "the page says it was answered in the chat"
+    one = {"question": "Which cut?", "options": [{"label": "Tight"}, {"label": "Loose"}]}
+    many = dict(one, multiSelect=True)
+    assert [pick(one, "2", True), pick(one, "3", True), pick(one, "1, 2", True), pick(many, "1, 2", True),
+            pick(one, "2", False), pick(one, "the loose one", True)] == ["Loose", "3", "1, 2", "Tight, Loose", "2", "the loose one"]
+    assert chat_reply(str(trc), None) is None and chat_reply(str(tmp / "none.jsonl"), 0) is None
+    # "Show it in Claude Code instead": silent, cleared
     th, box = run_hook()
     _call(url, "/ask/answer", {"id": page()["id"], "terminal": True})
     th.join()

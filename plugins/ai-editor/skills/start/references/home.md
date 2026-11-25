@@ -68,11 +68,13 @@ Ask with AskUserQuestion as usual. When the home page or a review page is open a
 (`lib/ai_editor/askhook.py`) puts the question on that page. A question about a video goes to that video's editor
 only: the hook takes the video your latest command named (its edit folder), so run a command on that edit (any
 `review.py <edit> ...` or script on it) before asking about it. On the page: the options, an Other box with a paperclip (an image
-can also be pasted or dropped on the card), and "Answer in Claude Code instead". Images are saved on this
+can also be pasted or dropped on the card), and "Show it in Claude Code instead". The user can also type the answer
+in the Claude chat while the card is up: whichever comes first wins, and that message then reaches you twice (as the
+tool's answer and as a chat message): treat it as one answer. Images are saved on this
 computer (the review page: `<edit>/review/`; the home page: `<edit>/asks/`, or `$AI_EDITOR_HOME/asks` with no
 edit folder yet) and the answer ends with `Attached images: /abs/a.png (Read each one to see it)`: Read every
 listed image before acting on the answer. The answer comes back as the tool's result, the same as a terminal answer. No page
-showing, "Answer in Claude Code instead", or every page that had it closed: the terminal box shows (an open page
+showing, "Show it in Claude Code instead", or every page that had it closed: the terminal box shows (an open page
 waits for the answer however long it takes). Never ask
 a question in plain chat text when AskUserQuestion fits: only the tool reaches the page. A question only
 reaches pages this session works on (the home page while it holds a job there or listens, the review page

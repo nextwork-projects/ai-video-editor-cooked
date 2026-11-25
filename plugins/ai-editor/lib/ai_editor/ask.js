@@ -40,6 +40,7 @@ const css=`#askq{position:fixed;inset:0;z-index:9999;display:none;align-items:ce
 #askq .aq-card.aq-drag{border-color:var(--a-ink)}
 #askq .aq-wide{width:100%;margin-top:12px}
 #askq .aq-foot{margin-top:16px;padding:0;border:0;text-align:center}
+#askq .aq-hint{display:block;color:var(--a-muted);font-size:13px;line-height:18px}
 #askq .aq-term{border:0;background:none;margin:0;padding:4px;color:var(--a-muted);font:inherit;font-size:13px;text-decoration:underline 1px;text-underline-offset:3px;cursor:pointer}
 #askq .aq-done{padding:18px 0 10px;font-size:15px;color:var(--a-body);text-align:center}
 #askbar{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);z-index:9999;display:none;align-items:center;gap:10px;margin:0;padding:11px 18px;border:1px solid var(--line,#E7E5E4);border-radius:999px;background:var(--panel,#fff);color:var(--ink,#0C0A09);font:600 14px/20px system-ui,-apple-system,"Segoe UI",sans-serif;box-shadow:0 8px 28px rgba(0,0,0,.16);cursor:pointer}
@@ -121,7 +122,7 @@ function draw(){
   <div class="aq-other"><input id="asko" placeholder="${multi?'Other: add your own words':'Other: type your own answer'}" aria-label="Other answer"><button class="aq-clip" id="askp" aria-label="attach an image" title="attach an image (or paste or drop one)">${CLIP}</button><input type="file" id="aski" accept="image/png,image/jpeg,image/gif,image/webp" multiple hidden>${multi?'':'<button class="aq-send" id="asks" disabled>Send answer</button>'}</div>
   <div class="aq-pics"></div>
   ${multi?'<button class="aq-send aq-wide" id="asks" disabled>Send answer</button>':''}
-  <div class="aq-foot"><button class="aq-term" id="askt">Answer in Claude Code instead</button></div></div>`;
+  <div class="aq-foot"><span class="aq-hint">Or type your answer in the Claude chat</span><button class="aq-term" id="askt">Show it in Claude Code instead</button></div></div>`;
   const $o=el.querySelector('#asko'),$s=el.querySelector('#asks');
   $o.value=own;
   const value=()=>multi?[...sel].sort((a,b)=>a-b).map(k=>opts[k].label).concat($o.value.trim()?[$o.value.trim()]:[]).join(', '):$o.value.trim();
@@ -138,8 +139,10 @@ function draw(){
   if(!bar.classList.contains('on')&&!(A.elsewhere&&!el.classList.contains('on')))el.classList.add('on');
 }
 async function poll(){
-  let a=null,all=[];
-  try{const r=await fetch('/ask'+(document.visibilityState==='visible'?'?v=1':''));if(!r.ok)return;const j=await r.json();a=j.ask;all=j.all||(a?[a]:[]);terminal(a?null:j.terminal)}catch(e){return}
+  let a=null,all=[],shut={};
+  try{const r=await fetch('/ask'+(document.visibilityState==='visible'?'?v=1':''));if(!r.ok)return;const j=await r.json();a=j.ask;all=j.all||(a?[a]:[]);shut=j.closed||{};terminal(a?null:j.terminal)}catch(e){return}
+  // answered in the Claude chat first (askhook.py reads it there): the card says so and goes
+  if(A&&shut[A.id]==='chat'&&!all.some(x=>x.id===A.id)){const on=el.classList.contains('on');close(on?'Answered in the Claude chat.':null)}
   if(!a){ALL=[];if(A)close();return}
   if(document.title!==TITLE){title=document.title;document.title=TITLE}
   const was=ALL.map(x=>x.id).join();ALL=all;
