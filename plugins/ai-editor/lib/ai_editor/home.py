@@ -447,7 +447,7 @@ def asks_for(sid):
     lis = listener()
     if sid and sid == lis:
         return ""
-    if not lis and not any(j.get("owner") for j in taken) and (not sid or sid == askhook.session()):
+    if not lis and not any(j.get("owner") for j in taken) and (not sid or sid == askhook.owner()):
         return job_name(taken[0]) if taken else ""
     return None
 
@@ -1894,7 +1894,7 @@ def takeable(j, sid, d, job=None):
 
 
 def cmd_wait(poll=1.0, job=None):
-    sid = askhook.session()
+    sid = askhook.owner()
     if job:   # the Claude the page opened for this job: it takes that job and nothing else
         return _take_one(job, sid, poll)
     beat = home() / ".listening"
@@ -1994,7 +1994,7 @@ def cmd_status(a):
     def f(d):
         t = time.time()
         d["claude_seen"], d["claude_v"] = t, my_version()   # the page's heartbeat: Claude (or a script it runs) is still at work
-        sid = askhook.session()
+        sid = askhook.owner()
         if if_active:   # a script's own report (progress.py): only onto a taken job of this session, never makes or takes one
             j = mine(d, a.job, getattr(a, "key", None), sid)
             if not j:
@@ -2053,7 +2053,7 @@ def cmd_status(a):
             raise
         j = None
     if j is None:
-        print(f"no {a.job} job on the page" + (" for this Claude session" if askhook.session() else ""))
+        print(f"no {a.job} job on the page" + (" for this Claude session" if askhook.owner() else ""))
         return 1   # progress.py reads the exit code: nothing was written
     if a.job == "setup" and (a.step or a.done or a.failed):   # a step finished: the tool rows tick as it goes
         run_doctor()
@@ -3214,6 +3214,7 @@ def demo():
     import atexit
     atexit.register(lambda: [p.terminate() for p in _spawned])   # a failed check leaves no review server behind
     os.environ["AI_EDITOR_HOME"] = str(tmp / "home")
+    askhook.claude_pid = lambda *a, **k: ""   # the waits below run in this process with no session: each is its own Claude, as written
     # a Claude mid-render is still busy: an old review/.claude but a render file written a minute ago (two projects
     # used to land in one Claude); nothing written for 2 hours, it is free for the next video
     ed = tmp / "render-busy-check"
