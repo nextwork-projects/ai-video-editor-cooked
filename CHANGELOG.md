@@ -2,6 +2,9 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.61, creator-teardown 2.7.61 (2026-11-26)
+- Two videos started at once each get their own Claude again. With a Claude Code that doesn't report a session id, every Claude looked free, so the first one took both videos and the window opened for the second found nothing to do. Now such a Claude is told apart by its own process.
+
 ## ai-editor 2.7.60, creator-teardown 2.7.60 (2026-11-25)
 - Duplicating a timeline and starting a trial reel take one click. The version tabs above the timeline now show on every video, with + Duplicate (a copy with your edits) and + Trial reel at their right end.
 - + Trial reel makes a copy named Trial 1, Trial 2 and so on, after the trial reels divider, and opens it. A note for Claude is written and waiting ("a new opening line, a new look and a new CTA"): send it, change it, or recut the copy by hand.

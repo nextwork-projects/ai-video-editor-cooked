@@ -133,6 +133,41 @@ def session():
     return os.environ.get("CLAUDE_CODE_SESSION_ID", "").strip()
 
 
+def owner():
+    """Which Claude this is, for who holds which job on the home page: its session, or for a Claude Code too old to set
+    CLAUDE_CODE_SESSION_ID, its own process ("pid-<n>", claude_pid). Never used to resume a session. Before this every
+    such Claude read "", each looked free, and one took every new video (a friend's two videos, 2026-11-26)."""
+    return session() or claude_pid()
+
+
+def claude_pid(pid=None, ps=None):
+    """"pid-<n>" for the nearest ancestor process whose command is `claude` (the Claude Code CLI, or the app's agent),
+    or "" when there is none or no `ps` (Windows). ps: (pid) -> (ppid, command) for the self-check."""
+    import subprocess
+    def real(p):
+        try:
+            out = subprocess.run(["ps", "-o", "ppid=,comm=", "-p", str(p)], capture_output=True, text=True, timeout=3).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            return None
+        if not out:
+            return None
+        pp, _, comm = out.partition(" ")
+        return int(pp), comm.strip()
+    ps = ps or real
+    p = pid or os.getppid()
+    for _ in range(16):
+        got = ps(p)
+        if not got:
+            return ""
+        pp, comm = got
+        if Path(comm).name.lower() in ("claude", "claude.exe") or comm.lower().endswith("/claude"):
+            return f"pid-{p}"
+        if pp <= 1:
+            return ""
+        p = pp
+    return ""
+
+
 def claude_env(env=None):
     """Which Claude Code runs this command, from its env: {session, host_session, kind}, kind "desktop" (the Claude
     desktop app's Code tab), "terminal" (the CLI) or "other" (an IDE, the SDK); {} outside Claude Code."""
@@ -542,6 +577,8 @@ def main():
 
 # ---------------------------------------------------------------- demo
 def demo():
+    tree = {50: (40, "/bin/zsh"), 40: (30, "/opt/homebrew/bin/claude"), 30: (1, "launchd"), 60: (1, "/bin/bash")}
+    assert claude_pid(50, lambda p: tree.get(p)) == "pid-40" and claude_pid(60, lambda p: tree.get(p)) == "", "a Claude without a session id is its process"
     import shutil
     import subprocess
     import tempfile
