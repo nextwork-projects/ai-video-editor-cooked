@@ -2,6 +2,11 @@
 
 What changed for every user, newest first.
 
+## ai-editor 2.7.62, creator-teardown 2.7.62 (2026-11-27)
+- Approve the cut opens a panel to start the edit: the style for the edit, and a box for anything Claude should know for it ("no zooms in the first 5 seconds"). Start the edit approves the cut and hands Claude both. Before, the button read "Approve the cut and add captions" and the panel had only the style.
+- Words or pieces you cut on the page now only skip on the draft you cut them on. A new draft no longer jumps over the same seconds of a different video, so it starts where it should.
+- The home page's style picker goes in four steps, from the library's skill tree.
+
 ## ai-editor 2.7.61, creator-teardown 2.7.61 (2026-11-26)
 - Two videos started at once each get their own Claude again. With a Claude Code that doesn't report a session id, every Claude looked free, so the first one took both videos and the window opened for the second found nothing to do. Now such a Claude is told apart by its own process.
 
