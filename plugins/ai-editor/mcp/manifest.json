@@ -1,0 +1,86 @@
+{
+  "manifest_version": "0.3",
+  "name": "cooked",
+  "display_name": "cooked.",
+  "version": "0.1.0",
+  "description": "Edit your videos with cooked. from your own Claude chat. All AI runs on your Claude plan.",
+  "long_description": "Drives the cooked. editor installed on this Mac: list your videos, open the review page, read the notes you leave on it, change the scene, hand back a new round and export. Needs the cooked. plugin installed (or COOKED_PLUGIN set), Python 3 and ffmpeg. Notes arrive only when the chat calls get_notes: MCP cannot wake Claude.",
+  "author": {
+    "name": "NextWork",
+    "url": "https://nextwork.ai"
+  },
+  "homepage": "https://github.com/nextwork-projects/ai-video-editor-cooked",
+  "license": "MIT",
+  "server": {
+    "type": "python",
+    "entry_point": "server.py",
+    "mcp_config": {
+      "command": "python3",
+      "args": [
+        "${__dirname}/server.py"
+      ],
+      "env": {
+        "COOKED_PLUGIN": "${user_config.plugin_dir}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "list_videos",
+      "description": "Every video in the user's cooked. library, newest first: name, folder, status, stage, draft."
+    },
+    {
+      "name": "open_video",
+      "description": "Start the video's review page and open it in the browser. Returns the page URL."
+    },
+    {
+      "name": "get_notes",
+      "description": "Wait for the user to press Send or Approve on the page, then return every note (time, text, words, what is on screen). Returns NO NOTES YET after timeout seconds."
+    },
+    {
+      "name": "show",
+      "description": "The scene's items (ids, times, boxes) and the words said, to target a change. at: one moment in seconds."
+    },
+    {
+      "name": "scene_ops",
+      "description": "Apply ops to scene.json (SCENE.md op format), with a one-line why the page shows."
+    },
+    {
+      "name": "add_item",
+      "description": "Add one item to the scene: text, image, video, shape or audio."
+    },
+    {
+      "name": "resolve_note",
+      "description": "Mark a note fixed, wontfix or open, with an optional reply the user sees."
+    },
+    {
+      "name": "hand_back",
+      "description": "The notes were answered in the scene: open the next round on the page (review.py round --scene)."
+    },
+    {
+      "name": "export",
+      "description": "Export what the page shows as one MP4 (the page's Export button). Waits up to timeout seconds."
+    }
+  ],
+  "user_config": {
+    "plugin_dir": {
+      "type": "directory",
+      "title": "cooked. plugin folder",
+      "description": "Optional. The plugins/ai-editor folder. Empty: the newest one Claude Code installed.",
+      "required": false,
+      "default": ""
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "darwin"
+    ],
+    "runtimes": {
+      "python": ">=3.9"
+    }
+  },
+  "keywords": [
+    "video",
+    "editing"
+  ]
+}
